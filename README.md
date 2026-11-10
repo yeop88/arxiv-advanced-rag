@@ -115,7 +115,8 @@ exam03_Advanced_RAG/
 │   ├── prompts.py             # ⭐ 4단계 프롬프트 (학습 핵심)
 │   ├── schemas.py             # 단계별 데이터 구조
 │   ├── llm.py                 # LLM/임베딩/리랭커 팩토리 (교체 가능)
-│   ├── vectorstore.py         # Chroma 로드/구축
+│   ├── vectorstore.py         # 벡터 DB 로드/구축 (Chroma | Pinecone 어댑터)
+│   ├── docstore.py            # 원문 보관소(JSONL) — Pinecone 사용 시 BM25·본문 기준
 │   ├── stage1_query_transform.py
 │   ├── stage2_rerank.py
 │   ├── stage3_generate.py
@@ -125,7 +126,8 @@ exam03_Advanced_RAG/
 ├── scripts/
 │   ├── ingest_arxiv.py        # arXiv 수집 (--fulltext/--ca-bundle/--insecure)
 │   ├── ingest_sample.py       # 번들 샘플 수집 (네트워크 불필요)
-│   └── ingest_local.py        # 로컬 PDF/텍스트 폴더 수집 (한국어 논문)
+│   ├── ingest_local.py        # 로컬 PDF/텍스트 폴더 수집 (한국어 논문)
+│   └── migrate_to_pinecone.py # Chroma → Pinecone 이전(벡터 그대로 복사, --dry-run)
 ├── eval/
 │   ├── eval_set.jsonl         # 평가셋 단일 소스(질문+정답논문+난이도)
 │   ├── dataset.py             # 평가셋 로더(난이도/카테고리 필터)
@@ -133,7 +135,10 @@ exam03_Advanced_RAG/
 │   ├── gen_questions.py       # 평가셋 반자동 확대(논문별 질문 생성→검수)
 │   ├── ragas_lite.py          # RAGAS 스타일 지표(LLM 심판)
 │   ├── evaluate.py            # 평가 하네스
-│   └── compare.py             # 설정 조합별 A/B 비교(--retrieval-only 등)
+│   ├── compare.py             # 설정 조합별 A/B 비교(--retrieval-only 등)
+│   ├── backend_eval.py        # 현재 LLM 백엔드로 질문별 지표·지연 기록 + 기록 간 비교
+│   └── vector_parity.py       # Chroma vs Pinecone 검색 결과 동일성 검증
+├── tests/                     # 단위·오프라인 테스트 (fake_pinecone.py: Pinecone 대역)
 ├── notebooks/
 │   └── advanced_rag_walkthrough.ipynb  # 4단계 셀 단위 학습 노트북
 ├── docs/
@@ -141,6 +146,24 @@ exam03_Advanced_RAG/
 │   └── ADR-001-query-transform-default.md  # 기본 질의변환 모드 결정 기록
 └── app.py                     # Streamlit 챗봇 UI
 ```
+
+---
+
+## 🗄️ 벡터 DB 전환 (Chroma → Pinecone)
+
+성능 저하 없이 옮기도록 설계했습니다.
+
+- **벡터를 다시 만들지 않고 Chroma 의 벡터를 그대로 복사**(ID 유지) → 임베딩이 완전히 동일.
+- 인덱스는 **cosine**: 벡터가 길이 1로 정규화돼 있어 Chroma(L2)와 순위가 같습니다.
+- **원문은 로컬 docstore(JSONL)에도 저장** → 하이브리드 검색의 BM25 가 Chroma 때와 같은 원문을 사용.
+
+```bash
+python scripts/migrate_to_pinecone.py --dry-run   # 키 없이 점검
+python scripts/migrate_to_pinecone.py             # 이전 (PINECONE_API_KEY 필요)
+python eval/vector_parity.py                      # 평가셋 전체로 Chroma 와 결과 비교
+# 통과하면 .env 에 VECTOR_BACKEND=pinecone
+```
+키가 없을 때는 `python eval/vector_parity.py --fake` 로 메모리 내 대역에 같은 벡터를 넣어 어댑터를 검증할 수 있습니다.
 
 ---
 

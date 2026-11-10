@@ -25,8 +25,6 @@ from __future__ import annotations
 
 import time
 
-from langchain_chroma import Chroma
-
 from config import settings
 from rag import stage1_query_transform as s1
 from rag import stage2_rerank as s2
@@ -34,7 +32,7 @@ from rag import stage3_generate as s3
 from rag import stage4_verify as s4
 from rag.contextualize import ChatHistory, contextualize
 from rag.schemas import PipelineResult
-from rag.vectorstore import load_vectorstore
+from rag.vectorstore import VectorStoreLike, load_vectorstore
 
 
 class RAGPipeline:
@@ -46,7 +44,7 @@ class RAGPipeline:
         print(result.answer)
     """
 
-    def __init__(self, vectorstore: Chroma | None = None):
+    def __init__(self, vectorstore: VectorStoreLike | None = None):
         self.vectorstore = vectorstore or load_vectorstore()
 
     def run(

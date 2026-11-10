@@ -15,6 +15,8 @@ FlagEmbedding>=1.2.0            # (선택) bge 계열 공식 구현
 # === 벡터 스토어 ===
 langchain-chroma>=0.1.4
 chromadb>=0.5.0
+pinecone>=10.3.0                 # VECTOR_BACKEND=pinecone 일 때 (공식 SDK 직접 사용 — langchain-pinecone 은 의존성 충돌로 미사용)
+rank-bm25>=0.2.2                 # 하이브리드 검색의 BM25
 
 # === 데이터 수집 (arXiv) ===
 arxiv>=2.1.0                     # arXiv API 클라이언트

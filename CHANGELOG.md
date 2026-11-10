@@ -5,6 +5,10 @@
 ## [Unreleased]
 
 ### Added
+- Pinecone 벡터 DB 지원 `VECTOR_BACKEND=pinecone`: 공식 SDK 위 어댑터(`PineconeStore`)가 Chroma 와 같은 메서드 모양을 제공해 파이프라인 코드 변경 없이 전환. 원문은 로컬 docstore(JSONL)에 보관해 BM25 하이브리드 검색 유지 (`rag/vectorstore.py`, `rag/docstore.py`, `config.py`)
+- Chroma → Pinecone 이전 스크립트: Chroma 벡터를 재임베딩 없이 그대로 복사(ID 유지), `--dry-run` 점검·`--reset` (`scripts/migrate_to_pinecone.py`)
+- 검색 동일성 검증 `eval/vector_parity.py`(평가셋 전체로 벡터 검색 겹침률·최종 근거 일치율·recall/MRR 비교, `--fake` 오프라인 모드) + Pinecone 대역 `tests/fake_pinecone.py` + 어댑터 단위테스트
+- 백엔드 단위 평가 `eval/backend_eval.py`: 질문별 지표·단계별 지연을 JSONL 로 누적 기록(중단 후 이어서 실행), `--compare` 로 기록 간 비교. 채점 thinking 고정 옵션
 - 로컬 LLM 백엔드 `LLM_PROVIDER=local`: OpenAI 호환 서버(예: FreeToken Local의 Qwen3.6-35B-A3B)에 `LOCAL_BASE_URL`로 연결. 응답의 `<think>…</think>` 추론 자동 제거 (`rag/llm.py`, `config.py`)
 - provider별·모델별 effort 설정: 이름·값 체계가 달라 env 분리 — `ANTHROPIC_EFFORT[_LIGHT]`(output_config.effort), `OPENAI_REASONING_EFFORT[_LIGHT]`(reasoning_effort), `LOCAL_THINKING[_LIGHT]`(enable_thinking on/off). 잘못된 값은 즉시 오류. `LLM_TEMPERATURE`·`LLM_MAX_TOKENS` env 추가 (`config.py`, `rag/llm.py`, `.env.example`)
 - 다분야 논문 대량 수집: 라이브 arXiv 수집으로 코퍼스 59→**490편**. CV·RL·GNN·speech·NLP·diffusion·추천·시계열·self-supervised·**멀티모달(162편)**·**양자화(44편)** 등 다분야 커버리지(초록 기반, Windows CA 번들로 프록시 SSL 통과)

@@ -106,6 +106,51 @@ def test_mmr_per_source_cap() -> None:
     print("  test_mmr_per_source_cap ✅")
 
 
+class _OneHotEmbeddings:
+    """질의 'a'·'b'·'c' 를 각 축 방향으로 보내는 가짜 임베딩(검색 순위를 예측 가능하게)."""
+
+    _axis = {"a": 0, "b": 1, "c": 2}
+
+    def embed_query(self, text):
+        v = [0.0, 0.0, 0.0]
+        v[self._axis[text]] = 1.0
+        return v
+
+    def embed_documents(self, texts):
+        return [self.embed_query(t) for t in texts]
+
+
+def test_pinecone_store_adapter() -> None:
+    """PineconeStore: 검색 본문은 docstore 기준, get/delete 가 Chroma 와 같은 모양으로 동작."""
+    import tempfile
+    from pathlib import Path
+
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from fake_pinecone import FakePineconeIndex
+
+    from rag.docstore import DocStore
+    from rag.vectorstore import PineconeStore, get_all_documents
+
+    path = Path(tempfile.mkdtemp()) / "docstore.jsonl"
+    store = PineconeStore(FakePineconeIndex(), "t", _OneHotEmbeddings(), DocStore(path))
+    store.upsert_vectors(
+        ["id-a", "id-b"], [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]],
+        ["본문 A", "본문 B"], [{"source": "P1", "section": None}, {"source": "P2"}],
+    )
+    hits = store.similarity_search_with_relevance_scores("a", k=2)
+    assert hits[0][0].page_content == "본문 A" and hits[0][0].id == "id-a", hits
+    assert hits[0][1] > hits[1][1], "더 가까운 문서의 관련도가 높아야 함"
+    assert hits[0][0].metadata == {"source": "P1", "section": None}, "메타데이터는 docstore 원본 그대로"
+    assert len(get_all_documents(store)) == 2 and store.count() == 2
+    assert DocStore(path).get("id-b")["text"] == "본문 B", "docstore 가 디스크에 저장돼야 함"
+
+    store.delete(ids=["id-a"])
+    assert store.count() == 1 and store.get()["ids"] == ["id-b"], "삭제가 인덱스·docstore 양쪽에 반영"
+    ids = store.add_documents([Document(page_content="c", metadata={"source": "P3"})])
+    assert store.similarity_search("c", k=1)[0].id == ids[0]
+    print("  test_pinecone_store_adapter ✅")
+
+
 def main() -> None:
     print("단위 테스트 실행:")
     test_rrf()
@@ -113,6 +158,7 @@ def main() -> None:
     test_parse_json()
     test_contextualize_no_history()
     test_mmr_per_source_cap()
+    test_pinecone_store_adapter()
     print("모든 단위 테스트 통과 ✅")
 
 

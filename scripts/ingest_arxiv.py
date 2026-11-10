@@ -221,7 +221,7 @@ def main() -> None:
         if removed:
             print(f"  (교체: 기존 청크 {removed}개 삭제 후 재적재)")
 
-    print(f"[2/2] 임베딩 + Chroma 저장 → {settings.chroma_dir}")
+    print(f"[2/2] 임베딩 + 벡터DB 저장 ({settings.vector_backend})")
     build_vectorstore(chunks)
     print(f"완료! 총 {len(chunks)}개 청크 저장. 이제 `streamlit run app.py` 로 실행하세요.")
 

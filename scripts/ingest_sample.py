@@ -79,7 +79,7 @@ def main() -> None:
     chunks = splitter.split_documents(docs)
     print(f"      {len(docs)}편 → {len(chunks)}개 청크")
 
-    print(f"[3/3] 임베딩 + Chroma 저장 → {settings.chroma_dir}")
+    print(f"[3/3] 임베딩 + 벡터DB 저장 ({settings.vector_backend})")
     build_vectorstore(chunks)
     print(f"완료! 총 {len(chunks)}개 청크 저장.")
 

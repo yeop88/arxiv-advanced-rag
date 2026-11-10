@@ -15,13 +15,12 @@ from __future__ import annotations
 
 from functools import lru_cache
 
-from langchain_chroma import Chroma
 from langchain_core.documents import Document
 
 from config import settings
 from rag.llm import get_reranker
 from rag.schemas import RetrievedChunk
-from rag.vectorstore import get_all_documents
+from rag.vectorstore import VectorStoreLike, get_all_documents
 
 
 def _chunk_key(content: str) -> str:
@@ -29,7 +28,7 @@ def _chunk_key(content: str) -> str:
     return content[:200]
 
 
-def retrieve(vectorstore: Chroma, queries: list[str]) -> list[RetrievedChunk]:
+def retrieve(vectorstore: VectorStoreLike, queries: list[str]) -> list[RetrievedChunk]:
     """여러 질의로 벡터검색 후 중복 제거한 후보 청크 리스트 반환."""
     # 질의가 여러 개이므로, 질의당 가져올 개수를 나눠 전체가 top_k_retrieve 근처가 되게
     per_query = max(3, settings.top_k_retrieve // max(1, len(queries)))
@@ -63,7 +62,8 @@ def retrieve(vectorstore: Chroma, queries: list[str]) -> list[RetrievedChunk]:
 def _get_bm25(vectorstore_id: int):
     """BM25 리트리버를 1회만 구축해 캐싱.
 
-    BM25 는 전체 코퍼스가 메모리에 있어야 하므로 Chroma 에서 모든 청크를 꺼내 인덱싱.
+    BM25 는 전체 코퍼스가 메모리에 있어야 하므로 스토어에서 모든 청크를 꺼내 인덱싱
+    (Pinecone 은 로컬 docstore 에서 꺼낸다 — Chroma 때와 같은 원문).
     (vectorstore_id 는 lru_cache 키 용도 — 같은 세션에선 재사용)
     """
     from langchain_community.retrievers import BM25Retriever
@@ -96,7 +96,7 @@ def _reciprocal_rank_fusion(
     return [(docs_by_key[key], score) for key, score in fused]
 
 
-def retrieve_hybrid(vectorstore: Chroma, queries: list[str]) -> list[RetrievedChunk]:
+def retrieve_hybrid(vectorstore: VectorStoreLike, queries: list[str]) -> list[RetrievedChunk]:
     """BM25 + 벡터 결과를 RRF 로 융합한 후보 리스트 반환."""
     _BM25_STORE["vs"] = vectorstore
     bm25 = _get_bm25(id(vectorstore))
@@ -226,7 +226,7 @@ def rerank(question: str, candidates: list[RetrievedChunk]) -> list[RetrievedChu
 
 
 def retrieve_and_rerank(
-    vectorstore: Chroma, question: str, queries: list[str]
+    vectorstore: VectorStoreLike, question: str, queries: list[str]
 ) -> tuple[list[RetrievedChunk], list[RetrievedChunk]]:
     """검색 + 리랭킹을 한 번에. (검색결과, 리랭킹결과) 튜플 반환 — 시각화용.
 

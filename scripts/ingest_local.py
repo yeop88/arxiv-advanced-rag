@@ -17,7 +17,6 @@ scripts/ingest_local.py — 로컬 PDF/텍스트 폴더 수집 (한국어 논문
 from __future__ import annotations
 
 import argparse
-import shutil
 import sys
 from pathlib import Path
 
@@ -27,7 +26,7 @@ from langchain_core.documents import Document  # noqa: E402
 
 from config import settings  # noqa: E402
 from rag.chunking import section_aware_split  # noqa: E402
-from rag.vectorstore import build_vectorstore  # noqa: E402
+from rag.vectorstore import build_vectorstore, reset_vectorstore  # noqa: E402
 
 SUPPORTED = {".pdf", ".txt", ".md"}
 
@@ -77,16 +76,16 @@ def main() -> None:
         print(f"폴더를 찾을 수 없습니다: {directory}")
         return
 
-    if args.reset and Path(settings.chroma_dir).exists():
-        shutil.rmtree(settings.chroma_dir)
-        print(f"[reset] 기존 벡터DB 삭제: {settings.chroma_dir}")
+    if args.reset:
+        reset_vectorstore()
+        print(f"[reset] 기존 벡터DB 삭제 ({settings.vector_backend})")
 
     print(f"[1/2] 로컬 수집·청킹: {directory}")
     chunks = load_dir(directory)
     if not chunks:
         return
 
-    print(f"[2/2] 임베딩 + Chroma 저장 → {settings.chroma_dir}")
+    print(f"[2/2] 임베딩 + 벡터DB 저장 ({settings.vector_backend})")
     build_vectorstore(chunks)
     print(f"완료! 총 {len(chunks)}개 청크 저장. `streamlit run app.py` 로 실행하세요.")
 
