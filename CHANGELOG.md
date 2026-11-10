@@ -42,6 +42,7 @@
 - 진행 보고서 (`docs/PROGRESS_REPORT.md`), 작업 지침 (`CLAUDE.md`)
 
 ### Changed
+- `.env.example`을 FreeToken Local(local) 기준으로 재구성: local 설정을 기본 활성화(Qwen3.6-35B-A3B, thinking 메인 on/경량 off, temperature 0.6, max_tokens 8192), Claude·OpenAI는 주석 처리된 대안 블록으로, 백엔드 선택지별 필수 값 안내 추가
 - 기본 질의변환 모드를 **`hyde` → `multi_query`로 번복**: 확장 평가셋 검색 A/B(hyde 최하)에 더해 **생성지표 2-arm 교차검증**(hard 31문항)에서도 multi_query가 모든 지표 우위/동률(faithfulness 0.953 vs 0.950)로 확정(ADR-001 재검토, §5.7). (`config.py`)
 - 평가 하네스가 질문을 하드코딩 대신 `eval/eval_set.jsonl`에서 로드하도록 변경 (`eval/compare.py`, `eval/evaluate.py`)
 - (이력) 기본 질의변환 모드를 `multi_query` → `hyde`로 변경했다가(10문항 소표본 근거) 위와 같이 번복 — 결정 기록 [docs/ADR-001](docs/ADR-001-query-transform-default.md)

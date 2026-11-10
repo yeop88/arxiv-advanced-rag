@@ -69,7 +69,8 @@ python -m venv .venv
 pip install -r requirements.txt
 
 # 2) 환경변수 설정
-copy .env.example .env          # 그리고 ANTHROPIC_API_KEY 입력
+copy .env.example .env          # 기본은 FreeToken Local(local): LOCAL_BASE_URL·LLM_MODEL 입력
+                                #   Claude 를 쓰려면 LLM_PROVIDER=anthropic + ANTHROPIC_API_KEY
 
 # 3) 논문 수집 → 벡터DB 구축
 #    (a) 네트워크 가능 환경: arXiv 실수집 (검색어 여러 개 가능, 이미 받은 논문은 자동 중복 제외)
