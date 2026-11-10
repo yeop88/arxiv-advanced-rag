@@ -18,14 +18,31 @@ load_dotenv()  # .env 로드
 @dataclass
 class Settings:
     # --- LLM 백엔드 ---
-    llm_provider: str = os.getenv("LLM_PROVIDER", "anthropic")  # "anthropic" | "openai"
-    llm_model: str = os.getenv("LLM_MODEL", "claude-opus-5-5")        # 생성·검증
-    llm_model_light: str = os.getenv("LLM_MODEL_LIGHT", "claude-haiku-5-5")  # 질의변환
-    llm_temperature: float = 0.0  # RAG 는 사실성이 중요 → 낮게 (OpenAI 백엔드 전용)
-    # API effort: 추론 깊이/토큰 지출을 제어(높을수록 더 깊게 생각, 비용↑).
-    # Anthropic output_config.effort 로 전달(GA, 베타 헤더 불필요). 값: low|medium|high|xhigh|max.
-    # ""(기본) 이면 전달하지 않고 API 기본값 사용(opus/haiku 5.x 는 medium).
-    llm_effort: str = os.getenv("LLM_EFFORT", "")
+    # "anthropic" | "openai" | "local"(OpenAI 호환 로컬 서버 — 예: FreeToken Local 의 Qwen)
+    llm_provider: str = os.getenv("LLM_PROVIDER", "anthropic")
+    llm_model: str = os.getenv("LLM_MODEL", "claude-opus-5-5")        # 생성·검증(메인)
+    llm_model_light: str = os.getenv("LLM_MODEL_LIGHT", "claude-haiku-5-5")  # 질의변환(경량)
+    # temperature 는 openai/local 전용(Claude 최신 API 는 temperature 를 400 으로 거부).
+    llm_temperature: float = float(os.getenv("LLM_TEMPERATURE", "0.0"))
+    # thinking 모델은 추론 토큰까지 포함하므로 부족하면 답이 잘린다 → 로컬 thinking 사용 시 상향 권장.
+    llm_max_tokens: int = int(os.getenv("LLM_MAX_TOKENS", "4096"))
+
+    # --- 로컬(OpenAI 호환) 서버 접속 ---
+    local_base_url: str = os.getenv("LOCAL_BASE_URL", "")    # 예: http://localhost:8000/v1
+    local_api_key: str = os.getenv("LOCAL_API_KEY", "EMPTY")  # 인증 없는 서버는 아무 값이나
+
+    # --- Effort: provider 마다 파라미터와 값 체계가 달라 분리, 각각 메인/경량 따로 ---
+    # 빈 값("")이면 아무것도 보내지 않고 서버/모델 기본값을 쓴다.
+    # Anthropic: output_config.effort = low|medium|high|xhigh|max (opus/haiku 5.x 기본 medium)
+    anthropic_effort: str = os.getenv("ANTHROPIC_EFFORT", "")
+    anthropic_effort_light: str = os.getenv("ANTHROPIC_EFFORT_LIGHT", "")
+    # OpenAI: reasoning_effort = none|minimal|low|medium|high|xhigh (추론 모델에서만 의미, 지원값은 모델별 상이)
+    openai_reasoning_effort: str = os.getenv("OPENAI_REASONING_EFFORT", "")
+    openai_reasoning_effort_light: str = os.getenv("OPENAI_REASONING_EFFORT_LIGHT", "")
+    # Local(Qwen3 계열): 등급형 effort 가 아니라 thinking on|off
+    # → chat_template_kwargs.enable_thinking 로 전달(vLLM·SGLang 방식, 서버가 무시할 수도 있음)
+    local_thinking: str = os.getenv("LOCAL_THINKING", "")
+    local_thinking_light: str = os.getenv("LOCAL_THINKING_LIGHT", "")
 
     # --- 임베딩 / 리랭커 (HuggingFace 로컬) ---
     embed_model: str = os.getenv("EMBED_MODEL", "BAAI/bge-m3")
@@ -80,6 +97,8 @@ class Settings:
             raise RuntimeError("ANTHROPIC_API_KEY 가 설정되지 않았습니다. .env 를 확인하세요.")
         if self.llm_provider == "openai" and not os.getenv("OPENAI_API_KEY"):
             raise RuntimeError("OPENAI_API_KEY 가 설정되지 않았습니다. .env 를 확인하세요.")
+        if self.llm_provider == "local" and not self.local_base_url:
+            raise RuntimeError("LOCAL_BASE_URL 이 설정되지 않았습니다. 예: http://localhost:8000/v1")
 
 
 # 싱글턴처럼 import 해서 사용: from config import settings

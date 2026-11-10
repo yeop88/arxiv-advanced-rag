@@ -152,7 +152,16 @@ exam03_Advanced_RAG/
 - `rerank_diversity` / `rerank_max_per_source`: 다양성 리랭킹(MMR) on/off — 다중 홉 질문에서 한 논문 쏠림 방지(recall@5 0.73→0.80)
 - `enable_verification`: 검증 on/off 로 환각률 비교
 - `LLM_MODEL`: Claude ↔ OpenAI, 큰 모델 ↔ 작은 모델
-- `LLM_EFFORT`: API effort(`low`~`max`) — 높을수록 깊게 추론하지만 토큰·지연↑. 비우면 API 기본값
+- **Effort (provider별·모델별 분리)** — 높을수록 깊게 추론하지만 토큰·지연↑. 비우면 기본값:
+
+  | provider | 메인 / 경량 env | 전달 방식 | 값 |
+  |---|---|---|---|
+  | `anthropic` | `ANTHROPIC_EFFORT` / `_LIGHT` | `output_config.effort` | low·medium·high·xhigh·max |
+  | `openai` | `OPENAI_REASONING_EFFORT` / `_LIGHT` | `reasoning_effort` | none·minimal·low·medium·high·xhigh |
+  | `local` (Qwen3 등) | `LOCAL_THINKING` / `_LIGHT` | `chat_template_kwargs.enable_thinking` | on·off |
+
+- **로컬 모델(OpenAI 호환 서버)**: `LLM_PROVIDER=local`, `LOCAL_BASE_URL`, `LLM_MODEL`(서버의 모델 id)을 설정.
+  응답에 섞인 `<think>…</think>` 추론은 자동 제거됩니다. 자세한 예시는 `.env.example` 참고.
 
 **학습·평가 도구:**
 ```bash

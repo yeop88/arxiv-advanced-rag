@@ -5,7 +5,8 @@
 ## [Unreleased]
 
 ### Added
-- API effort 설정: `LLM_EFFORT`(low|medium|high|xhigh|max)로 추론 깊이 제어, Anthropic `output_config.effort`로 전달. 비우면 API 기본값 (`config.py`, `rag/llm.py`, `.env.example`)
+- 로컬 LLM 백엔드 `LLM_PROVIDER=local`: OpenAI 호환 서버(예: FreeToken Local의 Qwen3.6-35B-A3B)에 `LOCAL_BASE_URL`로 연결. 응답의 `<think>…</think>` 추론 자동 제거 (`rag/llm.py`, `config.py`)
+- provider별·모델별 effort 설정: 이름·값 체계가 달라 env 분리 — `ANTHROPIC_EFFORT[_LIGHT]`(output_config.effort), `OPENAI_REASONING_EFFORT[_LIGHT]`(reasoning_effort), `LOCAL_THINKING[_LIGHT]`(enable_thinking on/off). 잘못된 값은 즉시 오류. `LLM_TEMPERATURE`·`LLM_MAX_TOKENS` env 추가 (`config.py`, `rag/llm.py`, `.env.example`)
 - 다분야 논문 대량 수집: 라이브 arXiv 수집으로 코퍼스 59→**490편**. CV·RL·GNN·speech·NLP·diffusion·추천·시계열·self-supervised·**멀티모달(162편)**·**양자화(44편)** 등 다분야 커버리지(초록 기반, Windows CA 번들로 프록시 SSL 통과)
 - 평가셋 대량 확대 12→**294문항**(단일홉 227·다중홉 67, easy81/medium144/hard69): `eval/gen_questions.py` 로 단일홉(논문별)·다중홉(`--multi-hop`, 임베딩 최근접 쌍) 질문을 경량 모델(`--light`)로 대량 생성 → 무료 검색지표로 자동 스크리닝(단일홉 recall=1.0·다중홉 recall≥0.5 통과분만) 승격
 - 평가셋 반자동 확대 도구: 코퍼스 논문별로 '그 논문만으로 답할 수 있는' 질문을 LLM으로 생성→검수/스크리닝→승격 (`eval/gen_questions.py`, `--dry-run`/`--light`/`--multi-hop` 지원)
