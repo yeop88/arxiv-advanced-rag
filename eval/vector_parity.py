@@ -32,6 +32,7 @@ sys.path.insert(0, str(ROOT / "tests"))
 from config import settings  # noqa: E402
 
 settings.query_transform_mode = "none"  # LLM 미사용: 벡터 스토어 차이만 측정
+settings.auto_fetch = False  # 평가는 코퍼스를 고정한다(근거 부족 시 논문 자동 수집 끔)
 
 from eval.dataset import load_eval_set  # noqa: E402
 from eval.retrieval_metrics import recall_at_k, reciprocal_rank  # noqa: E402

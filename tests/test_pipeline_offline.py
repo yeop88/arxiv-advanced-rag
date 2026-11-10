@@ -50,6 +50,7 @@ def main() -> None:
 
     settings.query_transform_mode = "multi_query"
     settings.enable_verification = True
+    settings.auto_fetch = False  # 오프라인 테스트: 네트워크(arXiv) 접속 없음
 
     from rag.pipeline import RAGPipeline
 
@@ -85,6 +86,43 @@ def main() -> None:
     first_tok = next(i for i, (e, _) in enumerate(events) if e == "token")
     assert events[first_tok - 1][0] == "generate_start", "토큰은 generate_start 뒤에 와야 함"
     print(f"진행 알림 {len(names)}개 순서 OK, 답변 스트리밍 토큰 {len(tokens)}회")
+
+    # --- 논문 자동 수집 2차 신호: 답변이 '찾을 수 없다'고 하면 수집 → 재검색 → 다시 작성 ---
+    import rag.auto_fetch as af
+
+    fake_main3 = FakeListChatModel(responses=[
+        "제공된 논문에서는 해당 내용을 찾을 수 없습니다.",
+        "새로 추가한 논문에 따르면 리랭킹은 정밀도를 높입니다 [1].",
+        '{"grounded": true, "faithfulness": 1.0, "unsupported_claims": [], "reasoning": "ok"}',
+    ])
+
+    def fake_get_llm3(light: bool = False, raw: bool = False):
+        return fake_light if light else fake_main3
+
+    s1.get_llm = s3.get_llm = s4.get_llm = fake_get_llm3
+    orig_needs, orig_fetch = af.needs_more, af.fetch_and_ingest
+    af.needs_more = lambda reranked: False  # 점수 신호는 끄고 답변 신호만 시험
+    af.fetch_and_ingest = lambda q, vs, emit=None: [{"source": "0000.00000", "title": "가짜 논문", "score": 0.9,
+                                                    "found_by": "test", "chunks": 1, "fulltext": False}]
+    settings.auto_fetch = True
+    try:
+        ev3: list[str] = []
+        result3 = pipe.run("리랭킹은 RAG에서 왜 필요한가요?",
+                           progress=lambda ev, **kw: ev3.append(ev + (":again" if kw.get("again") else "")
+                                                                   + (f":{kw['reason']}" if "reason" in kw else "")))
+    finally:
+        af.needs_more, af.fetch_and_ingest = orig_needs, orig_fetch
+        settings.auto_fetch = False
+    flow = [e for e in ev3 if e != "token"]
+    must = ["generate_done", "fetch_start:answer", "fetch_done", "retrieve_start:again", "retrieve_done",
+            "generate_start:again", "generate_done", "verify_start"]
+    i = 0
+    for m in must:  # must 의 각 단계가 flow 에 이 순서대로 나타나는지(앞에서부터 차례로 찾기)
+        assert m in flow[i:], f"2차 신호 흐름에 '{m}' 이 순서대로 없음: {flow}"
+        i = flow.index(m, i) + 1
+    assert result3.answer.startswith("새로 추가한 논문에 따르면"), "다시 쓴 답변이 최종 답변이어야 함"
+    assert result3.auto_fetched and result3.auto_fetched[0]["title"] == "가짜 논문"
+    print("논문 자동 수집 2차 신호(답변 '찾을 수 없음' → 수집 → 재작성) OK")
     print()
     print("모든 단계 통과 ✅")
 

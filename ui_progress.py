@@ -28,8 +28,53 @@ def _handle_event(event: str, info: dict, status, stage: str) -> str:
             status.caption(f"　　· {q}")
         return stage
     if event == "retrieve_start":
+        if info.get("again"):
+            status.write("2️⃣ **다시 검색** — 새로 추가한 논문까지 포함해 근거를 다시 고르는 중")
+            return "2/4 · 다시 검색 중"
         status.write(f"2️⃣ **검색·리랭킹** — 질의 {info.get('n_queries')}개로 논문을 찾고 관련도순으로 고르는 중")
         return "2/4 · 검색·리랭킹 중"
+    # --- 근거 부족 시 논문 자동 수집 ---
+    if event == "fetch_start":
+        if info.get("reason") == "answer":
+            why = "답변이 '근거에서 찾을 수 없다'고 밝혔습니다"
+        else:
+            why = f"가장 관련 높은 근거 점수 {info.get('top_score', 0):.2f} < 기준 {info.get('threshold', 0):.2f}"
+        status.write(f"📥 **근거 부족** — {why}. arXiv 에서 관련 논문을 찾아 DB 에 추가합니다")
+        return "📥 논문 찾는 중"
+    if event == "fetch_queries":
+        status.write("　· arXiv 검색어: " + " / ".join(f"`{q}`" for q in info.get("queries") or []))
+        return stage
+    if event == "fetch_warn":
+        status.caption(f"　⚠️ {info.get('message', '')}")
+        return stage
+    if event == "fetch_candidates":
+        src = "·".join(info.get("sources") or []) or "검색"
+        skipped = info.get("n_existing_skipped") or 0
+        status.write(f"　· {src}에서 DB 에 없는 후보 논문 {info.get('n')}편"
+                     + (f"(이미 있는 {skipped}편 제외)" if skipped else "") + " — 초록으로 관련도 채점 중")
+        return "📥 후보 논문 고르는 중"
+    if event == "fetch_selected":
+        papers = info.get("papers") or []
+        if not papers:
+            br = info.get("best_rejected")
+            status.write("　· 기준을 넘는 관련 논문이 없어 추가하지 않습니다"
+                         + (f" (가장 높은 점수 {br:.2f})" if br is not None else ""))
+        else:
+            status.write(f"　· 관련 논문 {len(papers)}편 선택 — 전문(PDF)을 받아 DB 에 추가합니다")
+            for t, s in papers:
+                status.caption(f"　　· {t[:80]} (관련도 {s:.2f})")
+        return stage
+    if event == "fetch_paper_start":
+        return f"📥 논문 {info['i']}/{info['n']} 전문 받는 중"
+    if event == "fetch_paper_done":
+        kind = "전문" if info.get("fulltext") else "초록(PDF 실패)"
+        status.write(f"　✓ [{info['i']}/{info['n']}] {info['title'][:60]} — {kind} {info['chunks']}청크 추가")
+        return stage
+    if event == "fetch_done":
+        n = len(info.get("added") or [])
+        status.write(f"　✓ 논문 자동 수집 {'완료: ' + str(n) + '편 추가' if n else '— 추가한 논문 없음(기존 근거로 진행)'} "
+                     f"({info['sec']:.1f}초)")
+        return stage
     if event == "retrieve_done":
         papers = info.get("papers") or []
         status.write(f"　✓ 후보 {info.get('n_candidates')}개 중 근거 {len(papers)}개 선택 ({info['sec']:.1f}초)")
@@ -37,6 +82,9 @@ def _handle_event(event: str, info: dict, status, stage: str) -> str:
             status.caption(f"　　[{i}] {p[:80]}")
         return stage
     if event == "generate_start":
+        if info.get("again"):
+            status.write(f"3️⃣ **답변 다시 작성** — 새 논문을 포함한 근거 {info.get('n_chunks')}개로 다시 쓰는 중")
+            return "3/4 · 답변 다시 작성 중"
         status.write(f"3️⃣ **답변 작성** — 근거 {info.get('n_chunks')}개로 답변을 쓰는 중 (아래에 실시간 표시)")
         return "3/4 · 답변 작성 중"
     if event == "generate_done":
@@ -142,8 +190,8 @@ def run_with_progress(pipe, prompt: str, history):
             while True:  # 쌓인 알림을 한 번에 처리(토큰은 마지막 것만 그림)
                 if ev == "token":
                     draft = info["text"]
-                elif ev == "regenerate_start":
-                    answer_box.empty()
+                elif ev == "regenerate_start" or (ev == "generate_start" and info.get("again")):
+                    answer_box.empty()  # 다시 쓰는 답변을 처음부터 표시
                     stage = _handle_event(ev, info, status, stage)
                 else:
                     stage = _handle_event(ev, info, status, stage)
@@ -161,7 +209,8 @@ def run_with_progress(pipe, prompt: str, history):
         st.stop()
     result = box["result"]
     tm = result.timings or {}
-    parts = [("변환", "1_query_transform"), ("검색", "2_retrieve_rerank"), ("작성", "3_generate"), ("검증", "4_verify")]
+    parts = [("변환", "1_query_transform"), ("검색", "2_retrieve_rerank"), ("논문수집", "2b_auto_fetch"),
+             ("재검색", "2c_retrieve_again"), ("작성", "3_generate"), ("재작성", "3c_generate_again"), ("검증", "4_verify")]
     detail = " · ".join(f"{n} {tm[k]:.0f}s" for n, k in parts if k in tm)
     status.update(label=f"✅ 완료 · 총 {total:.0f}초 ({detail})", state="complete", expanded=False)
     answer_box.markdown(result.answer)

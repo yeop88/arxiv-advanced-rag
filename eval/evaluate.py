@@ -24,6 +24,9 @@ warnings.filterwarnings("ignore")
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from config import settings  # noqa: E402
+
+settings.auto_fetch = False  # 평가는 코퍼스를 고정한다(근거 부족 시 논문 자동 수집 끔)
 from eval.dataset import questions as load_questions  # noqa: E402
 from eval.ragas_lite import evaluate_result, is_answered  # noqa: E402
 from rag.pipeline import RAGPipeline  # noqa: E402

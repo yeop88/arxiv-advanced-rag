@@ -27,6 +27,7 @@ import time
 from typing import Any, Callable
 
 from config import settings
+from rag import auto_fetch
 from rag import stage1_query_transform as s1
 from rag import stage2_rerank as s2
 from rag import stage3_generate as s3
@@ -55,6 +56,31 @@ class RAGPipeline:
 
     def __init__(self, vectorstore: VectorStoreLike | None = None):
         self.vectorstore = vectorstore or load_vectorstore()
+
+    def _fetch_and_retrieve(self, standalone: str, queries: list[str], result: PipelineResult,
+                            emit, reason: str, **info):
+        """논문 자동 수집 → (추가된 게 있으면) 다시 검색. 새 리랭크 결과를 돌려주고, 추가 없으면 None.
+        실패해도 예외를 올리지 않는다(기존 근거로 계속 진행 — graceful degrade)."""
+        t = time.perf_counter()
+        emit("fetch_start", reason=reason, **info)
+        try:
+            added = auto_fetch.fetch_and_ingest(standalone, self.vectorstore, emit)
+        except Exception as e:  # noqa: BLE001
+            added = []
+            emit("error", stage="fetch", message=str(e))
+        result.auto_fetched = added
+        result.timings["2b_auto_fetch"] = time.perf_counter() - t
+        emit("fetch_done", added=added, sec=result.timings["2b_auto_fetch"])
+        if not added:
+            return None
+        t = time.perf_counter()
+        emit("retrieve_start", n_queries=len(queries), again=True)
+        retrieved, reranked = s2.retrieve_and_rerank(self.vectorstore, standalone, queries)
+        result.retrieved, result.reranked = retrieved, reranked
+        result.timings["2c_retrieve_again"] = time.perf_counter() - t
+        emit("retrieve_done", n_candidates=len(retrieved),
+             papers=[c.title or c.source for c in reranked], sec=result.timings["2c_retrieve_again"])
+        return reranked
 
     def run(
         self, question: str, chat_history: ChatHistory | None = None,
@@ -110,6 +136,12 @@ class RAGPipeline:
         emit("retrieve_done", n_candidates=len(retrieved),
              papers=[c.title or c.source for c in reranked], sec=result.timings["2_retrieve_rerank"])
 
+        # --- 2b: 근거 부족 시 논문 자동 수집 → 다시 검색 (자기 확장, 1차 신호: 리랭크 점수) ---
+        if settings.auto_fetch and auto_fetch.needs_more(reranked):
+            reranked = self._fetch_and_retrieve(standalone, queries, result, emit, reason="score",
+                                                top_score=auto_fetch.top_score(reranked),
+                                                threshold=settings.auto_fetch_threshold) or reranked
+
         if not reranked:
             result.answer = "관련 근거를 찾지 못했습니다. 다른 질문을 시도하거나 논문을 더 수집하세요."
             return result
@@ -127,6 +159,22 @@ class RAGPipeline:
             return result
         result.timings["3_generate"] = time.perf_counter() - t
         emit("generate_done", sec=result.timings["3_generate"], chars=len(answer))
+
+        # --- 3b: 답변이 '근거에서 찾을 수 없다'고 하면 논문을 찾아 추가하고 다시 작성 (2차 신호) ---
+        # 점수로는 못 잡는 '비슷한 주제의 다른 논문만 있는' 경우. 한 질문에 수집은 최대 1회.
+        if settings.auto_fetch and not result.auto_fetched and "2b_auto_fetch" not in result.timings \
+                and auto_fetch.answer_lacks_evidence(answer):
+            new_reranked = self._fetch_and_retrieve(standalone, queries, result, emit, reason="answer")
+            if new_reranked:
+                reranked = new_reranked
+                t = time.perf_counter()
+                emit("generate_start", n_chunks=len(reranked), again=True)
+                try:
+                    answer = s3.generate(standalone, reranked, on_token=on_token)
+                except Exception as e:  # noqa: BLE001
+                    emit("error", stage="generate", message=str(e))  # 실패하면 첫 답변 유지
+                result.timings["3c_generate_again"] = time.perf_counter() - t
+                emit("generate_done", sec=result.timings["3c_generate_again"], chars=len(answer))
 
         # --- 4단계: 검증 (+ 필요시 자기수정 재생성) ---
         # 검증 실패는 치명적이지 않음 → 답변은 유지하고 검증만 생략(graceful degrade)

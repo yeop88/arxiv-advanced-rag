@@ -12,7 +12,6 @@ arXiv API(무료)로 논문 메타데이터+초록을 가져와 Chroma 에 저�
 from __future__ import annotations
 
 import argparse
-import re
 import sys
 from pathlib import Path
 
@@ -21,16 +20,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import arxiv  # noqa: E402
 from langchain_core.documents import Document  # noqa: E402
-from langchain_text_splitters import RecursiveCharacterTextSplitter  # noqa: E402
 
 from config import settings  # noqa: E402
-from rag.chunking import section_aware_split  # noqa: E402
+from rag.arxiv_source import make_client, norm_id, result_to_chunks  # noqa: E402
 from rag.vectorstore import build_vectorstore, delete_sources  # noqa: E402
-
-
-def _norm_id(short_id: str) -> str:
-    """'2310.11511v1' → '2310.11511' (버전 접미사 제거). 초록/전문 간 source 일치용."""
-    return re.sub(r"v\d+$", "", short_id)
 
 
 def _existing_sources() -> set[str]:
@@ -51,23 +44,6 @@ def _existing_sources() -> set[str]:
         return set()
 
 
-def _make_client(ca_bundle: str | None, insecure: bool) -> "arxiv.Client":
-    """arXiv 클라이언트 생성. 사내 프록시(MITM SSL) 환경 대응.
-
-    권장: --ca-bundle 로 사내 루트 CA 인증서(.pem)를 지정하면 '검증을 유지한 채' 통과.
-    최후수단: --insecure 는 SSL 검증을 끈다(보안 약화 — 신뢰된 사내망에서만).
-    """
-    # arXiv API 예의(rate limit) 준수: 요청 간 지연 + 재시도로 429 완화.
-    client = arxiv.Client(page_size=50, delay_seconds=5.0, num_retries=5)
-    if ca_bundle:
-        client._session.verify = ca_bundle  # 사내 CA 로 검증 (안전)
-    elif insecure:
-        import urllib3
-
-        urllib3.disable_warnings()
-        client._session.verify = False  # ⚠️ 검증 비활성 (신뢰된 사내망 한정)
-        print("  ⚠️ SSL 검증을 비활성화했습니다. 신뢰된 네트워크에서만 사용하세요.")
-    return client
 
 
 def fetch_papers(
@@ -85,7 +61,7 @@ def fetch_papers(
     skip 에 든 arXiv ID(이미 수집된 논문)는 건너뛴다(중복 방지).
     """
     skip = skip or set()
-    client = _make_client(ca_bundle, insecure)
+    client = make_client(ca_bundle, insecure)
     if id_list:
         search = arxiv.Search(id_list=id_list)
     else:
@@ -97,63 +73,23 @@ def fetch_papers(
 
     chunks: list[Document] = []
     for result in client.results(search):
-        arxiv_id = _norm_id(result.get_short_id())
+        arxiv_id = norm_id(result.get_short_id())
         if arxiv_id in skip:
             print(f"  건너뜀(중복): [{arxiv_id}] {result.title[:50]}")
             continue
         skip.add(arxiv_id)  # 같은 실행 내 중복도 방지
-        meta = {
-            "source": arxiv_id,
-            "title": result.title.strip(),
-            "authors": ", ".join(a.name for a in result.authors[:5]),
-            "published": result.published.strftime("%Y-%m-%d"),
-            "url": result.entry_id,
-        }
-
-        if fulltext:
-            text = _download_and_read_pdf(result, client._session)
-            if text:
-                # 전문 → 섹션 인식 청킹 (각 청크에 section 메타 부여)
-                paper_chunks = section_aware_split(text, meta)
-            else:
-                # PDF 실패 → 초록으로 폴백
-                paper_chunks = section_aware_split(
-                    f"{result.title}\n\n{result.summary}", meta
-                )
-        else:
-            # 제목 + 초록만 (빠르고 충분한 경우 많음) → 플랫 청킹
-            paper_chunks = _flat_splitter().split_documents(
-                [Document(page_content=f"{result.title}\n\n{result.summary}", metadata=meta)]
-            )
-
+        # 전문이면 섹션 인식 청킹(실패 시 초록), 아니면 제목+초록 플랫 청킹
+        paper_chunks, _ = result_to_chunks(result, client._session, fulltext)
         chunks.extend(paper_chunks)
         n_sec = len({c.metadata.get("section") for c in paper_chunks})
-        print(f"  수집: [{arxiv_id}] {meta['title'][:60]} "
+        print(f"  수집: [{arxiv_id}] {result.title.strip()[:60]} "
               f"({len(paper_chunks)}청크/{n_sec}섹션)")
 
     return chunks
 
 
-def _flat_splitter() -> RecursiveCharacterTextSplitter:
-    return RecursiveCharacterTextSplitter(
-        chunk_size=settings.chunk_size,
-        chunk_overlap=settings.chunk_overlap,
-    )
 
 
-def _download_and_read_pdf(result: "arxiv.Result", session) -> str:
-    """논문 PDF 를 받아 텍스트 추출 (fulltext 모드).
-
-    arxiv 4.x 에는 Result.download_pdf 가 없어 pdf_url 을 직접 받는다.
-    client 의 세션(session)을 재사용해 프록시 SSL(CA bundle) 설정을 그대로 쓴다.
-    """
-    import io
-
-    from pypdf import PdfReader
-
-    url = getattr(result, "pdf_url", None)
-    if not url:
-        return ""
     try:
         resp = session.get(url, timeout=60)
         resp.raise_for_status()

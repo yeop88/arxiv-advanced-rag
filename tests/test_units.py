@@ -151,6 +151,42 @@ def test_pinecone_store_adapter() -> None:
     print("  test_pinecone_store_adapter ✅")
 
 
+def test_paper_search_parsers() -> None:
+    """arXiv Atom 응답 해석(직접 호출 경로)과 OpenAlex 초록 역색인 복원."""
+    import rag.arxiv_source as A
+
+    atom = b"""<feed xmlns="http://www.w3.org/2005/Atom"><entry>
+      <id>http://arxiv.org/abs/2303.04137v5</id><published>2023-03-07T17:00:00Z</published>
+      <title>Diffusion Policy:
+        Visuomotor Policy Learning</title><summary>  We introduce   Diffusion Policy. </summary>
+      <author><name>Cheng Chi</name></author><author><name>Shuran Song</name></author></entry></feed>"""
+
+    class _Resp:
+        status_code = 200
+        content = atom
+
+        def raise_for_status(self):
+            pass
+
+    class _Sess:
+        def get(self, *a, **k):
+            return _Resp()
+
+    orig = A.http_session
+    A.http_session = lambda: _Sess()
+    try:
+        papers = A.search_arxiv("diffusion policy", 3)
+    finally:
+        A.http_session = orig
+    p = papers[0]
+    assert (p.pid, p.title, p.summary) == ("2303.04137", "Diffusion Policy: Visuomotor Policy Learning",
+                                           "We introduce Diffusion Policy."), p
+    assert p.author_names == ["Cheng Chi", "Shuran Song"] and str(p.published) == "2023-03-07"
+    assert A.paper_meta(p)["url"] == "https://arxiv.org/abs/2303.04137" and p.pdf_url.endswith("/pdf/2303.04137")
+    assert A._abstract_from_inverted({"networks": [1], "KAN": [0], "are": [2]}) == "KAN networks are"
+    print("  test_paper_search_parsers ✅")
+
+
 def main() -> None:
     print("단위 테스트 실행:")
     test_rrf()
@@ -159,6 +195,7 @@ def main() -> None:
     test_contextualize_no_history()
     test_mmr_per_source_cap()
     test_pinecone_store_adapter()
+    test_paper_search_parsers()
     print("모든 단위 테스트 통과 ✅")
 
 

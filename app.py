@@ -66,6 +66,13 @@ with st.sidebar:
     settings.use_hybrid = st.checkbox("2단계 · 하이브리드 검색(BM25+벡터)", value=True)
     settings.top_k_rerank = st.slider("2단계 · 근거 수(top-k)", 1, 10, settings.top_k_rerank)
     settings.enable_verification = st.checkbox("4단계 · 검증", value=True)
+    settings.auto_fetch = st.toggle(
+        "📥 근거 부족 시 논문 자동 수집",
+        value=settings.auto_fetch,
+        key="auto_fetch",
+        help="DB 에 맞는 근거가 없으면 arXiv 에서 관련 논문을 찾아 전문을 DB 에 추가하고 다시 검색합니다"
+             "(관련도 기준을 넘는 논문만, 질문당 최대 3편). 추가하면 질문이 수십 초 더 걸립니다.",
+    )
 
     # --- Thinking 켜기/끄기 ---
     # Qwen3 같은 로컬 모델은 thinking 을 on/off 로 제어한다(Claude·OpenAI 는 등급형 effort → .env 에서 설정).
@@ -140,6 +147,11 @@ def render_sources(result) -> None:
 
 def render_inspector(result) -> None:
     """한 답변의 검증 배지 + 단계별 내부 동작을 렌더."""
+    if getattr(result, "auto_fetched", None):
+        added = result.auto_fetched
+        st.info(f"📥 이 질문에 맞는 근거가 부족해 arXiv 논문 {len(added)}편을 DB 에 새로 추가했습니다:\n\n"
+                + "\n".join(f"- [{a['title']}](https://arxiv.org/abs/{a['source']}) — "
+                            f"{'전문' if a['fulltext'] else '초록'} {a['chunks']}청크" for a in added))
     if result.verification:
         v = result.verification
         c1, c2, c3 = st.columns(3)

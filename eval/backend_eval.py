@@ -28,6 +28,8 @@ warnings.filterwarnings("ignore")
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from config import settings  # noqa: E402
+
+settings.auto_fetch = False  # 평가는 코퍼스를 고정한다(근거 부족 시 논문 자동 수집 끔)
 from eval.dataset import load_eval_set  # noqa: E402
 from eval.ragas_lite import answer_relevance, context_relevance, is_answered  # noqa: E402
 from eval.retrieval_metrics import recall_at_k, reciprocal_rank  # noqa: E402

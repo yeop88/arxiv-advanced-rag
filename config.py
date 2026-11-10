@@ -123,6 +123,17 @@ class Settings:
     enable_verification: bool = True
     max_regenerations: int = 1  # 검증 실패 시 재생성 최대 횟수
 
+    # --- 논문 자동 수집 (근거가 부족하면 arXiv 에서 찾아 전문을 DB 에 추가하고 다시 검색) ---
+    auto_fetch: bool = os.getenv("AUTO_FETCH", "1") not in ("0", "false", "False")
+    # 트리거: 리랭크 최고 점수가 이 값보다 낮으면 "코퍼스에 근거 부족"으로 판단 (평가셋 분포로 보정)
+    auto_fetch_threshold: float = float(os.getenv("AUTO_FETCH_THRESHOLD", "0.2"))
+    auto_fetch_queries: int = 2           # 만들 arXiv 검색어 수
+    auto_fetch_candidates: int = 8        # 검색어당 후보 논문 수
+    # 후보 논문의 (질문, 제목+초록) 리랭크 점수가 이 값 이상인 것만 추가 — 엉뚱한 논문이 쌓이는 것 방지
+    auto_fetch_min_score: float = float(os.getenv("AUTO_FETCH_MIN_SCORE", "0.3"))
+    auto_fetch_max_papers: int = int(os.getenv("AUTO_FETCH_MAX_PAPERS", "3"))
+    auto_fetch_fulltext: bool = True      # PDF 전문(섹션 청킹). 실패한 논문만 초록으로 대체
+
     # --- 품질 하드닝 ---
     enable_llm_cache: bool = True          # 동일 프롬프트 응답 캐싱(SQLite) → 비용·속도 절감
     llm_cache_path: str = "./storage/llm_cache.db"

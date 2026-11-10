@@ -5,6 +5,9 @@
 ## [Unreleased]
 
 ### Added
+- 논문 자동 수집(자기 확장 RAG): 근거가 부족하면 arXiv 에서 관련 논문을 찾아 PDF 전문을 DB 에 추가하고 다시 검색·답변. 신호 2개 — ① 리랭크 최고 점수 < 0.2(평가셋 294문항 보정: 코퍼스 안 질문 4.1%만 오작동, 코퍼스 밖 8개 중 6개 감지) ② 답변이 '근거에서 찾을 수 없다'고 밝힘. 후보는 (질문, 제목+초록) 리랭크 0.3 이상만 최대 3편. 추가 논문은 `origin=auto` 표시 (`rag/auto_fetch.py`, `rag/pipeline.py`, `config.py AUTO_FETCH*`). 챗봇 사이드바 토글·진행 표시, 평가·테스트에서는 꺼짐
+- 논문 검색 출처 이중화: arXiv 검색 API 가 막히면(회사망 공용 IP 429) 30분간 OpenAlex 로 검색, PDF 는 arxiv.org 에서. arXiv 검색은 직접 호출·8초 제한(라이브러리 경유 시 실패까지 15~60초) (`rag/arxiv_source.py`)
+- 자동 수집 논문 관리 `scripts/manage_auto_papers.py`(목록·개별/전체 삭제, 수동 수집 논문 보호)
 - FreeToken 사용 가이드 `docs/FREETOKEN.md`(v0.2.2 기준): 구조·연결 설정·주요 명령(`ft ctl`/`serve`/`daemon`)·자원 관리(켜는 순서, MoE/KV 캐시)·측정 성능·문제 해결
 - 챗봇 시작 시 백그라운드 로딩 + 상태 관리: 임베딩·리랭커·벡터DB·BM25 를 미리 올리고, LLM 서버 `/health` 확인. 준비 전 질문은 진행 상황을 보여주며 대기 후 자동 진행, 사이드바 상태 2초 갱신 (`rag/warmup.py`, `ui_progress.py`, `app.py`)
 - 임베딩 모델도 GPU fp16 실행(`EMBED_DEVICE`/`RERANK_DEVICE`=auto): 질의 임베딩 148→22ms, 문서 20개 14.2→0.3s, 검색 결과 상위20 겹침 99.9% (`config.py`, `rag/llm.py`)
@@ -55,6 +58,7 @@
 - 진행 보고서 (`docs/PROGRESS_REPORT.md`), 작업 지침 (`CLAUDE.md`)
 
 ### Changed
+- arXiv 수집 공용 코드를 `rag/arxiv_source.py`로 분리(클라이언트·PDF 전문·청킹), `scripts/ingest_arxiv.py`는 이를 사용(동작 동일)
 - 2단계(검색·리랭크) 속도 개선: 리랭크+MMR 4.74s→0.06s(294문항 평균). MMR 이 후보를 CPU 로 다시 임베딩하던 것을 벡터 스토어에 저장된 벡터를 ID 로 꺼내 쓰도록 변경(Chroma `get`·Pinecone `fetch`, 결과 동일), 리랭커 GPU fp16(294문항 중 1문항 근소한 점수 뒤집힘 → recall@5 0.9711→0.9694, `RERANK_FP16=0`으로 끌 수 있음). 검색 결과에 청크 ID 를 싣도록 함 (`rag/llm.py`, `rag/stage2_rerank.py`, `rag/vectorstore.py`, `rag/schemas.py`)
 - `.env.example`을 FreeToken Local(local) 기준으로 재구성: local 설정을 기본 활성화(Qwen3.6-35B-A3B, thinking 메인 on/경량 off, temperature 0.6, max_tokens 8192), Claude·OpenAI는 주석 처리된 대안 블록으로, 백엔드 선택지별 필수 값 안내 추가
 - 기본 질의변환 모드를 **`hyde` → `multi_query`로 번복**: 확장 평가셋 검색 A/B(hyde 최하)에 더해 **생성지표 2-arm 교차검증**(hard 31문항)에서도 multi_query가 모든 지표 우위/동률(faithfulness 0.953 vs 0.950)로 확정(ADR-001 재검토, §5.7). (`config.py`)
