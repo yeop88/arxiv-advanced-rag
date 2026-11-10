@@ -202,16 +202,67 @@ def _load_chroma():
 
 
 # ---------------------------------------------------------------------------
+# 기준 코퍼스 보기: 자동 수집 논문(origin=auto)을 숨긴 스토어
+# ---------------------------------------------------------------------------
+class ExcludeOriginStore:
+    """다른 스토어를 감싸 metadata.origin == exclude 인 청크를 검색·조회에서 뺀다(삭제하지 않음).
+
+    벡터 검색: 넉넉히(k+여유) 가져와 걸러내고, 남은 게 k 개보다 적으면 더 많이 다시 가져온다
+    → '그 청크들이 없는 코퍼스'의 상위 k 와 같다. 백엔드 필터 문법(Pinecone $ne 가 필드가 없는
+    레코드를 어떻게 다루는지 등)에 기대지 않아 Chroma·Pinecone 에서 똑같이 동작한다.
+    get(): 걸러낸 목록 → BM25 색인도 기준 코퍼스만으로 만들어진다(IDF 까지 동일).
+    그 밖의 속성(add_documents·count 등)은 감싼 스토어로 넘긴다.
+    """
+
+    MARGIN = 20
+
+    def __init__(self, inner, exclude: str = "auto"):
+        self.inner = inner
+        self.exclude = exclude
+
+    def _keep(self, meta: dict | None) -> bool:
+        return (meta or {}).get("origin") != self.exclude
+
+    def similarity_search_with_relevance_scores(self, query: str, k: int = 4) -> list[tuple[Document, float]]:
+        fetch = k + self.MARGIN
+        while True:
+            hits = self.inner.similarity_search_with_relevance_scores(query, k=fetch)
+            kept = [(d, s) for d, s in hits if self._keep(d.metadata)]
+            if len(kept) >= k or len(hits) < fetch:  # 충분하거나, 스토어 전체를 다 본 경우
+                return kept[:k]
+            fetch *= 4
+
+    def similarity_search(self, query: str, k: int = 4) -> list[Document]:
+        return [d for d, _ in self.similarity_search_with_relevance_scores(query, k)]
+
+    def get(self) -> dict:
+        raw = self.inner.get()
+        ids = raw.get("ids") or [None] * len(raw.get("documents", []))
+        rows = [(i, t, m) for i, t, m in zip(ids, raw.get("documents", []), raw.get("metadatas", []))
+                if self._keep(m)]
+        return {"ids": [r[0] for r in rows], "documents": [r[1] for r in rows],
+                "metadatas": [r[2] for r in rows]}
+
+    def __getattr__(self, name):
+        return getattr(self.inner, name)
+
+
+# ---------------------------------------------------------------------------
 # 공통 진입점
 # ---------------------------------------------------------------------------
 def load_vectorstore(backend: str | None = None) -> VectorStoreLike:
-    """설정된 백엔드의 스토어를 로드. backend 를 주면 설정과 무관하게 그 백엔드(비교 측정용)."""
+    """설정된 백엔드의 스토어를 로드. backend 를 주면 설정과 무관하게 그 백엔드(비교 측정용).
+
+    settings.exclude_auto_papers 면 자동 수집 논문을 숨긴 기준 코퍼스 보기로 감싸서 준다.
+    """
     backend = backend or settings.vector_backend
     if backend == "pinecone":
-        return _load_pinecone()
-    if backend == "chroma":
-        return _load_chroma()
-    raise ValueError(f"알 수 없는 VECTOR_BACKEND: {backend} (chroma|pinecone)")
+        vs = _load_pinecone()
+    elif backend == "chroma":
+        vs = _load_chroma()
+    else:
+        raise ValueError(f"알 수 없는 VECTOR_BACKEND: {backend} (chroma|pinecone)")
+    return ExcludeOriginStore(vs) if settings.exclude_auto_papers else vs
 
 
 def get_all_documents(vs: VectorStoreLike) -> list[Document]:
@@ -229,6 +280,7 @@ def get_vectors(vs: VectorStoreLike, ids: list[str]) -> dict[str, list[float]]:
     ids = [i for i in dict.fromkeys(ids) if i]
     if not ids:
         return {}
+    vs = getattr(vs, "inner", vs)  # 기준 코퍼스 보기(ExcludeOriginStore)면 실제 스토어로
     try:
         if isinstance(vs, PineconeStore):
             res = vs.index.fetch(ids=ids, namespace=vs.namespace)

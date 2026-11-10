@@ -65,7 +65,7 @@ def make_search_queries(question: str) -> list[str]:
 
 
 def _existing_sources(vectorstore) -> set[str]:
-    raw = vectorstore.get()
+    raw = getattr(vectorstore, "inner", vectorstore).get()  # 숨긴 자동 수집분까지 포함해 중복 판단
     return {(m or {}).get("source") for m in raw.get("metadatas", []) if (m or {}).get("source")}
 
 

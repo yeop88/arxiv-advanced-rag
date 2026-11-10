@@ -30,6 +30,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from config import settings  # noqa: E402
 
 settings.auto_fetch = False  # 평가는 코퍼스를 고정한다(근거 부족 시 논문 자동 수집 끔)
+from eval.corpus import add_corpus_arg, describe, set_corpus  # noqa: E402
 from eval.dataset import load_eval_set  # noqa: E402
 from eval.ragas_lite import answer_relevance, context_relevance, is_answered  # noqa: E402
 from eval.retrieval_metrics import recall_at_k, reciprocal_rank  # noqa: E402
@@ -90,9 +91,15 @@ def run(args) -> None:
     out.parent.mkdir(parents=True, exist_ok=True)
     done = set()
     if out.exists() and not args.fresh:  # 이어서 실행: 이미 기록된 질문은 건너뜀
-        done = {json.loads(l)["id"] for l in out.read_text(encoding="utf-8").splitlines() if l.strip()}
+        prev = [json.loads(l) for l in out.read_text(encoding="utf-8").splitlines() if l.strip()]
+        other = {r.get("corpus", "base") for r in prev} - {args.corpus}  # 예전 기록(필드 없음)은 base
+        if other:
+            raise SystemExit(f"{out.name} 에는 다른 코퍼스({sorted(other)}) 기록이 있습니다. "
+                             f"--corpus 를 맞추거나 다른 --label 을 쓰세요.")
+        done = {r["id"] for r in prev}
     elif out.exists():
         out.unlink()
+    set_corpus(args.corpus)
 
     arm_thinking = args.thinking
     _set_thinking(arm_thinking)
@@ -102,6 +109,7 @@ def run(args) -> None:
           f"질문 {len(records)}개 (기록됨 {len(done)}개 건너뜀)")
     _wait_ready(args.max_wait)
     pipe = RAGPipeline()
+    print(f"  {describe(args.corpus, pipe.vectorstore)}")
 
     for i, rec in enumerate(records, 1):
         if rec["id"] in done:
@@ -129,7 +137,7 @@ def run(args) -> None:
                              f"서버 상태 확인 후 같은 명령으로 이어서 실행하세요.")
         exp = rec.get("expected_sources") or []
         row = {
-            "id": rec["id"], "difficulty": rec.get("difficulty"), "multi_hop": rec.get("multi_hop"),
+            "id": rec["id"], "corpus": args.corpus, "difficulty": rec.get("difficulty"), "multi_hop": rec.get("multi_hop"),
             "recall": recall_at_k(res.reranked, exp, k) if exp else None,
             "mrr": reciprocal_rank(res.reranked, exp) if exp else None,
             "faithfulness": res.verification.faithfulness if res.verification else None,
@@ -195,6 +203,7 @@ def main() -> None:
     ap.add_argument("--retries", type=int, default=3, help="문항 실패 시 재시도 횟수(실패 결과는 기록하지 않음)")
     ap.add_argument("--max-wait", type=int, default=1800, help="서버 준비 대기 최대 초(503 model loading 등)")
     ap.add_argument("--compare", nargs="+", help="비교할 결과 JSONL 경로들")
+    add_corpus_arg(ap)
     args = ap.parse_args()
     if args.compare:
         compare(args.compare)

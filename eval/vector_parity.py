@@ -33,6 +33,8 @@ from config import settings  # noqa: E402
 
 settings.query_transform_mode = "none"  # LLM 미사용: 벡터 스토어 차이만 측정
 settings.auto_fetch = False  # 평가는 코퍼스를 고정한다(근거 부족 시 논문 자동 수집 끔)
+# 자동 수집 논문은 챗봇이 쓰는 Pinecone 에만 들어가므로, 두 백엔드를 같은 코퍼스로 비교하려면 숨긴다
+settings.exclude_auto_papers = True
 
 from eval.dataset import load_eval_set  # noqa: E402
 from eval.retrieval_metrics import recall_at_k, reciprocal_rank  # noqa: E402

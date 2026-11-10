@@ -20,6 +20,10 @@ eval/compare.py — 설정 조합별 A/B 평가 자동화
     python eval/compare.py --n 4                  # 질문 수 제한(비용 절감)
     python eval/compare.py --difficulty hard      # 난이도 필터
     python eval/compare.py --retrieval-only       # 검색 지표만 — 대량 스크리닝(저비용)
+    python eval/compare.py --retrieval-only --only baseline --corpus both   # LLM 0회, 두 코퍼스 비교
+
+코퍼스: 기본은 자동 수집 논문을 숨긴 기준 코퍼스(--corpus base) → 이전 수치와 그대로 비교된다.
+--corpus all 은 자동 수집분 포함(실제 챗봇 상태), both 는 둘 다(eval/corpus.py 참고).
 """
 from __future__ import annotations
 
@@ -36,6 +40,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from config import settings  # noqa: E402
 
 settings.auto_fetch = False  # 평가는 코퍼스를 고정한다(근거 부족 시 논문 자동 수집 끔)
+from eval.corpus import LABELS, add_corpus_arg, corpora, describe, set_corpus  # noqa: E402
 from eval.dataset import load_eval_set  # noqa: E402
 from eval.ragas_lite import evaluate_result, is_answered  # noqa: E402
 from eval.retrieval_metrics import recall_at_k, reciprocal_rank  # noqa: E402
@@ -118,47 +123,56 @@ def main() -> None:
     parser.add_argument("--category", default=None, help="카테고리 필터")
     parser.add_argument("--retrieval-only", action="store_true",
                         help="검색 지표(recall@k·MRR)만 — 생성·검증·심판 생략(저비용 대량 스크리닝)")
+    parser.add_argument("--only", nargs="+", default=None, metavar="TEXT",
+                        help="이름에 TEXT 가 들어간 설정만 실행 (예: --only baseline → LLM 0회)")
+    add_corpus_arg(parser, allow_both=True)
     args = parser.parse_args()
 
     records = load_eval_set(difficulty=args.difficulty, category=args.category, limit=args.n)
     if not records:
         print("평가셋이 비었습니다(필터 확인). eval/eval_set.jsonl")
         return
+    configs = [c for c in CONFIGS if not args.only or any(t in c[0] for t in args.only)]
+    if not configs:
+        print(f"--only {args.only} 에 맞는 설정이 없습니다: {[c[0] for c in CONFIGS]}")
+        return
     k = settings.top_k_rerank
+    results: list[tuple[str, str, dict]] = []  # (코퍼스, 설정 이름, 지표)
 
-    vs = load_vectorstore()
-    pipe = None if args.retrieval_only else RAGPipeline()  # 유료 모드일 때만 전체 파이프라인
-    results: list[tuple[str, dict]] = []
-
-    for name, overrides in CONFIGS:
-        print(f"\n▶ 설정: {name}")
-        apply_config(overrides)
-        t0 = time.perf_counter()
-        metrics = run_config(pipe, vs, records, args.retrieval_only)
-        metrics["time"] = time.perf_counter() - t0
-        results.append((name, metrics))
-        line = f"  recall@{k}={metrics[f'recall@{k}']:.2f} mrr={metrics['mrr']:.2f}"
-        if not args.retrieval_only:
-            line += (f" | faith={metrics['faithfulness']:.2f} "
-                     f"ans_rel={metrics['answer_relevance']:.2f} "
-                     f"ctx_rel={metrics['context_relevance']:.2f} "
-                     f"ans_rate={metrics['answer_rate']:.0%}")
-        print(line)
+    for corpus in corpora(args.corpus):
+        set_corpus(corpus)
+        vs = load_vectorstore()
+        pipe = None if args.retrieval_only else RAGPipeline(vs)  # 유료 모드일 때만 전체 파이프라인
+        print(f"\n■ {describe(corpus, vs)}")
+        for name, overrides in configs:
+            print(f"\n▶ 설정: {name}")
+            apply_config(overrides)
+            t0 = time.perf_counter()
+            metrics = run_config(pipe, vs, records, args.retrieval_only)
+            metrics["time"] = time.perf_counter() - t0
+            results.append((corpus, name, metrics))
+            line = f"  recall@{k}={metrics[f'recall@{k}']:.4f} mrr={metrics['mrr']:.4f}"
+            if not args.retrieval_only:
+                line += (f" | faith={metrics['faithfulness']:.2f} "
+                         f"ans_rel={metrics['answer_relevance']:.2f} "
+                         f"ctx_rel={metrics['context_relevance']:.2f} "
+                         f"ans_rate={metrics['answer_rate']:.0%}")
+            print(line)
 
     # --- 비교표 (markdown) ---
     print("\n" + "=" * 78)
     mode = "검색 지표만(무료)" if args.retrieval_only else "전 지표"
     print(f"A/B 평가 비교표 (질문 {len(records)}개, {mode})\n")
     if args.retrieval_only:
-        print(f"| 설정 | recall@{k} | MRR |")
-        print("|---|---|---|")
-        for name, m in results:
-            print(f"| {name} | {m[f'recall@{k}']:.3f} | {m['mrr']:.3f} |")
+        print(f"| 코퍼스 | 설정 | recall@{k} | MRR |")
+        print("|---|---|---|---|")
+        for corpus, name, m in results:
+            print(f"| {LABELS[corpus]} | {name} | {m[f'recall@{k}']:.4f} | {m['mrr']:.4f} |")
     else:
-        print(f"| 설정 | recall@{k} | MRR | faithfulness | answer_rel | context_rel | answer_rate |")
-        print("|---|---|---|---|---|---|---|")
-        for name, m in results:
-            print(f"| {name} | {m[f'recall@{k}']:.3f} | {m['mrr']:.3f} "
+        print(f"| 코퍼스 | 설정 | recall@{k} | MRR | faithfulness | answer_rel | context_rel | answer_rate |")
+        print("|---|---|---|---|---|---|---|---|")
+        for corpus, name, m in results:
+            print(f"| {LABELS[corpus]} | {name} | {m[f'recall@{k}']:.4f} | {m['mrr']:.4f} "
                   f"| {m['faithfulness']:.3f} | {m['answer_relevance']:.3f} "
                   f"| {m['context_relevance']:.3f} | {m['answer_rate']:.0%} |")
     print("=" * 78)

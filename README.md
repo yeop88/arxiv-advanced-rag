@@ -96,6 +96,7 @@ streamlit run app.py
 > 계속 갱신되고, 답변은 써지는 대로 보입니다. 로컬 모델처럼 오래 걸려도 어디까지 왔는지 알 수 있습니다.
 > **📥 논문 자동 수집** — DB 에 맞는 근거가 없으면 arXiv 에서 관련 논문을 찾아 **전문**을 DB 에 추가하고 다시 답합니다
 > (관련도 기준을 넘는 논문만, 질문당 최대 3편, 사이드바에서 끄기 가능). 추가된 논문은 `python scripts/manage_auto_papers.py`로 보고 지울 수 있습니다.
+> 평가는 지우지 않고도 자동 수집분을 빼고(기본) 또는 넣고 할 수 있습니다(`--corpus`, 아래 학습·평가 도구).
 > **🧠 Thinking 토글**(로컬 모델 전용) — 사이드바에서 생성·검증 / 질의변환의 thinking 을 켜고 끌 수 있습니다.
 > 켜면 다중 홉 비교에 유리하지만 느립니다(측정: 질문당 off 약 1분, on 약 3~4분).
 > (API 키는 secrets 로 주입, 벡터DB는 사전 구축).
@@ -144,6 +145,8 @@ exam03_Advanced_RAG/
 │   ├── evaluate.py            # 평가 하네스
 │   ├── compare.py             # 설정 조합별 A/B 비교(--retrieval-only 등)
 │   ├── backend_eval.py        # 현재 LLM 백엔드로 질문별 지표·지연 기록 + 기록 간 비교
+│   ├── corpus.py              # 평가 코퍼스 선택(--corpus base|all|both: 자동 수집 논문 제외/포함)
+│   ├── auto_fetch_effect.py   # 자동 수집 전/후 검색 비교(수집을 일으킨 질문들)
 │   └── vector_parity.py       # Chroma vs Pinecone 검색 결과 동일성 검증
 ├── tests/                     # 단위·오프라인 테스트 (fake_pinecone.py: Pinecone 대역)
 ├── notebooks/
@@ -203,7 +206,12 @@ jupyter notebook notebooks/advanced_rag_walkthrough.ipynb   # 4단계 셀 단위
 python eval/compare.py                    # 설정별 A/B (검색+생성 지표)
 python eval/compare.py --retrieval-only   # LLM 없이 검색 품질만 저비용 스크리닝
 python eval/compare.py --difficulty hard  # 난이도 필터
+python eval/compare.py --retrieval-only --only baseline --corpus both   # LLM 0회, 두 코퍼스 나란히
+python eval/auto_fetch_effect.py          # 자동 수집 전/후 비교(수집을 일으킨 질문들, LLM 0회)
 ```
+**평가 코퍼스**: 챗봇이 자동 수집한 논문은 지우지 않고, 평가할 때만 골라 씁니다.
+기본값 `--corpus base`는 자동 수집 논문을 숨긴 기준 코퍼스라 이전 수치와 그대로 비교됩니다.
+`--corpus all`은 자동 수집분까지 포함한 실제 챗봇 상태, `both`는 둘 다 측정합니다(`compare.py`, `backend_eval.py`).
 평가셋은 `eval/eval_set.jsonl` 한 줄 = 질문 하나. 질문·정답논문(`expected_sources`)을
 추가하면 코드 수정 없이 평가셋이 커집니다. 대량으로 늘릴 땐:
 ```bash

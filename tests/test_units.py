@@ -151,6 +151,43 @@ def test_pinecone_store_adapter() -> None:
     print("  test_pinecone_store_adapter ✅")
 
 
+def test_exclude_auto_view() -> None:
+    """기준 코퍼스 보기: 자동 수집 청크를 숨긴 결과가 '처음부터 그 청크가 없던 스토어'와 같아야 한다."""
+    import tempfile
+
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from fake_pinecone import FakePineconeIndex
+
+    from rag.docstore import DocStore
+    from rag.vectorstore import ExcludeOriginStore, PineconeStore, get_all_documents, get_vectors
+
+    def make(with_auto: bool):
+        st = PineconeStore(FakePineconeIndex(), "t", _OneHotEmbeddings(),
+                           DocStore(Path(tempfile.mkdtemp()) / "d.jsonl"))
+        ids, vecs, texts, metas = [], [], [], []
+        for i in range(6):  # 수동 수집 청크: 질의 'a' 와 점점 멀어지게
+            ids.append(f"m{i}"); vecs.append([1.0, 0.1 * (i + 1), 0.0])
+            texts.append(f"수동 {i}"); metas.append({"source": f"P{i}"})
+        if with_auto:  # 자동 수집 청크가 질의 'a' 에 가장 가깝다 → 숨기지 않으면 상위를 차지
+            for i in range(4):
+                ids.append(f"a{i}"); vecs.append([1.0, 0.01 * i, 0.0])
+                texts.append(f"자동 {i}"); metas.append({"source": f"A{i}", "origin": "auto"})
+        st.upsert_vectors(ids, vecs, texts, metas)
+        return st
+
+    full, clean = make(True), make(False)
+    view = ExcludeOriginStore(full)
+    view.MARGIN = 0  # 여유 없이 → 첫 조회가 자동 청크로 가득 차 '더 가져오기' 경로를 타게 함
+    got = [d.id for d in view.similarity_search("a", k=3)]
+    want = [d.id for d in clean.similarity_search("a", k=3)]
+    assert got == want == ["m0", "m1", "m2"], (got, want)
+    assert [d.id for d in full.similarity_search("a", k=1)] == ["a0"], "원본 스토어에는 자동 청크가 그대로 있어야 함"
+    assert sorted(d.id for d in get_all_documents(view)) == [f"m{i}" for i in range(6)], "BM25 용 목록에서도 숨김"
+    assert set(get_vectors(view, ["m0", "a0"])) == {"m0", "a0"}, "저장 벡터 조회는 실제 스토어로 넘겨야 함"
+    assert view.count() == 10, "그 밖의 속성은 감싼 스토어로 넘김"
+    print("  test_exclude_auto_view ✅")
+
+
 def test_paper_search_parsers() -> None:
     """arXiv Atom 응답 해석(직접 호출 경로)과 OpenAlex 초록 역색인 복원."""
     import rag.arxiv_source as A
@@ -196,6 +233,7 @@ def main() -> None:
     test_mmr_per_source_cap()
     test_pinecone_store_adapter()
     test_paper_search_parsers()
+    test_exclude_auto_view()
     print("모든 단위 테스트 통과 ✅")
 
 
