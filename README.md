@@ -92,6 +92,8 @@ streamlit run app.py
 > (각 `[n]` 인용의 제목·섹션·arXiv 링크·원문) + "단계별 내부 동작"을 펼쳐 볼 수 있습니다.
 > **멀티턴 지원** — "그럼 둘 중 뭐가 더 느려?" 같은 후속질문도 이전 맥락을 반영해 답합니다
 > (0단계 질의 문맥화). 사내 서버/Streamlit Cloud 에 그대로 배포 가능
+> **⏱️ 실시간 진행 표시** — 질문하면 4단계가 각각 무엇을 하는지(만든 검색 질의, 고른 논문, 검증 결과)와 경과 시간이
+> 계속 갱신되고, 답변은 써지는 대로 보입니다. 로컬 모델처럼 오래 걸려도 어디까지 왔는지 알 수 있습니다.
 > **🧠 Thinking 토글**(로컬 모델 전용) — 사이드바에서 생성·검증 / 질의변환의 thinking 을 켜고 끌 수 있습니다.
 > 켜면 다중 홉 비교에 유리하지만 느립니다(측정: 질문당 off 약 1분, on 약 3~4분).
 > (API 키는 secrets 로 주입, 벡터DB는 사전 구축).
@@ -145,7 +147,9 @@ exam03_Advanced_RAG/
 │   └── advanced_rag_walkthrough.ipynb  # 4단계 셀 단위 학습 노트북
 ├── docs/
 │   ├── PROGRESS_REPORT.md     # 진행 보고서(A/B 결과·이슈·로드맵)
-│   └── ADR-001-query-transform-default.md  # 기본 질의변환 모드 결정 기록
+│   ├── ADR-001-query-transform-default.md  # 기본 질의변환 모드 결정 기록
+│   └── FREETOKEN.md           # FreeToken(로컬 LLM 서버) 사용법·자원 관리·문제 해결 (v0.2.2)
+├── ui_progress.py             # 챗봇 실시간 진행 표시(백그라운드 실행 + 0.5초 갱신)
 └── app.py                     # Streamlit 챗봇 UI
 ```
 
@@ -166,6 +170,7 @@ python eval/vector_parity.py                      # 평가셋 전체로 Chroma �
 # 통과하면 .env 에 VECTOR_BACKEND=pinecone
 ```
 키가 없을 때는 `python eval/vector_parity.py --fake` 로 메모리 내 대역에 같은 벡터를 넣어 어댑터를 검증할 수 있습니다.
+회사망 프록시 때문에 `CERTIFICATE_VERIFY_FAILED` 가 나면 `python scripts/export_ca_bundle.py` 를 한 번 실행하세요(인증서 검증은 유지).
 
 ---
 
@@ -216,6 +221,7 @@ python eval/gen_questions.py --n 20   # 코퍼스에서 질문 후보 생성(사
 ## 📋 진행 보고서 · 변경 이력
 
 - 의사결정·구현·검증·이슈·로드맵: [docs/PROGRESS_REPORT.md](docs/PROGRESS_REPORT.md)
+- 로컬 LLM 서버(FreeToken) 사용법: [docs/FREETOKEN.md](docs/FREETOKEN.md)
 - 기능 추가/수정 이력: [CHANGELOG.md](CHANGELOG.md)
 
 ## 📝 참고

@@ -47,6 +47,24 @@ class Settings:
     # --- 임베딩 / 리랭커 (HuggingFace 로컬) ---
     embed_model: str = os.getenv("EMBED_MODEL", "BAAI/bge-m3")
     rerank_model: str = os.getenv("RERANK_MODEL", "BAAI/bge-reranker-v2-m3")
+    # 실행 장치: "auto"(GPU 있으면 GPU) | "cuda" | "cpu". GPU 에선 fp16 으로 올린다.
+    # 측정: 질의 임베딩 148→22ms, 문서 20개 14.2→0.3s, 리랭크 20쌍 1.18→0.08s, 검색 결과 사실상 동일.
+    embed_device: str = os.getenv("EMBED_DEVICE", "auto")
+    rerank_device: str = os.getenv("RERANK_DEVICE", "auto")
+    # 리랭커 GPU fp16: VRAM 절반(FreeToken 과 GPU 공유 시 유리). 294문항 측정에서 fp32 대비
+    # 1문항만 근소한 점수 뒤집힘(recall@5 0.9711→0.9694). 정확도 최우선이면 0 으로 끄기.
+    rerank_fp16: bool = os.getenv("RERANK_FP16", "1") not in ("0", "false", "False")
+
+    @staticmethod
+    def resolve_device(value: str) -> str:
+        if value != "auto":
+            return value
+        try:
+            import torch
+
+            return "cuda" if torch.cuda.is_available() else "cpu"
+        except ImportError:
+            return "cpu"
 
     # --- 벡터 스토어 ---
     # "chroma"(로컬 파일) | "pinecone"(원격). 전환은 scripts/migrate_to_pinecone.py 로 벡터를 그대로 복사한 뒤.
@@ -61,6 +79,15 @@ class Settings:
     pinecone_region: str = os.getenv("PINECONE_REGION", "us-east-1")
     # 원문 보관소: Pinecone 사용 시 BM25·본문 조회의 기준(원격 DB 에서 전체 문서를 꺼내기 어렵기 때문)
     docstore_path: str = os.getenv("DOCSTORE_PATH", "./storage/docstore.jsonl")
+    # 사내 프록시 CA 묶음(PEM). 비우면 storage/ca_bundle.pem 이 있을 때 자동 사용
+    # (scripts/export_ca_bundle.py 로 생성). 인증서 검증을 끄지 않고 프록시를 통과하기 위함.
+    ca_bundle: str = os.getenv("CA_BUNDLE", "")
+
+    def resolved_ca_bundle(self) -> str | None:
+        if self.ca_bundle:
+            return self.ca_bundle
+        default = os.path.join("storage", "ca_bundle.pem")
+        return default if os.path.exists(default) else None
 
     # --- 청킹 ---
     chunk_size: int = 1000

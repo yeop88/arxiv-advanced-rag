@@ -36,7 +36,7 @@ def main() -> None:
         ]
     )
 
-    def fake_get_llm(light: bool = False):
+    def fake_get_llm(light: bool = False, raw: bool = False):  # raw: 스트리밍 경로용(가짜 모델은 동일)
         return fake_light if light else fake_main
 
     # 각 stage 모듈의 get_llm 교체
@@ -71,6 +71,20 @@ def main() -> None:
     print(f"4단계 검증: grounded={result.verification.grounded}, "
           f"faithfulness={result.verification.faithfulness}")
     print(f"재생성 여부: {result.regenerated}")
+
+    # --- 진행 알림 + 답변 스트리밍 (챗봇 실시간 표시용) ---
+    events: list[tuple[str, dict]] = []
+    result2 = pipe.run("리랭킹은 RAG에서 왜 필요한가요?", progress=lambda ev, **kw: events.append((ev, kw)))
+    names = [e for e, _ in events if e != "token"]
+    expected = ["transform_start", "transform_done", "retrieve_start", "retrieve_done",
+                "generate_start", "generate_done", "verify_start", "verify_done"]
+    assert names == expected, f"진행 알림 순서가 다름: {names}"
+    tokens = [kw["text"] for e, kw in events if e == "token"]
+    assert len(tokens) > 1, "답변이 토큰 단위로 스트리밍되지 않음"
+    assert tokens[-1].strip() == result2.answer, "스트리밍 마지막 텍스트와 최종 답변이 다름"
+    first_tok = next(i for i, (e, _) in enumerate(events) if e == "token")
+    assert events[first_tok - 1][0] == "generate_start", "토큰은 generate_start 뒤에 와야 함"
+    print(f"진행 알림 {len(names)}개 순서 OK, 답변 스트리밍 토큰 {len(tokens)}회")
     print()
     print("모든 단계 통과 ✅")
 

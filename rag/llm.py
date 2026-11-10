@@ -61,11 +61,13 @@ def _strip_reasoning(msg: AIMessage) -> AIMessage:
     return msg
 
 
-def get_llm(light: bool = False) -> Runnable:
+def get_llm(light: bool = False, raw: bool = False) -> Runnable:
     """생성/검증용 LLM 반환. 모든 호출처는 `prompt | get_llm() | StrOutputParser()` 형태.
 
     Args:
         light: True 면 경량 모델·경량 effort 사용 — 질의변환처럼 쉬운 작업용.
+        raw: True 면 후처리(<think> 제거) 래퍼 없이 모델 그대로 반환. 래퍼는 전체 응답을
+             모아야 동작해 토큰 스트리밍을 막으므로, 스트리밍할 때 쓰고 제거는 호출부가 한다.
     """
     _init_llm_cache()
     model = settings.llm_model_light if light else settings.llm_model
@@ -131,7 +133,7 @@ def get_llm(light: bool = False) -> Runnable:
             max_retries=settings.llm_max_retries,
             **extra,
         )
-        return llm | RunnableLambda(_strip_reasoning)
+        return llm if raw else llm | RunnableLambda(_strip_reasoning)
 
     raise ValueError(f"알 수 없는 LLM_PROVIDER: {provider} (anthropic|openai|local)")
 
@@ -141,9 +143,16 @@ def get_embeddings():
     """HuggingFace 임베딩(bge-m3). 무거우므로 캐싱해서 1번만 로드."""
     from langchain_huggingface import HuggingFaceEmbeddings
 
+    device = settings.resolve_device(settings.embed_device)
+    model_kwargs: dict = {"device": device}
+    if device.startswith("cuda"):
+        import torch
+
+        # GPU 에선 fp16: 메모리 절반(bge-m3 약 1GB), 속도 수~수십 배. 저장 벡터(fp32)와 코사인 ≥0.9997.
+        model_kwargs["model_kwargs"] = {"torch_dtype": torch.float16}
     return HuggingFaceEmbeddings(
         model_name=settings.embed_model,
-        model_kwargs={"device": "cpu"},  # GPU 있으면 "cuda"
+        model_kwargs=model_kwargs,
         encode_kwargs={"normalize_embeddings": True},  # 코사인 유사도용 정규화
     )
 
@@ -155,6 +164,13 @@ def get_reranker():
     CrossEncoder 는 (query, passage) 쌍을 함께 입력받아 관련도 점수를 매깁니다.
     벡터검색(bi-encoder)보다 느리지만 훨씬 정확 → 소수 후보 재정렬에 사용.
     """
+    import torch
     from sentence_transformers import CrossEncoder
 
-    return CrossEncoder(settings.rerank_model, max_length=512)
+    device = settings.resolve_device(settings.rerank_device)
+    if device.startswith("cuda") and settings.rerank_fp16:
+        # GPU fp16: 메모리 절반, 20쌍 1.18s → 0.08s. 294문항에서 fp32 대비 1문항만 근소한 점수 뒤집힘
+        # (recall@5 0.9711→0.9694). 로컬 LLM 과 GPU 를 나눠 쓸 때 느려지는 위험이 줄어든다.
+        return CrossEncoder(settings.rerank_model, max_length=512, device=device,
+                            model_kwargs={"torch_dtype": torch.float16})
+    return CrossEncoder(settings.rerank_model, max_length=512, device=device)

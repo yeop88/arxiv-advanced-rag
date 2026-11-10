@@ -14,6 +14,7 @@ from pydantic import BaseModel, Field
 class RetrievedChunk(BaseModel):
     """검색된 하나의 근거 조각."""
     content: str
+    id: str | None = None     # 벡터 스토어의 청크 ID — 저장된 임베딩을 다시 꺼내 쓰는 데 사용
     source: str = ""          # arXiv ID
     title: str = ""
     section: str = ""         # 전문 기반일 때 섹션명(Method/Results 등)

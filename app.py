@@ -15,16 +15,40 @@ from __future__ import annotations
 import streamlit as st
 
 from config import settings
+from rag.warmup import PipelineLoader, llm_status
+from ui_progress import run_with_progress, wait_until_ready
 
 st.set_page_config(page_title="arXiv RAG 챗봇", page_icon="📚", layout="centered")
 
 
-@st.cache_resource(show_spinner="모델·벡터DB 로딩 중... (최초 1회)")
-def get_pipeline():
-    """파이프라인(임베딩/리랭커/벡터DB)은 무거우므로 세션당 1회만 로드."""
-    from rag.pipeline import RAGPipeline
+@st.cache_resource(show_spinner=False)
+def get_loader() -> PipelineLoader:
+    """앱 프로세스당 1개. 만들어지는 즉시 백그라운드에서 임베딩·리랭커·벡터DB·BM25 를 올린다.
+    페이지가 처음 열리는 순간 시작되므로, 사용자가 질문을 입력하는 동안 로딩이 진행된다."""
+    return PipelineLoader()
 
-    return RAGPipeline()
+
+loader = get_loader()
+
+
+@st.fragment(run_every=2)
+def status_panel() -> None:
+    """사이드바 상태 표시 — 2초마다 갱신(로딩 진행, LLM 서버 상태)."""
+    if loader.state == "ready":
+        st.success(f"모델·DB 준비 완료 ({loader.since_start():.0f}초)", icon="✅")
+    elif loader.state == "error":
+        st.error(f"모델·DB 준비 실패: {loader.error}")
+    else:
+        st.info(f"모델·DB 로딩 중 ({len(loader.done)}/4)\n\n{loader.step} · {loader.since_start():.0f}초", icon="⏳")
+    state, desc = llm_status()
+    if state == "ok":
+        st.success(f"LLM 서버: {desc}", icon="✅")
+    elif state == "loading":
+        st.warning(f"LLM 서버: {desc}", icon="⏳")
+    elif state == "down":
+        st.error(f"LLM 서버: {desc}")
+    else:
+        st.caption(f"LLM: {desc}")
 
 
 # ---------------------------------------------------------------------------
@@ -32,6 +56,7 @@ def get_pipeline():
 # ---------------------------------------------------------------------------
 with st.sidebar:
     st.title("⚙️ 설정")
+    status_panel()
     settings.query_transform_mode = st.selectbox(
         "1단계 · 질의 변환",
         options=["multi_query", "hyde", "decompose", "none"],
@@ -159,19 +184,14 @@ if prompt := st.chat_input("논문에 대해 물어보세요 (예: 리랭킹은 
 
     # AI 응답
     with st.chat_message("assistant"):
-        try:
-            pipe = get_pipeline()
-        except FileNotFoundError as e:
-            st.error(str(e))
-            st.stop()
+        # 모델·DB·LLM 서버가 아직 준비 전이면 진행 상황을 보여주며 기다린 뒤 이어서 답한다
+        pipe = wait_until_ready(loader, llm_status)
 
         # 직전까지의 대화를 (role, content) 히스토리로 전달 → 멀티턴 문맥화
         history = [(m["role"], m["content"]) for m in st.session_state.messages[:-1]]
         mode = _thinking_label()
-        with st.spinner(f"4단계 파이프라인 실행 중... ({mode})"):
-            result = pipe.run(prompt, chat_history=history)
+        result = run_with_progress(pipe, prompt, history)
 
-        st.markdown(result.answer)
         if mode:
             st.caption(mode)
         render_sources(result)

@@ -114,8 +114,15 @@ def main() -> None:
     if diff:
         print(f"최종 근거가 다른 질문 {len(diff)}개: {diff[:10]}")
 
-    ok = rb >= ra - 0.005 and mb >= ma - 0.005
-    print("\n판정:", "✅ 저하 없음 (recall·MRR 이 Chroma 이상)" if ok else "⚠️ 저하 있음 — 원인 확인 필요")
+    tol = 0.005
+    ok = rb >= ra - tol and mb >= ma - tol
+    if ok and rb >= ra and mb >= ma:
+        verdict = "✅ 저하 없음 (recall·MRR 이 Chroma 이상)"
+    elif ok:
+        verdict = f"✅ 허용 범위 (차이 recall {rb - ra:+.4f} / MRR {mb - ma:+.4f}, 허용 오차 {tol} 이내 — 근사 탐색 수준)"
+    else:
+        verdict = f"⚠️ 저하 있음 (허용 오차 {tol} 초과) — 원인 확인 필요"
+    print("\n판정:", verdict)
     if args.fake:
         print("※ fake 는 정확 탐색이라 '어댑터·이전 과정이 결과를 바꾸지 않는지'를 검증한다. "
               "실제 Pinecone 은 근사 탐색이므로 키를 넣고 다시 실행해 최종 확인할 것.")

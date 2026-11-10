@@ -20,7 +20,7 @@ from langchain_core.documents import Document
 from config import settings
 from rag.llm import get_reranker
 from rag.schemas import RetrievedChunk
-from rag.vectorstore import VectorStoreLike, get_all_documents
+from rag.vectorstore import VectorStoreLike, get_all_documents, get_vectors
 
 
 def _chunk_key(content: str) -> str:
@@ -46,6 +46,7 @@ def retrieve(vectorstore: VectorStoreLike, queries: list[str]) -> list[Retrieved
                 continue
             seen[key] = RetrievedChunk(
                 content=doc.page_content,
+                id=doc.id,
                 source=doc.metadata.get("source", ""),
                 title=doc.metadata.get("title", ""),
                 section=doc.metadata.get("section", ""),
@@ -77,6 +78,17 @@ def _get_bm25(vectorstore_id: int):
 _BM25_STORE: dict = {}  # vectorstore 참조 보관 (lru_cache 는 해시 가능 인자만 받으므로)
 
 
+def warm_bm25(vectorstore: VectorStoreLike) -> None:
+    """BM25 색인을 미리 구축(챗봇 시작 시 백그라운드 로딩용). 첫 질문 지연을 없앤다."""
+    _BM25_STORE["vs"] = vectorstore
+    _get_bm25(id(vectorstore))
+
+
+def reset_bm25() -> None:
+    """코퍼스에 문서가 추가·삭제된 뒤 호출 → 다음 검색 때 새 원문으로 BM25 를 다시 만든다."""
+    _get_bm25.cache_clear()
+
+
 def _reciprocal_rank_fusion(
     rankings: list[list[Document]], k: int
 ) -> list[tuple[Document, float]]:
@@ -90,7 +102,8 @@ def _reciprocal_rank_fusion(
     for ranking in rankings:
         for rank, doc in enumerate(ranking):
             key = _chunk_key(doc.page_content)
-            docs_by_key[key] = doc
+            if key not in docs_by_key or (doc.id and not docs_by_key[key].id):
+                docs_by_key[key] = doc
             scores[key] = scores.get(key, 0.0) + 1.0 / (k + rank)
     fused = sorted(scores.items(), key=lambda kv: kv[1], reverse=True)
     return [(docs_by_key[key], score) for key, score in fused]
@@ -115,6 +128,7 @@ def retrieve_hybrid(vectorstore: VectorStoreLike, queries: list[str]) -> list[Re
     return [
         RetrievedChunk(
             content=doc.page_content,
+            id=doc.id,
             source=doc.metadata.get("source", ""),
             title=doc.metadata.get("title", ""),
             section=doc.metadata.get("section", ""),
@@ -131,6 +145,7 @@ def _mmr_select(
     lambda_: float,
     same_source_penalty: float,
     max_per_source: int = 0,
+    vectors: dict[str, list[float]] | None = None,
 ) -> list[RetrievedChunk]:
     """MMR(Maximal Marginal Relevance)로 관련도와 다양성을 함께 고려해 k개 선택.
 
@@ -144,6 +159,9 @@ def _mmr_select(
     (MMR의 soft 벌점만으로는 관련도 격차가 큰 경우 쏠림을 못 막기 때문. 단, 후보 논문이
      부족해 k를 못 채우면 상한을 완화해 빈 슬롯을 채운다.)
     → 다중 홉 질문에서 서로 다른 논문의 근거가 상위에 고르게 올라온다.
+
+    vectors: {청크 ID: 저장된 임베딩}. 주어지면 그대로 쓰고, 없는 청크만 새로 임베딩한다.
+    (저장된 벡터는 색인 때 같은 모델로 만든 것이라 결과가 같고, CPU 재임베딩 수 초를 아낀다)
     """
     import numpy as np
 
@@ -158,7 +176,12 @@ def _mmr_select(
     rel = (scores - scores.min()) / span if span > 1e-9 else np.ones_like(scores)
 
     # 청크 임베딩 → 정규화(코사인 = 내적)
-    embs = np.array(get_embeddings().embed_documents([c.content for c in candidates]), dtype=float)
+    vectors = vectors or {}
+    missing = [i for i, c in enumerate(candidates) if not (c.id and c.id in vectors)]
+    fresh = get_embeddings().embed_documents([candidates[i].content for i in missing]) if missing else []
+    fresh_by_idx = dict(zip(missing, fresh))
+    embs = np.array([fresh_by_idx[i] if i in fresh_by_idx else vectors[c.id]
+                     for i, c in enumerate(candidates)], dtype=float)
     embs /= (np.linalg.norm(embs, axis=1, keepdims=True) + 1e-9)
     sim = embs @ embs.T  # (N, N) 코사인 유사도
 
@@ -198,7 +221,8 @@ def _mmr_select(
     return [candidates[i] for i in selected]
 
 
-def rerank(question: str, candidates: list[RetrievedChunk]) -> list[RetrievedChunk]:
+def rerank(question: str, candidates: list[RetrievedChunk],
+           vectorstore: VectorStoreLike | None = None) -> list[RetrievedChunk]:
     """크로스인코더로 재정렬 후 상위 top_k_rerank 반환.
 
     config.rerank_diversity 가 True 면 단순 점수순 대신 MMR로 다양성까지 고려한다.
@@ -216,9 +240,10 @@ def rerank(question: str, candidates: list[RetrievedChunk]) -> list[RetrievedChu
     if settings.rerank_diversity:
         # 관련도순 정렬된 후보에 MMR 적용 (내부에서 다양성 재배치)
         candidates = sorted(candidates, key=lambda c: c.rerank_score or 0.0, reverse=True)
+        vectors = get_vectors(vectorstore, [c.id for c in candidates if c.id]) if vectorstore else None
         return _mmr_select(
             candidates, settings.top_k_rerank, settings.mmr_lambda,
-            settings.same_source_penalty, settings.rerank_max_per_source,
+            settings.same_source_penalty, settings.rerank_max_per_source, vectors=vectors,
         )
 
     ranked = sorted(candidates, key=lambda c: c.rerank_score or 0.0, reverse=True)
@@ -237,5 +262,5 @@ def retrieve_and_rerank(
         retrieved = retrieve_hybrid(vectorstore, queries)
     else:
         retrieved = retrieve(vectorstore, queries)
-    reranked = rerank(question, retrieved)
+    reranked = rerank(question, retrieved, vectorstore)
     return retrieved, reranked

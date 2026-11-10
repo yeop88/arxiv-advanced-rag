@@ -5,6 +5,13 @@
 ## [Unreleased]
 
 ### Added
+- FreeToken 사용 가이드 `docs/FREETOKEN.md`(v0.2.2 기준): 구조·연결 설정·주요 명령(`ft ctl`/`serve`/`daemon`)·자원 관리(켜는 순서, MoE/KV 캐시)·측정 성능·문제 해결
+- 챗봇 시작 시 백그라운드 로딩 + 상태 관리: 임베딩·리랭커·벡터DB·BM25 를 미리 올리고, LLM 서버 `/health` 확인. 준비 전 질문은 진행 상황을 보여주며 대기 후 자동 진행, 사이드바 상태 2초 갱신 (`rag/warmup.py`, `ui_progress.py`, `app.py`)
+- 임베딩 모델도 GPU fp16 실행(`EMBED_DEVICE`/`RERANK_DEVICE`=auto): 질의 임베딩 148→22ms, 문서 20개 14.2→0.3s, 검색 결과 상위20 겹침 99.9% (`config.py`, `rag/llm.py`)
+- 챗봇 실시간 진행 표시: 질문 입력 즉시 표시, 4단계 진행 로그(만든 검색 질의·고른 논문·검증 결과·재작성 여부)와 경과 시간을 0.5초마다 갱신, 답변은 생성되는 대로 스트리밍. 완료 시 단계별 소요 시간 요약 (`ui_progress.py`, `app.py`)
+- 파이프라인 진행 알림 `RAGPipeline.run(progress=...)`과 답변 토큰 스트리밍(`generate(on_token=...)`). 로컬 모델은 스트리밍 시 `<think>` 구간을 숨김 (`rag/pipeline.py`, `rag/stage3_generate.py`, `rag/llm.py get_llm(raw=)`)
+- 사내 프록시 CA 묶음 생성 `scripts/export_ca_bundle.py`(certifi + Windows 인증서 저장소 → `storage/ca_bundle.pem`)와 `CA_BUNDLE` 설정 — Pinecone 연결이 인증서 검증을 유지한 채 프록시를 통과
+- `.env.example` Pinecone 입력란(API 키·인덱스·네임스페이스·위치·docstore·CA_BUNDLE)
 - 챗봇 사이드바 Thinking 토글: 로컬 모델(Qwen 등)의 생성·검증 / 질의변환 thinking 을 실행 중에 켜고 끔. 답변마다 사용한 모드 표시 (`app.py`)
 - 평가 실패 방지: 생성·검증·질의변환·채점 실패(예: 서버 `503 model is still loading`)를 감지하면 기록하지 않고 서버 준비를 기다린 뒤 재시도, 계속 실패하면 중단 (`eval/backend_eval.py --retries/--max-wait`)
 - Pinecone 벡터 DB 지원 `VECTOR_BACKEND=pinecone`: 공식 SDK 위 어댑터(`PineconeStore`)가 Chroma 와 같은 메서드 모양을 제공해 파이프라인 코드 변경 없이 전환. 원문은 로컬 docstore(JSONL)에 보관해 BM25 하이브리드 검색 유지 (`rag/vectorstore.py`, `rag/docstore.py`, `config.py`)
@@ -48,6 +55,7 @@
 - 진행 보고서 (`docs/PROGRESS_REPORT.md`), 작업 지침 (`CLAUDE.md`)
 
 ### Changed
+- 2단계(검색·리랭크) 속도 개선: 리랭크+MMR 4.74s→0.06s(294문항 평균). MMR 이 후보를 CPU 로 다시 임베딩하던 것을 벡터 스토어에 저장된 벡터를 ID 로 꺼내 쓰도록 변경(Chroma `get`·Pinecone `fetch`, 결과 동일), 리랭커 GPU fp16(294문항 중 1문항 근소한 점수 뒤집힘 → recall@5 0.9711→0.9694, `RERANK_FP16=0`으로 끌 수 있음). 검색 결과에 청크 ID 를 싣도록 함 (`rag/llm.py`, `rag/stage2_rerank.py`, `rag/vectorstore.py`, `rag/schemas.py`)
 - `.env.example`을 FreeToken Local(local) 기준으로 재구성: local 설정을 기본 활성화(Qwen3.6-35B-A3B, thinking 메인 on/경량 off, temperature 0.6, max_tokens 8192), Claude·OpenAI는 주석 처리된 대안 블록으로, 백엔드 선택지별 필수 값 안내 추가
 - 기본 질의변환 모드를 **`hyde` → `multi_query`로 번복**: 확장 평가셋 검색 A/B(hyde 최하)에 더해 **생성지표 2-arm 교차검증**(hard 31문항)에서도 multi_query가 모든 지표 우위/동률(faithfulness 0.953 vs 0.950)로 확정(ADR-001 재검토, §5.7). (`config.py`)
 - 평가 하네스가 질문을 하드코딩 대신 `eval/eval_set.jsonl`에서 로드하도록 변경 (`eval/compare.py`, `eval/evaluate.py`)

@@ -24,6 +24,16 @@ class _QueryResponse:
 
 
 @dataclass
+class _Vec:
+    values: list
+
+
+@dataclass
+class _FetchResponse:
+    vectors: dict
+
+
+@dataclass
 class _Stats:
     namespaces: dict = field(default_factory=dict)
 
@@ -51,6 +61,10 @@ class FakePineconeIndex:
         return _QueryResponse(matches=[
             _Match(ids[j], float(scores[j]), store[ids[j]][1] if include_metadata else None) for j in order
         ])
+
+    def fetch(self, *, ids, namespace: str = "", **_):
+        store = self._ns.get(namespace, {})
+        return _FetchResponse(vectors={i: _Vec(list(store[i][0])) for i in ids if i in store})
 
     def delete(self, *, ids=None, delete_all: bool = False, namespace: str = "", **_):
         if delete_all:

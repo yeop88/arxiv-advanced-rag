@@ -139,13 +139,20 @@ class PineconeStore:
         return ids
 
 
-def ensure_pinecone_index(dimension: int):
-    """인덱스가 없으면 cosine 으로 생성, 있으면 차원·척도가 맞는지 확인. Index 객체 반환."""
-    from pinecone import Pinecone, ServerlessSpec
+def _pinecone_client():
+    """Pinecone 클라이언트. 사내 프록시 환경이면 CA 묶음으로 검증을 유지한 채 연결."""
+    from pinecone import Pinecone
 
     if not settings.pinecone_api_key:
         raise RuntimeError("PINECONE_API_KEY 가 설정되지 않았습니다.")
-    pc = Pinecone(api_key=settings.pinecone_api_key)
+    return Pinecone(api_key=settings.pinecone_api_key, ssl_ca_certs=settings.resolved_ca_bundle())
+
+
+def ensure_pinecone_index(dimension: int):
+    """인덱스가 없으면 cosine 으로 생성, 있으면 차원·척도가 맞는지 확인. Index 객체 반환."""
+    from pinecone import ServerlessSpec
+
+    pc = _pinecone_client()
     name = settings.pinecone_index
     if not pc.has_index(name):
         pc.create_index(
@@ -162,15 +169,11 @@ def ensure_pinecone_index(dimension: int):
 
 
 def _load_pinecone(create: bool = False) -> PineconeStore:
-    from pinecone import Pinecone
-
-    if not settings.pinecone_api_key:
-        raise RuntimeError("PINECONE_API_KEY 가 설정되지 않았습니다.")
     emb = get_embeddings()
     if create:
         index = ensure_pinecone_index(len(emb.embed_query("dimension probe")))
     else:
-        pc = Pinecone(api_key=settings.pinecone_api_key)
+        pc = _pinecone_client()
         if not pc.has_index(settings.pinecone_index):
             raise FileNotFoundError(
                 f"Pinecone 인덱스가 없습니다: {settings.pinecone_index}\n"
@@ -212,12 +215,28 @@ def load_vectorstore(backend: str | None = None) -> VectorStoreLike:
 
 
 def get_all_documents(vs: VectorStoreLike) -> list[Document]:
-    """스토어의 모든 청크를 Document 로 반환 (BM25 인덱스 구축용)."""
-    raw = vs.get()  # {'documents': [...], 'metadatas': [...], ...}
-    docs = []
-    for content, meta in zip(raw.get("documents", []), raw.get("metadatas", [])):
-        docs.append(Document(page_content=content, metadata=meta or {}))
-    return docs
+    """스토어의 모든 청크를 Document 로 반환 (BM25 인덱스 구축용). ID 도 함께 싣는다."""
+    raw = vs.get()  # {'ids': [...], 'documents': [...], 'metadatas': [...]}
+    ids = raw.get("ids") or [None] * len(raw.get("documents", []))
+    return [
+        Document(page_content=content, metadata=meta or {}, id=i)
+        for i, content, meta in zip(ids, raw.get("documents", []), raw.get("metadatas", []))
+    ]
+
+
+def get_vectors(vs: VectorStoreLike, ids: list[str]) -> dict[str, list[float]]:
+    """청크 ID 로 저장된 임베딩을 꺼낸다(MMR 이 다시 임베딩하지 않도록). 실패하면 빈 dict."""
+    ids = [i for i in dict.fromkeys(ids) if i]
+    if not ids:
+        return {}
+    try:
+        if isinstance(vs, PineconeStore):
+            res = vs.index.fetch(ids=ids, namespace=vs.namespace)
+            return {k: list(v.values) for k, v in res.vectors.items()}
+        raw = vs._collection.get(ids=ids, include=["embeddings"])  # Chroma
+        return {i: list(e) for i, e in zip(raw["ids"], raw["embeddings"])}
+    except Exception:  # noqa: BLE001 — 꺼내지 못하면 호출부가 새로 임베딩
+        return {}
 
 
 def delete_sources(sources: set[str]) -> int:
