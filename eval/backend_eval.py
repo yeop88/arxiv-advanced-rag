@@ -41,6 +41,45 @@ def _set_thinking(value: str | None) -> None:
         settings.local_thinking = value
 
 
+def _failure(res) -> str | None:
+    """파이프라인은 오류를 삼키고 안내 문구를 답변처럼 돌려준다(사용자용 graceful degrade).
+    평가에서는 그런 결과를 정상 기록으로 남기면 지표가 오염되므로 실패로 판정한다."""
+    from eval.ragas_lite import _NO_EVIDENCE
+
+    if res.answer.startswith("답변 생성 중 오류"):
+        return res.answer[:120]
+    if _NO_EVIDENCE in res.answer:
+        return None  # 근거 0건은 정상 결과
+    if settings.enable_verification and res.verification is None:
+        return "검증 단계 실패(verification 없음)"
+    if settings.query_transform_mode != "none" and len(res.transformed_queries) <= 1:
+        return "질의변환 실패(원 질문으로 대체됨 → 검색 입력이 달라짐)"
+    return None
+
+
+def _wait_ready(max_wait: int) -> None:
+    """로컬 서버가 모델을 다시 올리는 중(503 model is still loading)이면 준비될 때까지 기다린다.
+    LLM 캐시를 거치지 않도록 OpenAI 클라이언트로 직접 1토큰 요청."""
+    if settings.llm_provider != "local":
+        return
+    from openai import OpenAI
+
+    client = OpenAI(base_url=settings.local_base_url, api_key=settings.local_api_key, timeout=60, max_retries=0)
+    t0 = time.time()
+    while True:
+        try:
+            client.chat.completions.create(
+                model=settings.llm_model, max_tokens=1, messages=[{"role": "user", "content": "ping"}],
+                extra_body={"chat_template_kwargs": {"enable_thinking": False}},
+            )
+            return
+        except Exception as e:  # noqa: BLE001
+            if time.time() - t0 > max_wait:
+                raise RuntimeError(f"서버가 {max_wait}초 동안 준비되지 않음: {e}") from e
+            print(f"  서버 대기 중({int(time.time() - t0)}s): {str(e)[:80]}")
+            time.sleep(30)
+
+
 def run(args) -> None:
     from rag.pipeline import RAGPipeline
 
@@ -59,24 +98,33 @@ def run(args) -> None:
     print(f"[{args.label}] provider={settings.llm_provider} model={settings.llm_model} "
           f"thinking(main)={settings.local_thinking or '-'} judge_thinking={args.judge_thinking} "
           f"질문 {len(records)}개 (기록됨 {len(done)}개 건너뜀)")
+    _wait_ready(args.max_wait)
     pipe = RAGPipeline()
 
     for i, rec in enumerate(records, 1):
         if rec["id"] in done:
             continue
         q = rec["question"]
-        _set_thinking(arm_thinking)  # 측정 대상 설정으로 파이프라인 실행
-        t0 = time.perf_counter()
-        res = pipe.run(q)
-        total = time.perf_counter() - t0
-
-        _set_thinking(args.judge_thinking)  # 채점은 고정 설정
-        try:
-            ans_rel = answer_relevance(q, res.answer)
-            ctx_rel = context_relevance(q, res.reranked)
-        except Exception as e:  # noqa: BLE001
-            ans_rel = ctx_rel = None
-            print(f"  채점 실패: {e}")
+        for attempt in range(1, args.retries + 2):
+            _set_thinking(arm_thinking)  # 측정 대상 설정으로 파이프라인 실행
+            t0 = time.perf_counter()
+            res = pipe.run(q)
+            total = time.perf_counter() - t0
+            reason = _failure(res)
+            if reason is None:
+                _set_thinking(args.judge_thinking)  # 채점은 고정 설정
+                try:
+                    ans_rel = answer_relevance(q, res.answer)
+                    ctx_rel = context_relevance(q, res.reranked)
+                except Exception as e:  # noqa: BLE001
+                    reason = f"채점 실패: {str(e)[:100]}"
+            if reason is None:
+                break
+            print(f"  [{rec['id']}] 시도 {attempt} 실패 → 기록하지 않고 재시도: {reason}")
+            _wait_ready(args.max_wait)
+        else:
+            raise SystemExit(f"[{rec['id']}] {args.retries + 1}회 실패 — 오염된 기록을 남기지 않고 중단합니다. "
+                             f"서버 상태 확인 후 같은 명령으로 이어서 실행하세요.")
         exp = rec.get("expected_sources") or []
         row = {
             "id": rec["id"], "difficulty": rec.get("difficulty"), "multi_hop": rec.get("multi_hop"),
@@ -142,6 +190,8 @@ def main() -> None:
     ap.add_argument("--judge-thinking", choices=["on", "off"], default="off",
                     help="채점 시 thinking(비교 공정성을 위해 고정, 기본 off)")
     ap.add_argument("--fresh", action="store_true", help="기존 기록을 지우고 처음부터")
+    ap.add_argument("--retries", type=int, default=3, help="문항 실패 시 재시도 횟수(실패 결과는 기록하지 않음)")
+    ap.add_argument("--max-wait", type=int, default=1800, help="서버 준비 대기 최대 초(503 model loading 등)")
     ap.add_argument("--compare", nargs="+", help="비교할 결과 JSONL 경로들")
     args = ap.parse_args()
     if args.compare:

@@ -42,6 +42,30 @@ with st.sidebar:
     settings.top_k_rerank = st.slider("2단계 · 근거 수(top-k)", 1, 10, settings.top_k_rerank)
     settings.enable_verification = st.checkbox("4단계 · 검증", value=True)
 
+    # --- Thinking 켜기/끄기 ---
+    # Qwen3 같은 로컬 모델은 thinking 을 on/off 로 제어한다(Claude·OpenAI 는 등급형 effort → .env 에서 설정).
+    st.markdown("---")
+    if settings.llm_provider == "local":
+        think_main = st.toggle(
+            "🧠 Thinking 모드 (생성·검증)",
+            value=settings.local_thinking == "on",
+            key="think_main",
+            help="켜면 답하기 전에 추론해 다중 홉 비교·종합에 유리하지만 느려집니다"
+                 "(측정: 질문당 off 약 1분, on 약 3~4분).",
+        )
+        settings.local_thinking = "on" if think_main else "off"
+        think_light = st.toggle(
+            "질의변환에도 Thinking",
+            value=settings.local_thinking_light == "on",
+            key="think_light",
+            help="질의변환은 쉬운 작업이라 보통 꺼 둡니다(켜면 질문마다 수십 초 추가).",
+        )
+        settings.local_thinking_light = "on" if think_light else "off"
+        st.caption("⏱️ 현재: " + ("생각하며 답함 — 질문당 수 분" if think_main else "빠른 답변 — 질문당 약 1분"))
+    else:
+        st.caption("🧠 Thinking 토글은 로컬 모델(LLM_PROVIDER=local) 전용입니다. "
+                   "Claude·OpenAI 는 .env 의 effort 설정을 쓰세요.")
+
     st.markdown("---")
     st.caption(f"LLM: `{settings.llm_provider}` / {settings.llm_model}")
     st.caption(f"임베딩: `{settings.embed_model}`")
@@ -60,6 +84,13 @@ st.caption("학술논문 근거 기반 질의응답 · 질의변환→리랭킹�
 # ---------------------------------------------------------------------------
 if "messages" not in st.session_state:
     st.session_state.messages = []  # [{role, content, result?}]
+
+
+def _thinking_label() -> str:
+    """답변에 붙일 thinking 모드 표시(로컬 모델일 때만)."""
+    if settings.llm_provider != "local":
+        return ""
+    return f"🧠 thinking {settings.local_thinking or '서버 기본값'} (질의변환 {settings.local_thinking_light or '기본값'})"
 
 
 def render_sources(result) -> None:
@@ -113,6 +144,8 @@ def render_inspector(result) -> None:
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
+        if msg.get("mode"):
+            st.caption(msg["mode"])  # 이 답변을 만든 thinking 모드
         if msg["role"] == "assistant" and msg.get("result"):
             render_sources(msg["result"])
             render_inspector(msg["result"])
@@ -134,13 +167,16 @@ if prompt := st.chat_input("논문에 대해 물어보세요 (예: 리랭킹은 
 
         # 직전까지의 대화를 (role, content) 히스토리로 전달 → 멀티턴 문맥화
         history = [(m["role"], m["content"]) for m in st.session_state.messages[:-1]]
-        with st.spinner("4단계 파이프라인 실행 중..."):
+        mode = _thinking_label()
+        with st.spinner(f"4단계 파이프라인 실행 중... ({mode})"):
             result = pipe.run(prompt, chat_history=history)
 
         st.markdown(result.answer)
+        if mode:
+            st.caption(mode)
         render_sources(result)
         render_inspector(result)
 
     st.session_state.messages.append(
-        {"role": "assistant", "content": result.answer, "result": result}
+        {"role": "assistant", "content": result.answer, "result": result, "mode": mode}
     )

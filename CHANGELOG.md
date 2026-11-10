@@ -5,6 +5,8 @@
 ## [Unreleased]
 
 ### Added
+- 챗봇 사이드바 Thinking 토글: 로컬 모델(Qwen 등)의 생성·검증 / 질의변환 thinking 을 실행 중에 켜고 끔. 답변마다 사용한 모드 표시 (`app.py`)
+- 평가 실패 방지: 생성·검증·질의변환·채점 실패(예: 서버 `503 model is still loading`)를 감지하면 기록하지 않고 서버 준비를 기다린 뒤 재시도, 계속 실패하면 중단 (`eval/backend_eval.py --retries/--max-wait`)
 - Pinecone 벡터 DB 지원 `VECTOR_BACKEND=pinecone`: 공식 SDK 위 어댑터(`PineconeStore`)가 Chroma 와 같은 메서드 모양을 제공해 파이프라인 코드 변경 없이 전환. 원문은 로컬 docstore(JSONL)에 보관해 BM25 하이브리드 검색 유지 (`rag/vectorstore.py`, `rag/docstore.py`, `config.py`)
 - Chroma → Pinecone 이전 스크립트: Chroma 벡터를 재임베딩 없이 그대로 복사(ID 유지), `--dry-run` 점검·`--reset` (`scripts/migrate_to_pinecone.py`)
 - 검색 동일성 검증 `eval/vector_parity.py`(평가셋 전체로 벡터 검색 겹침률·최종 근거 일치율·recall/MRR 비교, `--fake` 오프라인 모드) + Pinecone 대역 `tests/fake_pinecone.py` + 어댑터 단위테스트
