@@ -1,0 +1,401 @@
+[
+  {
+    "source": "2005.11401",
+    "title": "Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks",
+    "authors": "Lewis et al.",
+    "published": "2020-05-22",
+    "abstract": "We introduce RAG models where a parametric seq2seq generator is combined with a non-parametric memory, a dense vector index of Wikipedia accessed with a pretrained neural retriever. The retriever selects relevant passages, which the generator conditions on to produce the final output. This lets the model access and update external knowledge without retraining, reducing hallucination and improving factual accuracy on open-domain question answering compared to purely parametric models."
+  },
+  {
+    "source": "2004.04906",
+    "title": "Dense Passage Retrieval for Open-Domain Question Answering",
+    "authors": "Karpukhin et al.",
+    "published": "2020-04-10",
+    "abstract": "Dense Passage Retrieval (DPR) learns dense vector representations of questions and passages using a dual-encoder (bi-encoder) architecture trained with a contrastive objective. Questions and passages are embedded independently, enabling fast approximate nearest-neighbor search over millions of documents. DPR substantially outperforms traditional sparse retrieval such as BM25 on open-domain QA benchmarks, establishing dense retrieval as a strong foundation for retrieval-augmented systems."
+  },
+  {
+    "source": "2112.01488",
+    "title": "ColBERTv2: Effective and Efficient Retrieval via Lightweight Late Interaction",
+    "authors": "Santhanam et al.",
+    "published": "2021-12-02",
+    "abstract": "ColBERTv2 uses late interaction, encoding queries and documents into token-level embeddings and scoring them with a fine-grained MaxSim operation. This preserves more information than single-vector bi-encoders while remaining far cheaper than full cross-encoders. Combined with residual compression, ColBERTv2 reaches state-of-the-art retrieval quality with a reduced index footprint, bridging the gap between efficient first-stage retrieval and accurate reranking."
+  },
+  {
+    "source": "1901.04085",
+    "title": "Passage Re-ranking with BERT",
+    "authors": "Nogueira and Cho",
+    "published": "2019-01-13",
+    "abstract": "We fine-tune BERT as a cross-encoder re-ranker that jointly encodes a query and a candidate passage and outputs a relevance score. Unlike bi-encoders that embed query and passage separately, the cross-encoder attends across both, capturing fine-grained interactions and producing substantially more accurate rankings. Used as a second stage over a fast first-stage retriever, BERT re-ranking yields large gains on passage ranking benchmarks, motivating the retrieve-then-rerank pipeline."
+  },
+  {
+    "source": "2212.10496",
+    "title": "Precise Zero-Shot Dense Retrieval without Relevance Labels (HyDE)",
+    "authors": "Gao et al.",
+    "published": "2022-12-20",
+    "abstract": "Hypothetical Document Embeddings (HyDE) tackles zero-shot dense retrieval by prompting a language model to generate a hypothetical answer document for a query, then embedding that document to search the corpus. Because the generated text shares vocabulary and style with real documents, its embedding retrieves relevant passages more effectively than embedding the short query alone. HyDE requires no relevance labels and improves retrieval across tasks and languages."
+  },
+  {
+    "source": "2305.14283",
+    "title": "Query Rewriting for Retrieval-Augmented Large Language Models",
+    "authors": "Ma et al.",
+    "published": "2023-05-23",
+    "abstract": "We propose Rewrite-Retrieve-Read, where a query rewriting step reformulates the user question before retrieval. A trainable rewriter, optimized with reinforcement learning from reader feedback, bridges the gap between how users phrase questions and how evidence is written. Query rewriting improves retrieval recall and downstream answer accuracy for retrieval-augmented LLMs on open-domain and multi-hop question answering."
+  },
+  {
+    "source": "2309.15217",
+    "title": "RAGAS: Automated Evaluation of Retrieval Augmented Generation",
+    "authors": "Es et al.",
+    "published": "2023-09-26",
+    "abstract": "RAGAS provides reference-free metrics to evaluate RAG pipelines along three axes: faithfulness (whether the answer is grounded in the retrieved context), answer relevance (whether it addresses the question), and context relevance (whether retrieved passages are on-topic). By using an LLM as a judge, RAGAS enables automated, scalable evaluation without hand-labeled ground truth, supporting rapid iteration on retrieval and generation components."
+  },
+  {
+    "source": "2310.11511",
+    "title": "Self-RAG: Learning to Retrieve, Generate, and Critique through Self-Reflection",
+    "authors": "Asai et al.",
+    "published": "2023-10-17",
+    "abstract": "Self-RAG trains a single model to adaptively retrieve passages on demand and to critique its own generations using reflection tokens. The model decides when retrieval is needed, assesses whether retrieved evidence supports its statements, and verifies factual grounding before finalizing an answer. This self-reflective verification loop reduces hallucination and improves factuality and citation accuracy over standard retrieval-augmented generation."
+  },
+  {
+    "source": "2007.01282",
+    "title": "Fusion-in-Decoder: Leveraging Passage Retrieval with Generative Models",
+    "authors": "Izacard and Grave",
+    "published": "2020-07-02",
+    "abstract": "Fusion-in-Decoder (FiD) encodes each retrieved passage independently with the encoder and fuses all passage representations in the decoder when generating the answer. This lets the model scale to many retrieved passages efficiently and aggregate evidence across them. FiD achieves strong results on open-domain question answering, demonstrating that generative readers benefit from attending over a large set of retrieved contexts."
+  },
+  {
+    "source": "2311.09210",
+    "title": "Chain-of-Note: Enhancing Robustness in Retrieval-Augmented Language Models",
+    "authors": "Yu et al.",
+    "published": "2023-11-15",
+    "abstract": "Chain-of-Note generates sequential reading notes for each retrieved document, assessing its relevance and reliability before composing a final answer. By explicitly reasoning over whether each passage actually supports the query, the model handles noisy or irrelevant retrieval and knows when to respond that the answer is unknown. This improves robustness and reduces hallucination when retrieved evidence is incomplete or contradictory."
+  },
+  {
+    "source": "2002.08909",
+    "title": "REALM: Retrieval-Augmented Language Model Pre-Training",
+    "authors": "Guu et al.",
+    "published": "2020-02-10",
+    "abstract": "REALM augments language model pre-training with a learned textual knowledge retriever, so the model retrieves and attends over documents from a large corpus during pre-training, fine-tuning, and inference. The retriever is trained end-to-end by backpropagating through a maximum inner product search over the knowledge corpus. This grounds predictions in retrieved evidence and improves open-domain question answering while keeping the knowledge source interpretable and updatable."
+  },
+  {
+    "source": "2112.04426",
+    "title": "Improving Language Models by Retrieving from Trillions of Tokens (RETRO)",
+    "authors": "Borgeaud et al.",
+    "published": "2021-12-08",
+    "abstract": "RETRO enhances an autoregressive language model with a chunked cross-attention mechanism that conditions generation on nearest-neighbor chunks retrieved from a database of trillions of tokens. By offloading factual knowledge to an external retrieval database, a comparatively small model matches much larger models on language modeling, demonstrating that retrieval can substitute for parameters and make knowledge updatable without retraining."
+  },
+  {
+    "source": "2208.03299",
+    "title": "Atlas: Few-shot Learning with Retrieval Augmented Language Models",
+    "authors": "Izacard et al.",
+    "published": "2022-08-05",
+    "abstract": "Atlas is a retrieval-augmented language model designed for few-shot learning on knowledge-intensive tasks. It jointly trains a dense retriever and a Fusion-in-Decoder reader, showing that retrieval augmentation lets a model learn new tasks from very few examples while relying on an external, updatable knowledge index. Atlas achieves strong few-shot results on question answering and fact checking with far fewer parameters than purely parametric models."
+  },
+  {
+    "source": "2112.09118",
+    "title": "Unsupervised Dense Information Retrieval with Contrastive Learning (Contriever)",
+    "authors": "Izacard et al.",
+    "published": "2021-12-16",
+    "abstract": "Contriever trains dense retrievers without supervision using contrastive learning on positive pairs built from unlabeled text via cropping and data augmentation. The resulting bi-encoder generalizes well across domains and languages in zero-shot settings, rivaling supervised retrievers and BM25. It provides a strong, label-free foundation for the first-stage retriever in retrieval-augmented systems."
+  },
+  {
+    "source": "2107.05720",
+    "title": "SPLADE: Sparse Lexical and Expansion Model for First Stage Ranking",
+    "authors": "Formal et al.",
+    "published": "2021-07-12",
+    "abstract": "SPLADE learns sparse representations over the vocabulary for queries and documents, combining the efficiency of inverted-index retrieval with learned term weighting and expansion. By predicting importance weights for words not literally present, it addresses vocabulary mismatch while remaining compatible with traditional sparse retrieval infrastructure. SPLADE bridges lexical and neural retrieval and is a strong component in hybrid search."
+  },
+  {
+    "source": "2307.03172",
+    "title": "Lost in the Middle: How Language Models Use Long Contexts",
+    "authors": "Liu et al.",
+    "published": "2023-07-06",
+    "abstract": "This work shows that language models use information in long input contexts unevenly: accuracy is highest when relevant evidence appears at the beginning or end of the context and degrades when it is in the middle. The finding has direct implications for RAG, where the ordering of retrieved passages matters. It motivates careful reranking and placement of the most relevant evidence near the start or end of the prompt."
+  },
+  {
+    "source": "2305.06983",
+    "title": "Active Retrieval Augmented Generation (FLARE)",
+    "authors": "Jiang et al.",
+    "published": "2023-05-11",
+    "abstract": "FLARE performs active, iterative retrieval during long-form generation: it anticipates upcoming content, and whenever the model is about to generate low-confidence tokens, it issues a new retrieval query to gather supporting evidence before continuing. This interleaving of retrieval and generation keeps long outputs grounded, reducing hallucination compared to retrieving only once at the start."
+  },
+  {
+    "source": "2401.15884",
+    "title": "Corrective Retrieval Augmented Generation (CRAG)",
+    "authors": "Yan et al.",
+    "published": "2024-01-29",
+    "abstract": "CRAG adds a lightweight retrieval evaluator that assesses the quality of retrieved documents and triggers corrective actions: when retrieval is judged incorrect or ambiguous, the system falls back to web search or decomposes and refines the knowledge. A decompose-then-recompose step filters irrelevant content from retrieved passages. CRAG improves robustness of RAG when the retriever returns imperfect or off-topic evidence."
+  },
+  {
+    "source": "2301.12652",
+    "title": "REPLUG: Retrieval-Augmented Black-Box Language Models",
+    "authors": "Shi et al.",
+    "published": "2023-01-30",
+    "abstract": "REPLUG treats a large language model as a frozen black box and prepends retrieved documents to its input, training only the retriever to supply documents that lower the LM's perplexity. Because it requires no access to model internals, REPLUG augments API-only models with external knowledge and improves language modeling and question answering, showing retrieval can be bolted onto fixed LLMs."
+  },
+  {
+    "source": "2212.14024",
+    "title": "Demonstrate-Search-Predict: Composing Retrieval and Language Models (DSP)",
+    "authors": "Khattab et al.",
+    "published": "2022-12-28",
+    "abstract": "DSP is a framework for composing retrieval models and language models through programs that pass natural language text between them in sophisticated pipelines. It uses in-context demonstrations to coordinate multi-hop search and prediction steps, improving knowledge-intensive tasks over naive retrieve-then-read. DSP foreshadows programmatic RAG pipelines where retrieval and generation are orchestrated as composable stages."
+  },
+  {
+    "source": "1908.10084",
+    "title": "Sentence-BERT: Sentence Embeddings using Siamese BERT-Networks",
+    "authors": "Reimers and Gurevych",
+    "published": "2019-08-27",
+    "abstract": "Sentence-BERT modifies BERT with siamese and triplet networks to produce semantically meaningful sentence embeddings that can be compared with cosine similarity. This makes large-scale semantic search and clustering tractable, reducing the cost of finding similar sentences from hours with vanilla BERT to seconds. It underpins modern bi-encoder embedding models used for dense retrieval."
+  },
+  {
+    "source": "2210.07316",
+    "title": "MTEB: Massive Text Embedding Benchmark",
+    "authors": "Muennighoff et al.",
+    "published": "2022-10-13",
+    "abstract": "MTEB is a benchmark spanning many tasks and datasets for evaluating text embedding models, including retrieval, reranking, clustering, classification, and semantic similarity across multiple languages. It reveals that no single embedding model dominates all tasks, helping practitioners choose embeddings suited to their use case. MTEB has become the standard leaderboard for comparing retrieval embedding models."
+  },
+  {
+    "source": "1911.00172",
+    "title": "Generalization through Memorization: Nearest Neighbor Language Models (kNN-LM)",
+    "authors": "Khandelwal et al.",
+    "published": "2019-11-01",
+    "abstract": "kNN-LM interpolates a standard language model's predictions with a nearest-neighbor retrieval over a datastore of cached hidden states and their next tokens. Retrieving similar contexts from training data improves prediction, especially for rare patterns and factual recall, without additional training. It shows that explicit memorization via retrieval complements parametric language modeling."
+  },
+  {
+    "source": "2302.00083",
+    "title": "In-Context Retrieval-Augmented Language Models",
+    "authors": "Ram et al.",
+    "published": "2023-02-01",
+    "abstract": "This work studies in-context RALM, which simply prepends retrieved documents to the input of an off-the-shelf language model without modifying its parameters. Even with a generic retriever, this yields large gains in language modeling, and tuning the retriever to the LM improves results further. The study highlights how document ordering and retrieval frequency affect performance in prompt-based RAG."
+  },
+  {
+    "source": "2312.10997",
+    "title": "Retrieval-Augmented Generation for Large Language Models: A Survey",
+    "authors": "Gao et al.",
+    "published": "2023-12-18",
+    "abstract": "This survey organizes RAG research into Naive, Advanced, and Modular paradigms. Advanced RAG introduces pre-retrieval steps such as query transformation and post-retrieval steps such as reranking and context compression to improve over naive retrieve-then-read. Modular RAG composes reusable components (search, rerank, generate, verify, memory). The survey frames the retrieval, generation, and augmentation techniques that define modern RAG pipelines."
+  },
+  {
+    "source": "2404.16130",
+    "title": "From Local to Global: A Graph RAG Approach to Query-Focused Summarization",
+    "authors": "Edge et al.",
+    "published": "2024-04-24",
+    "abstract": "GraphRAG builds a knowledge graph from a corpus using an LLM, detects communities of related entities, and precomputes summaries for each community. For global, sensemaking questions that span an entire corpus, it aggregates community summaries into a final answer, outperforming naive vector RAG on comprehensiveness and diversity. GraphRAG targets questions that require connecting information scattered across many documents."
+  },
+  {
+    "source": "2004.12832",
+    "title": "ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT",
+    "authors": "Khattab and Zaharia",
+    "published": "2020-04-27",
+    "abstract": "ColBERT introduces late interaction: queries and documents are independently encoded into bags of token-level embeddings, and relevance is computed with a cheap MaxSim operator that sums the maximum similarity of each query token to document tokens. This defers fine-grained interaction to the end, keeping most computation offline and precomputable, so ColBERT enjoys the expressiveness of deep interaction while scaling to millions of passages with low latency."
+  },
+  {
+    "source": "2007.00808",
+    "title": "Approximate Nearest Neighbor Negative Contrastive Learning for Dense Text Retrieval (ANCE)",
+    "authors": "Xiong et al.",
+    "published": "2020-07-01",
+    "abstract": "ANCE argues that dense retrievers trained with in-batch or random negatives see negatives that are too easy, mismatching the hard negatives encountered at inference. It constructs hard negatives globally from an approximate nearest-neighbor index that is asynchronously refreshed during training, yielding a much stronger learning signal. This closes the gap to sparse retrieval and improves dense passage retrieval across benchmarks."
+  },
+  {
+    "source": "2104.08663",
+    "title": "BEIR: A Heterogeneous Benchmark for Zero-shot Evaluation of Information Retrieval Models",
+    "authors": "Thakur et al.",
+    "published": "2021-04-17",
+    "abstract": "BEIR is a benchmark of diverse retrieval tasks (fact checking, question answering, citation prediction, and more) designed to test how well retrieval models generalize zero-shot to domains they were not trained on. It reveals that dense retrievers, though strong in-domain, often underperform BM25 out-of-domain, while late-interaction and reranking models generalize better, motivating robustness as a first-class retrieval goal."
+  },
+  {
+    "source": "2212.03533",
+    "title": "Text Embeddings by Weakly-Supervised Contrastive Pre-training (E5)",
+    "authors": "Wang et al.",
+    "published": "2022-12-07",
+    "abstract": "E5 trains general-purpose text embeddings by contrastive pre-training on a large curated collection of weakly-supervised text pairs (such as question-answer and title-passage pairs) mined from the web, followed by supervised fine-tuning. The resulting single embedding model transfers across retrieval, clustering, and semantic similarity tasks, achieving strong zero-shot results on the MTEB benchmark."
+  },
+  {
+    "source": "2402.03216",
+    "title": "BGE M3-Embedding: Multi-Lingual, Multi-Functionality, Multi-Granularity Text Embeddings Through Self-Knowledge Distillation",
+    "authors": "Chen et al.",
+    "published": "2024-02-05",
+    "abstract": "BGE-M3 is a single embedding model that supports dense retrieval, sparse (lexical) retrieval, and multi-vector (late-interaction) retrieval simultaneously, across 100+ languages and inputs from short queries to long documents. Self-knowledge distillation lets the three retrieval modes teach one another during training. Its hybrid output makes it well suited to multilingual, mixed Korean-English retrieval pipelines."
+  },
+  {
+    "source": "2212.10509",
+    "title": "Interleaving Retrieval with Chain-of-Thought Reasoning for Knowledge-Intensive Multi-Step Questions (IRCoT)",
+    "authors": "Trivedi et al.",
+    "published": "2022-12-20",
+    "abstract": "IRCoT interleaves retrieval with chain-of-thought reasoning: each reasoning step guides what to retrieve next, and newly retrieved evidence guides the next reasoning step. This tight loop lets the model gather evidence it could not have found from the original question alone, substantially improving multi-hop question answering over retrieve-once pipelines."
+  },
+  {
+    "source": "2210.03350",
+    "title": "Measuring and Narrowing the Compositionality Gap in Language Models (Self-Ask)",
+    "authors": "Press et al.",
+    "published": "2022-10-07",
+    "abstract": "This work defines the compositionality gap: the fraction of multi-hop questions a model can answer sub-question by sub-question but fails to answer as a whole. Self-Ask prompts the model to explicitly pose and answer intermediate follow-up questions before the final answer, and connects naturally to a search engine for each sub-question, narrowing the gap on multi-hop reasoning."
+  },
+  {
+    "source": "1704.00051",
+    "title": "Reading Wikipedia to Answer Open-Domain Questions (DrQA)",
+    "authors": "Chen et al.",
+    "published": "2017-03-31",
+    "abstract": "DrQA is an early open-domain QA system that combines a TF-IDF document retriever over all of Wikipedia with a neural reading-comprehension model that extracts answer spans from retrieved articles. It established the now-standard retriever-reader decomposition that underlies modern retrieval-augmented systems."
+  },
+  {
+    "source": "1611.09268",
+    "title": "MS MARCO: A Human Generated MAchine Reading COmprehension Dataset",
+    "authors": "Nguyen et al.",
+    "published": "2016-11-28",
+    "abstract": "MS MARCO is a large-scale dataset built from real anonymized Bing queries paired with human-written answers and relevant passages. Its passage ranking and document ranking tasks became the standard training and evaluation ground for neural retrievers and rerankers, enabling the dense-retrieval and BERT-reranking advances that followed."
+  },
+  {
+    "source": "2112.07899",
+    "title": "Large Dual Encoders Are Generalizable Retrievers (GTR)",
+    "authors": "Ni et al.",
+    "published": "2021-12-15",
+    "abstract": "GTR shows that scaling up the size of dual-encoder (bi-encoder) retrievers, while keeping the bottleneck embedding dimension fixed, dramatically improves out-of-domain generalization. A single large dual encoder fine-tuned on modest supervised data outperforms much larger sparse and dense baselines on the BEIR zero-shot benchmark, challenging the view that dual encoders generalize poorly."
+  },
+  {
+    "source": "1706.03762",
+    "title": "Attention Is All You Need",
+    "authors": "Vaswani et al.",
+    "published": "2017-06-12",
+    "abstract": "This paper introduces the Transformer, a sequence model built entirely on self-attention and feed-forward layers, dispensing with recurrence and convolution. Multi-head attention lets each position attend to all others in parallel, enabling far more parallel training and better long-range dependency modeling. The Transformer is the architectural foundation of virtually all modern language models and text encoders."
+  },
+  {
+    "source": "1810.04805",
+    "title": "BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding",
+    "authors": "Devlin et al.",
+    "published": "2018-10-11",
+    "abstract": "BERT pre-trains a deep bidirectional Transformer with masked language modeling and next-sentence prediction, then fine-tunes on downstream tasks. Bidirectional context yields rich contextual representations that set new state of the art across many NLP benchmarks, and BERT encoders became the backbone of cross-encoder rerankers and many dense retrievers."
+  },
+  {
+    "source": "2005.14165",
+    "title": "Language Models are Few-Shot Learners (GPT-3)",
+    "authors": "Brown et al.",
+    "published": "2020-05-28",
+    "abstract": "GPT-3 is a 175B-parameter autoregressive language model that performs new tasks from a few in-context examples in the prompt, without gradient updates. It demonstrates that scaling model size unlocks strong few-shot and zero-shot capabilities across translation, question answering, and reasoning, establishing in-context learning as a core paradigm for large language models."
+  },
+  {
+    "source": "2203.02155",
+    "title": "Training language models to follow instructions with human feedback (InstructGPT)",
+    "authors": "Ouyang et al.",
+    "published": "2022-03-04",
+    "abstract": "InstructGPT aligns language models to user intent via reinforcement learning from human feedback (RLHF): supervised fine-tuning on demonstrations, a reward model trained on human preference comparisons, and policy optimization against that reward. The resulting models are far more helpful, truthful, and less toxic than much larger un-aligned models, defining the modern instruction-tuning recipe."
+  },
+  {
+    "source": "2201.11903",
+    "title": "Chain-of-Thought Prompting Elicits Reasoning in Large Language Models",
+    "authors": "Wei et al.",
+    "published": "2022-01-28",
+    "abstract": "Chain-of-thought prompting elicits multi-step reasoning by including exemplars that show intermediate reasoning steps leading to the answer. This simple change substantially improves performance on arithmetic, commonsense, and symbolic reasoning, and the benefit emerges with model scale, revealing reasoning as an emergent capability of large language models."
+  },
+  {
+    "source": "1910.10683",
+    "title": "Exploring the Limits of Transfer Learning with a Unified Text-to-Text Transformer (T5)",
+    "authors": "Raffel et al.",
+    "published": "2019-10-23",
+    "abstract": "T5 casts every NLP task as text-to-text, so the same model, objective, and decoding apply to translation, classification, summarization, and QA alike. Through a systematic study of pre-training objectives, data, and scale on the C4 corpus, it provides a unified framework and strong transfer-learning baselines that influenced later encoder-decoder retrieval readers such as Fusion-in-Decoder."
+  },
+  {
+    "source": "1907.11692",
+    "title": "RoBERTa: A Robustly Optimized BERT Pretraining Approach",
+    "authors": "Liu et al.",
+    "published": "2019-07-26",
+    "abstract": "RoBERTa shows that BERT was significantly undertrained, and that careful choices, more data, longer training, larger batches, dynamic masking, and dropping next-sentence prediction, yield large gains without architectural change. It became a strong default encoder for retrieval and reranking and a case study in the importance of pre-training recipe over architecture."
+  },
+  {
+    "source": "2302.13971",
+    "title": "LLaMA: Open and Efficient Foundation Language Models",
+    "authors": "Touvron et al.",
+    "published": "2023-02-27",
+    "abstract": "LLaMA is a family of foundation language models (7B-65B) trained only on publicly available data, showing that smaller models trained on more tokens can match or exceed much larger models. Its open release of competitive weights catalyzed a wave of open-source instruction tuning, retrieval augmentation, and on-device LLM research."
+  },
+  {
+    "source": "2307.09288",
+    "title": "Llama 2: Open Foundation and Fine-Tuned Chat Models",
+    "authors": "Touvron et al.",
+    "published": "2023-07-18",
+    "abstract": "Llama 2 releases pre-trained and chat-tuned models up to 70B, detailing the full alignment pipeline of supervised fine-tuning and RLHF with a focus on helpfulness and safety. The accompanying analysis of data, reward modeling, and safety evaluation made high-quality open chat models widely usable for retrieval-augmented and agentic applications."
+  },
+  {
+    "source": "2203.15556",
+    "title": "Training Compute-Optimal Large Language Models (Chinchilla)",
+    "authors": "Hoffmann et al.",
+    "published": "2022-03-29",
+    "abstract": "Chinchilla studies the compute-optimal trade-off between model size and training tokens, finding that prior large models were substantially undertrained: parameters and data should scale roughly equally. A 70B model trained on far more tokens outperforms larger models, reshaping how practitioners allocate a fixed training budget."
+  },
+  {
+    "source": "2204.02311",
+    "title": "PaLM: Scaling Language Modeling with Pathways",
+    "authors": "Chowdhery et al.",
+    "published": "2022-04-05",
+    "abstract": "PaLM is a 540B-parameter dense Transformer trained efficiently across thousands of accelerators with the Pathways system. It achieves breakthrough few-shot results on reasoning and multilingual benchmarks and provides extensive evidence for emergent capabilities and the benefits of chain-of-thought prompting at scale."
+  },
+  {
+    "source": "2303.08774",
+    "title": "GPT-4 Technical Report",
+    "authors": "OpenAI",
+    "published": "2023-03-15",
+    "abstract": "GPT-4 is a large multimodal model accepting text and image inputs and producing text, with human-level performance on many professional and academic benchmarks. The report emphasizes predictable scaling, extensive safety and alignment work, and evaluation of capabilities and risks, while withholding architectural and training details."
+  },
+  {
+    "source": "2001.08361",
+    "title": "Scaling Laws for Neural Language Models",
+    "authors": "Kaplan et al.",
+    "published": "2020-01-23",
+    "abstract": "This paper shows that language-model loss falls as a smooth power law in model size, dataset size, and compute, across many orders of magnitude. The predictable relationships let practitioners forecast performance and allocate compute, laying the empirical groundwork for the large-scale models that followed."
+  },
+  {
+    "source": "2210.11416",
+    "title": "Scaling Instruction-Finetuned Language Models (Flan-T5 / Flan-PaLM)",
+    "authors": "Chung et al.",
+    "published": "2022-10-20",
+    "abstract": "This work scales instruction fine-tuning along the number of tasks, model size, and inclusion of chain-of-thought data. Fine-tuning on 1,800+ tasks sharply improves zero-shot and few-shot generalization and reasoning across held-out benchmarks, making instruction tuning a cheap, general lever for better downstream and retrieval-augmented performance."
+  },
+  {
+    "source": "2206.07682",
+    "title": "Emergent Abilities of Large Language Models",
+    "authors": "Wei et al.",
+    "published": "2022-06-15",
+    "abstract": "An ability is called emergent if it is absent in smaller models but appears in larger ones, often unpredictably at a scale threshold. The paper documents such jumps across many tasks and prompting strategies, framing scale as a qualitative, not merely quantitative, driver of capability and complicating extrapolation from small models."
+  },
+  {
+    "source": "2210.03629",
+    "title": "ReAct: Synergizing Reasoning and Acting in Language Models",
+    "authors": "Yao et al.",
+    "published": "2022-10-06",
+    "abstract": "ReAct interleaves reasoning traces with task actions, letting a model plan, call external tools such as search, observe results, and update its plan. This synergy reduces hallucination and error propagation relative to reasoning-only prompting and underpins many retrieval-augmented and tool-using agent designs."
+  },
+  {
+    "source": "2305.10601",
+    "title": "Tree of Thoughts: Deliberate Problem Solving with Large Language Models",
+    "authors": "Yao et al.",
+    "published": "2023-05-17",
+    "abstract": "Tree of Thoughts generalizes chain-of-thought by exploring a tree of intermediate reasoning states with lookahead and backtracking, guided by self-evaluation and search. This deliberate exploration markedly improves performance on tasks requiring planning or search where single-path reasoning fails."
+  },
+  {
+    "source": "2106.09685",
+    "title": "LoRA: Low-Rank Adaptation of Large Language Models",
+    "authors": "Hu et al.",
+    "published": "2021-06-17",
+    "abstract": "LoRA freezes the pre-trained weights and injects trainable low-rank update matrices into each layer, cutting the number of trainable parameters and optimizer memory by orders of magnitude with no added inference latency. It makes adapting large models to new domains and tasks, including retrieval and embedding models, cheap and modular."
+  },
+  {
+    "source": "1409.0473",
+    "title": "Neural Machine Translation by Jointly Learning to Align and Translate",
+    "authors": "Bahdanau et al.",
+    "published": "2014-09-01",
+    "abstract": "This paper introduces the attention mechanism for neural machine translation, letting the decoder softly search and weight relevant source positions instead of compressing the whole input into one fixed vector. Attention removed the fixed-length bottleneck and became the conceptual seed of the Transformer and of similarity-based retrieval."
+  },
+  {
+    "source": "1301.3781",
+    "title": "Efficient Estimation of Word Representations in Vector Space (word2vec)",
+    "authors": "Mikolov et al.",
+    "published": "2013-01-16",
+    "abstract": "word2vec learns dense word embeddings with the efficient continuous bag-of-words and skip-gram models, capturing semantic and syntactic regularities as linear structure in vector space. It popularized the idea that meaning can be represented as geometry, the premise underlying modern dense text retrieval and vector search."
+  },
+  {
+    "source": "2303.18223",
+    "title": "A Survey of Large Language Models",
+    "authors": "Zhao et al.",
+    "published": "2023-03-31",
+    "abstract": "This survey organizes the landscape of large language models around pre-training, adaptation (instruction tuning and alignment), utilization (prompting and in-context learning), and evaluation. It serves as a broad reference map connecting scaling, emergent abilities, retrieval augmentation, and agents into a single picture of the field."
+  }
+]

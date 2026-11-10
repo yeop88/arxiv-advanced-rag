@@ -1,0 +1,146 @@
+"""
+app.py — Streamlit 챗봇형 RAG 테스트/배포 UI
+
+대화형 챗봇 인터페이스로 arXiv Advanced RAG 를 테스트·시연합니다.
+- 상단: 대화 히스토리(사용자 질문 / AI 답변)
+- 각 답변 아래: 검증 배지 + "단계별 내부 동작" 펼쳐보기 (학습·디버깅용)
+- 사이드바: 파이프라인 설정 실시간 조정
+
+실행: streamlit run app.py
+배포: streamlit 커뮤니티 클라우드 / 사내 서버에 그대로 올릴 수 있음
+      (단, ANTHROPIC_API_KEY 는 secrets 로 주입, 벡터DB는 사전 구축 필요)
+"""
+from __future__ import annotations
+
+import streamlit as st
+
+from config import settings
+
+st.set_page_config(page_title="arXiv RAG 챗봇", page_icon="📚", layout="centered")
+
+
+@st.cache_resource(show_spinner="모델·벡터DB 로딩 중... (최초 1회)")
+def get_pipeline():
+    """파이프라인(임베딩/리랭커/벡터DB)은 무거우므로 세션당 1회만 로드."""
+    from rag.pipeline import RAGPipeline
+
+    return RAGPipeline()
+
+
+# ---------------------------------------------------------------------------
+# 사이드바: 파이프라인 설정
+# ---------------------------------------------------------------------------
+with st.sidebar:
+    st.title("⚙️ 설정")
+    settings.query_transform_mode = st.selectbox(
+        "1단계 · 질의 변환",
+        options=["multi_query", "hyde", "decompose", "none"],
+        index=0,
+        help="multi_query: 여러 각도 / hyde: 가상답변 / decompose: 하위질문 분해",
+    )
+    settings.use_hybrid = st.checkbox("2단계 · 하이브리드 검색(BM25+벡터)", value=True)
+    settings.top_k_rerank = st.slider("2단계 · 근거 수(top-k)", 1, 10, settings.top_k_rerank)
+    settings.enable_verification = st.checkbox("4단계 · 검증", value=True)
+
+    st.markdown("---")
+    st.caption(f"LLM: `{settings.llm_provider}` / {settings.llm_model}")
+    st.caption(f"임베딩: `{settings.embed_model}`")
+    if st.button("🗑️ 대화 초기화"):
+        st.session_state.messages = []
+        st.rerun()
+
+# ---------------------------------------------------------------------------
+# 헤더
+# ---------------------------------------------------------------------------
+st.title("📚 arXiv RAG 챗봇")
+st.caption("학술논문 근거 기반 질의응답 · 질의변환→리랭킹→생성→검증 4단계")
+
+# ---------------------------------------------------------------------------
+# 대화 상태
+# ---------------------------------------------------------------------------
+if "messages" not in st.session_state:
+    st.session_state.messages = []  # [{role, content, result?}]
+
+
+def render_sources(result) -> None:
+    """답변의 [n] 인용에 대응하는 근거 출처 패널.
+
+    reranked 순서 = 생성 프롬프트의 [1][2]... 번호와 일치하므로, 그대로 나열하면
+    사용자가 각 인용의 원문·섹션·arXiv 링크를 바로 확인할 수 있다.
+    """
+    if not result.reranked:
+        return
+    with st.expander(f"📑 근거 출처 {len(result.reranked)}개 (인용 [n] 대응)", expanded=False):
+        for i, c in enumerate(result.reranked, 1):
+            sec = f" · {c.section}" if c.section else ""
+            link = c.link
+            title_md = f"[{c.title}]({link})" if link else (c.title or "unknown")
+            st.markdown(f"**[{i}]** {title_md}  \n"
+                        f"<small>arXiv:{c.source or 'N/A'}{sec}</small>",
+                        unsafe_allow_html=True)
+            snippet = c.content.strip()
+            st.caption(snippet[:300] + ("..." if len(snippet) > 300 else ""))
+
+
+def render_inspector(result) -> None:
+    """한 답변의 검증 배지 + 단계별 내부 동작을 렌더."""
+    if result.verification:
+        v = result.verification
+        c1, c2, c3 = st.columns(3)
+        c1.metric("근거 충실", "✅" if v.grounded else "⚠️")
+        c2.metric("Faithfulness", f"{v.faithfulness:.2f}")
+        c3.metric("재생성", "🔁" if result.regenerated else "–")
+        if v.unsupported_claims:
+            st.warning("근거 없는 주장: " + "; ".join(v.unsupported_claims))
+
+    with st.expander("🔍 단계별 내부 동작 보기"):
+        if result.standalone_question and result.standalone_question != result.question:
+            st.markdown("**0단계 · 멀티턴 문맥화**")
+            st.markdown(f"- 원 질문: {result.question}")
+            st.markdown(f"- 독립형: {result.standalone_question}")
+        st.markdown(f"**1단계 · 질의변환 ({len(result.transformed_queries)}개)**")
+        for q in result.transformed_queries:
+            st.markdown(f"- {q}")
+        st.markdown(f"**2단계 · 리랭킹 선택 ({len(result.reranked)}개)**")
+        for i, c in enumerate(result.reranked, 1):
+            rr = f"{c.rerank_score:.3f}" if c.rerank_score is not None else "–"
+            st.markdown(f"{i}. `{c.title[:70]}` (arXiv:{c.source}) · 리랭크={rr}")
+        if result.timings:
+            st.caption("⏱️ " + " · ".join(f"{k}={v:.1f}s" for k, v in result.timings.items()))
+
+
+# --- 지난 대화 렌더 ---
+for msg in st.session_state.messages:
+    with st.chat_message(msg["role"]):
+        st.markdown(msg["content"])
+        if msg["role"] == "assistant" and msg.get("result"):
+            render_sources(msg["result"])
+            render_inspector(msg["result"])
+
+# --- 입력 ---
+if prompt := st.chat_input("논문에 대해 물어보세요 (예: 리랭킹은 왜 필요한가요?)"):
+    # 사용자 메시지
+    st.session_state.messages.append({"role": "user", "content": prompt})
+    with st.chat_message("user"):
+        st.markdown(prompt)
+
+    # AI 응답
+    with st.chat_message("assistant"):
+        try:
+            pipe = get_pipeline()
+        except FileNotFoundError as e:
+            st.error(str(e))
+            st.stop()
+
+        # 직전까지의 대화를 (role, content) 히스토리로 전달 → 멀티턴 문맥화
+        history = [(m["role"], m["content"]) for m in st.session_state.messages[:-1]]
+        with st.spinner("4단계 파이프라인 실행 중..."):
+            result = pipe.run(prompt, chat_history=history)
+
+        st.markdown(result.answer)
+        render_sources(result)
+        render_inspector(result)
+
+    st.session_state.messages.append(
+        {"role": "assistant", "content": result.answer, "result": result}
+    )

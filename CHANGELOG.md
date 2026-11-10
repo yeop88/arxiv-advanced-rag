@@ -1,0 +1,59 @@
+# Changelog
+
+이 프로젝트의 주요 변경사항을 기록합니다. 형식은 [Keep a Changelog](https://keepachangelog.com/ko/)를 따릅니다.
+
+## [Unreleased]
+
+### Added
+- API effort 설정: `LLM_EFFORT`(low|medium|high|xhigh|max)로 추론 깊이 제어, Anthropic `output_config.effort`로 전달. 비우면 API 기본값 (`config.py`, `rag/llm.py`, `.env.example`)
+- 다분야 논문 대량 수집: 라이브 arXiv 수집으로 코퍼스 59→**490편**. CV·RL·GNN·speech·NLP·diffusion·추천·시계열·self-supervised·**멀티모달(162편)**·**양자화(44편)** 등 다분야 커버리지(초록 기반, Windows CA 번들로 프록시 SSL 통과)
+- 평가셋 대량 확대 12→**294문항**(단일홉 227·다중홉 67, easy81/medium144/hard69): `eval/gen_questions.py` 로 단일홉(논문별)·다중홉(`--multi-hop`, 임베딩 최근접 쌍) 질문을 경량 모델(`--light`)로 대량 생성 → 무료 검색지표로 자동 스크리닝(단일홉 recall=1.0·다중홉 recall≥0.5 통과분만) 승격
+- 평가셋 반자동 확대 도구: 코퍼스 논문별로 '그 논문만으로 답할 수 있는' 질문을 LLM으로 생성→검수/스크리닝→승격 (`eval/gen_questions.py`, `--dry-run`/`--light`/`--multi-hop` 지원)
+- 다양성 리랭킹(MMR) + 논문당 청크 상한: 전문 코퍼스에서 한 논문이 상위를 독점하는 쏠림을 막아 다중 홉 커버리지 개선 (`rag/stage2_rerank.py`, `config.rerank_diversity`/`mmr_lambda`/`same_source_penalty`/`rerank_max_per_source`). 2-arm A/B(hyde, 10문항): recall@5 0.653→0.750·answer_rel 0.754→0.771·faithfulness 유지, **tradeoff context_rel 0.625→0.546**(§5.5). 단위테스트 추가
+- 학습용 Jupyter 노트북: 4단계(+0단계)를 셀 단위로 따라가며 각 단계 입출력을 확인 (`notebooks/advanced_rag_walkthrough.ipynb`)
+- 평가셋 외부화: 질문을 코드에서 분리해 단일 JSONL로 관리(`eval/eval_set.jsonl` + 로더 `eval/dataset.py`) — 난이도/카테고리 필터, 코드 수정 없이 확장. `compare.py`·`evaluate.py`가 이를 로드
+- 무료 검색 지표 recall@k·MRR·hit@k: `expected_sources`와 검색 결과만으로 계산(LLM 불필요) (`eval/retrieval_metrics.py`) — 대량 평가셋 저비용 스크리닝의 기반
+- `compare.py` 옵션: `--retrieval-only`(생성·검증·심판 생략, 저비용) / `--difficulty` / `--category` / `--n`
+- 코퍼스 대폭 확장: 샘플 논문 26→**57편** — RAG/IR·검색·임베딩 심화 10편(ColBERT·ANCE·BEIR·E5·BGE-M3·IRCoT·Self-Ask·DrQA·MS MARCO·GTR) + **주요 AI/LLM 논문 21편**(Transformer·BERT·GPT-3·InstructGPT·CoT·T5·RoBERTa·LLaMA·Llama2·Chinchilla·PaLM·GPT-4·Scaling Laws·Flan·Emergent·ReAct·ToT·LoRA·attention·word2vec·LLM Survey) (`data/sample_papers.json`)
+- 전문(full-text) 수집: 다중 홉 평가 질문이 참조하는 핵심 논문 15편을 PDF 전문으로 교체 수집 → 섹션 청킹, 코퍼스 37→1,319청크. 재측정에서 설정 간 격차가 드러남(§5.3)
+- arXiv 수집 옵션 `--ids`(논문 ID 직접 지정) / `--replace`(초록→전문 교체, 기존 청크 삭제 후 재적재) + `delete_sources()` (`scripts/ingest_arxiv.py`, `rag/vectorstore.py`)
+- 수집 중복 제거: 이미 벡터DB에 있는 논문(source)은 재수집 시 자동 건너뜀 (`scripts/ingest_arxiv.py`, `scripts/ingest_sample.py`) — 반복 실행·누적 수집 안전
+- arXiv 수집 다중 검색어: `--query` 에 여러 주제를 한 번에 지정, rate-limit 지연·재시도 내장 (`scripts/ingest_arxiv.py`)
+- 로컬 문서 수집: PDF/txt/md 폴더를 섹션 청킹으로 수집 (`scripts/ingest_local.py`) — 한국어 논문(RISS/DBpia에서 받은 PDF) 경로
+- 섹션 감지 한국어 확장: 초록/서론/방법/결과/결론 등 국문 섹션 제목 인식 (`rag/chunking.py`)
+- LLM 응답 캐싱(SQLite): 동일 프롬프트 재호출 비용·지연 제거 (`rag/llm.py`, `config.enable_llm_cache`) — 측정상 4.6s→0.002s
+- 단위 테스트: RRF/파싱/문맥화 순수함수 (`tests/test_units.py`)
+- 인용 출처 패널: 챗봇 답변의 `[n]` 인용에 대응하는 제목·섹션·arXiv 링크·원문 스니펫 표시 (`app.py` render_sources, `RetrievedChunk.link`/`url`)
+- 섹션 인식 청킹: 논문 전문을 섹션(Abstract/Method/Results 등)으로 나눠 청킹하고 `section` 메타 부여 (`rag/chunking.py`). 인용 헤더에 섹션 표시, 테스트 `tests/test_chunking.py`
+- 멀티턴 대화: 0단계 질의 문맥화 — 후속질문을 히스토리로 독립형 질문으로 재작성 (`rag/contextualize.py`, `pipeline.run(chat_history=...)`)
+- 4단계 Advanced RAG 파이프라인 (질의변환 → 리랭킹 → 생성 → 검증)
+- 질의변환 3전략: multi_query / HyDE / decompose (`rag/stage1_query_transform.py`)
+- 하이브리드 검색: BM25 + 벡터를 RRF로 융합 (`rag/stage2_rerank.py`, `config.use_hybrid`)
+- 크로스인코더 리랭킹 (bge-reranker-v2-m3)
+- 인용 기반 생성 + LLM-as-judge 검증 + 자기수정 재생성
+- arXiv 수집 스크립트 (`scripts/ingest_arxiv.py`) + 오프라인 샘플 수집 (`scripts/ingest_sample.py`)
+- 샘플 코퍼스 (`data/sample_papers.json`) — 초기 26편(위 항목에서 57편으로 확장)
+- RAGAS 스타일 평가 (`eval/ragas_lite.py`, `eval/evaluate.py`)
+- A/B 평가 자동화 — 설정 조합별 비교표 (`eval/compare.py`)
+- Streamlit 챗봇형 테스트 배포 UI (`app.py`)
+- 오프라인 전 파이프라인 테스트 (`tests/test_pipeline_offline.py`)
+- 결정 기록(ADR): 기본 질의변환 모드 선택 근거 (`docs/ADR-001-query-transform-default.md`)
+- 진행 보고서 (`docs/PROGRESS_REPORT.md`), 작업 지침 (`CLAUDE.md`)
+
+### Changed
+- 기본 질의변환 모드를 **`hyde` → `multi_query`로 번복**: 확장 평가셋 검색 A/B(hyde 최하)에 더해 **생성지표 2-arm 교차검증**(hard 31문항)에서도 multi_query가 모든 지표 우위/동률(faithfulness 0.953 vs 0.950)로 확정(ADR-001 재검토, §5.7). (`config.py`)
+- 평가 하네스가 질문을 하드코딩 대신 `eval/eval_set.jsonl`에서 로드하도록 변경 (`eval/compare.py`, `eval/evaluate.py`)
+- (이력) 기본 질의변환 모드를 `multi_query` → `hyde`로 변경했다가(10문항 소표본 근거) 위와 같이 번복 — 결정 기록 [docs/ADR-001](docs/ADR-001-query-transform-default.md)
+- 평가셋을 다중 홉(교차 비교·종합) 질문으로 교체 — 난이도 변별력 확보, 설정 간 격차 검증용 (`eval/compare.py`, `eval/evaluate.py`)
+- 평가셋 확대(10문항) + A/B 설정 그리드 확대(baseline/multi_query/hybrid/hyde 4종) (`eval/compare.py`)
+- `answer_rate` 지표 개선: substring 매칭 → 길이+근거0건 판별(`is_answered`) — 정직한 단서가 달린 긴 답변의 오판 제거
+- 프로젝트 성격을 **비영리**로 명시, 문서의 상업화/수익 서술을 공개·확장 관점으로 변경
+- 파이프라인에 graceful 에러 핸들링 추가(질의변환·검증 실패 시 degrade, 생성 실패 시 안내 메시지)
+- LLM 호출에 자동 재시도(`max_retries`) 적용
+- arXiv 수집에 사내 프록시 SSL 대응 옵션 추가 (`--ca-bundle`, `--insecure`)
+- `ingest_arxiv.py`: 전문 모드가 섹션 인식 청킹을 사용하도록 변경(청크 단위로 수집, 중복 청킹 제거)
+
+### Fixed
+- arXiv 대량 수집 중 한 검색어의 HTTP 429가 예외로 전체 실행을 중단시켜 수집분이 전부 유실되던 문제 → 검색어별 격리(실패 검색어만 건너뛰고 나머지는 저장) (`scripts/ingest_arxiv.py`)
+- arxiv 4.x에서 제거된 `Result.download_pdf` 사용으로 `--fulltext` 실패 → `pdf_url` 직접 다운로드(클라이언트 세션의 CA 설정 재사용)로 수정 (`scripts/ingest_arxiv.py`)
+- Anthropic 최신 API 버전에서 `temperature` 파라미터 400 에러 → 제거 (`rag/llm.py`)

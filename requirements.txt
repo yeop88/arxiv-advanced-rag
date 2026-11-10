@@ -1,0 +1,29 @@
+# === 핵심 프레임워크 ===
+langchain>=0.3.0
+langchain-core>=0.3.0
+langchain-community>=0.3.0
+
+# === LLM 백엔드 (교체 가능) ===
+langchain-anthropic>=0.3.0      # Claude
+langchain-openai>=0.2.0         # OpenAI (대안)
+
+# === 임베딩 / 리랭킹 (HuggingFace, 로컬 실행) ===
+langchain-huggingface>=0.1.0
+sentence-transformers>=3.0.0    # bge-m3 임베딩 + bge-reranker 크로스인코더
+FlagEmbedding>=1.2.0            # (선택) bge 계열 공식 구현
+
+# === 벡터 스토어 ===
+langchain-chroma>=0.1.4
+chromadb>=0.5.0
+
+# === 데이터 수집 (arXiv) ===
+arxiv>=2.1.0                     # arXiv API 클라이언트
+pypdf>=4.0.0                     # 논문 PDF 파싱
+
+# === UI ===
+streamlit>=1.38.0
+
+# === 유틸 ===
+python-dotenv>=1.0.0
+pydantic>=2.7.0
+tenacity>=8.3.0                  # API 재시도
