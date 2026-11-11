@@ -84,6 +84,7 @@ def _wait_ready(max_wait: int) -> None:
 
 
 def run(args) -> None:
+    from rag.auto_fetch import answer_signal, needs_more
     from rag.pipeline import RAGPipeline
 
     records = load_eval_set(difficulty=args.difficulty, category=args.category, limit=args.n)
@@ -141,6 +142,7 @@ def run(args) -> None:
             "recall": recall_at_k(res.reranked, exp, k) if exp else None,
             "mrr": reciprocal_rank(res.reranked, exp) if exp else None,
             "top_score": max((c.rerank_score or 0.0 for c in res.reranked), default=0.0),
+            "would_fetch": needs_more(res.reranked) or answer_signal(q, res.answer, res.reranked),
             "faithfulness": res.verification.faithfulness if res.verification else None,
             "answer_relevance": ans_rel, "context_relevance": ctx_rel,
             "answered": is_answered(res.answer), "regenerated": res.regenerated,

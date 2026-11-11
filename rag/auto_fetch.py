@@ -56,6 +56,49 @@ def answer_lacks_evidence(answer: str) -> bool:
     return any(m in answer for m in _NO_EVIDENCE_MARKERS)
 
 
+_NAME = re.compile(r"[A-Za-z][A-Za-z0-9\-]+")
+_GENERIC_NAMES = {"LLM", "LLMS", "RAG", "GPU", "CPU", "AI", "NLP", "MLP", "CNN", "RNN", "API", "QA"}
+
+
+def named_terms(question: str) -> list[str]:
+    """질문의 고유 명칭(대문자 2개 이상 또는 숫자 포함: SimCLR, BM25). 일반 약어는 뺀다."""
+    names = [w for w in _NAME.findall(question)
+             if (sum(c.isupper() for c in w) >= 2 or any(c.isdigit() for c in w)) and w.upper() not in _GENERIC_NAMES]
+    return list(dict.fromkeys(names))
+
+
+def answer_signal(question: str, answer: str, reranked) -> bool:
+    """2차 신호: 답변이 근거 부족을 밝혔고, 질문이 묻는 대상이 근거에 정말 없을 때만 수집한다.
+
+    다중 홉 질문은 일부만 못 찾아도 '찾을 수 없다'고 쓰므로 표현만으로 판단하면 과하게 켜진다(측정 47%).
+    - 명칭이 하나: 그 이름이 제목에 들어간 근거 논문이 없으면 수집(다른 논문이 언급만 한 경우 포함)
+    - 명칭이 여럿: 어느 하나가 근거 본문에 전혀 없으면 수집
+    """
+    if not answer_lacks_evidence(answer):
+        return False
+    names = named_terms(question)
+    if not names:
+        return False
+    if len(names) == 1:
+        titles = " ".join(c.title for c in reranked).lower()
+        return names[0].lower() not in titles
+    text = " ".join(f"{c.title} {c.content}" for c in reranked).lower()
+    return any(n.lower() not in text for n in names)
+
+
+def select_papers(ranked: list) -> list:
+    """(논문, 점수) 점수순 목록에서 추가할 논문을 고른다.
+
+    파생 논문이 원 논문보다 점수가 높은 경우가 많아, 관련도가 충분한 후보 중 가장 많이 인용된 논문을 먼저 넣는다.
+    """
+    eligible = [x for x in ranked if x[1] >= settings.auto_fetch_min_score]
+    anchors = [x for x in eligible if x[1] >= settings.auto_fetch_anchor_score and x[0].cited_by > 0]
+    if anchors:
+        anchor = max(anchors, key=lambda x: x[0].cited_by)
+        eligible = [anchor] + [x for x in eligible if x is not anchor]
+    return eligible[: settings.auto_fetch_max_papers]
+
+
 def make_search_queries(question: str) -> list[str]:
     """질문 → 짧은 영어 arXiv 검색어 목록(경량 LLM). 실패하면 질문 그대로 1개."""
     from langchain_core.output_parsers import StrOutputParser
@@ -82,7 +125,7 @@ def _existing_sources(vectorstore) -> set[str]:
 def fetch_and_ingest(question: str, vectorstore, emit: Emit | None = None) -> list[dict]:
     """근거 보강: 관련 논문을 찾아 DB 에 추가하고, 추가한 논문 정보를 돌려준다(없으면 빈 목록)."""
     from rag import stage2_rerank as s2
-    from rag.arxiv_source import Paper, http_session, result_to_chunks, search_papers
+    from rag.arxiv_source import Paper, http_session, result_to_chunks, search_openalex, search_papers
     from rag.llm import get_reranker
 
     emit = emit or (lambda *a, **k: None)
@@ -107,6 +150,17 @@ def fetch_and_ingest(question: str, vectorstore, emit: Emit | None = None) -> li
                     candidates[p.pid] = p
         except Exception as e:  # noqa: BLE001 — 한 검색어 실패가 전체를 막지 않게
             emit("fetch_warn", message=f"검색 실패({q}): {str(e)[:120]}")
+    if settings.auto_fetch_citation_search:  # 원 논문은 글자 일치 순서에서 밀리므로 인용 수 순으로도 찾는다
+        for q in queries:
+            try:
+                for p in search_openalex(q, 50, by_citations=True):
+                    sources_used.add(p.found_by)
+                    if p.pid in candidates:
+                        candidates[p.pid].cited_by = max(candidates[p.pid].cited_by, p.cited_by)
+                    elif p.pid not in existing:
+                        candidates[p.pid] = p
+            except Exception as e:  # noqa: BLE001
+                emit("fetch_warn", message=f"인용 순 검색 실패({q}): {str(e)[:120]}")
     emit("fetch_candidates", n=len(candidates), n_existing_skipped=n_skipped, sources=sorted(sources_used))
     if not candidates:
         return []
@@ -116,7 +170,7 @@ def fetch_and_ingest(question: str, vectorstore, emit: Emit | None = None) -> li
     items = list(candidates.values())
     scores = get_reranker().predict([(question, f"{r.title}\n{r.summary}") for r in items])
     ranked = sorted(zip(items, (float(s) for s in scores)), key=lambda x: x[1], reverse=True)
-    chosen = [(r, s) for r, s in ranked if s >= settings.auto_fetch_min_score][: settings.auto_fetch_max_papers]
+    chosen = select_papers(ranked)
     emit("fetch_selected", papers=[(r.title.strip(), s) for r, s in chosen],
          best_rejected=(ranked[len(chosen)][1] if len(ranked) > len(chosen) else None))
     if not chosen:

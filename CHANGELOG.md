@@ -66,6 +66,8 @@
 - 진행 보고서 (`docs/PROGRESS_REPORT.md`), 작업 지침 (`CLAUDE.md`)
 
 ### Changed
+- 자동 수집 답변 신호 강화: 답변이 근거 부족을 밝히고 질문의 고유 명칭이 근거에 없을 때만 수집(코퍼스 안 질문의 신호 47%→23%) (`rag/auto_fetch.py answer_signal`)
+- 자동 수집 후보에 OpenAlex 인용 수 순 검색 추가, 관련도 0.5 이상 중 최다 인용 논문 우선 선정(`AUTO_FETCH_CITATION_SEARCH`, `AUTO_FETCH_ANCHOR_SCORE`): 원 논문 수집 2/12→6/12
 - 자동 수집 검색어당 후보 8→20개(`AUTO_FETCH_CANDIDATES`): 후보에서 잘리던 원 논문 포함. 후보 20·참고문헌 제외·가중치 0.7 조합으로 평가셋 recall 하락 −0.0085→−0.0017, 원 논문 3/7→5/7
 - README 에 단계별 사용 모델·실행 위치 표와 2단계 검색 구성 요소(임베딩·BM25·RRF·리랭커·MMR) 설명 추가, GPU 안내를 현재 동작(`auto`)에 맞게 수정
 - `vector_parity.py`는 자동 수집 논문을 숨기고 비교(자동 수집분은 Pinecone 에만 있어 그대로면 두 백엔드 코퍼스가 달라짐). 자동 수집 중복 판단·`manage_auto_papers.py`는 숨김 설정과 무관하게 전체를 봄

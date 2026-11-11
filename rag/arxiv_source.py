@@ -106,6 +106,7 @@ class Paper:
     author_names: list[str] = field(default_factory=list)
     published: date = field(default_factory=date.today)
     found_by: str = ""
+    cited_by: int = 0
 
     def get_short_id(self) -> str:
         return self.pid
@@ -188,13 +189,19 @@ def _abstract_from_inverted(inv: dict | None) -> str:
     return " ".join(w for _, w in words)
 
 
-def search_openalex(query: str, n: int, session=None) -> list[Paper]:
-    """OpenAlex 검색 → arXiv 에 올라온 논문만(arXiv ID 추출). 초록은 역색인으로 복원."""
+def search_openalex(query: str, n: int, session=None, by_citations: bool = False) -> list[Paper]:
+    """OpenAlex 검색 → arXiv 에 올라온 논문만(arXiv ID 추출). 초록은 역색인으로 복원.
+
+    by_citations: 인용 수 순으로 받는다. 글자 일치 순서에서 파생 논문에 밀리는 원 논문을 찾는 데 쓴다.
+    """
     session = session or http_session()
-    r = session.get("https://api.openalex.org/works", timeout=30, params={
-        "search": query, "per-page": 25,
-        "select": "display_name,locations,abstract_inverted_index,publication_date,authorships",
-    })
+    params = {
+        "search": query, "per-page": 50 if by_citations else 25,
+        "select": "display_name,locations,abstract_inverted_index,publication_date,authorships,cited_by_count",
+    }
+    if by_citations:
+        params["sort"] = "cited_by_count:desc"
+    r = session.get("https://api.openalex.org/works", timeout=30, params=params)
     r.raise_for_status()
     out: list[Paper] = []
     for w in r.json().get("results", []):
@@ -211,7 +218,7 @@ def search_openalex(query: str, n: int, session=None) -> list[Paper]:
             pid=pid, title=(w.get("display_name") or "").strip(),
             summary=_abstract_from_inverted(w.get("abstract_inverted_index")),
             author_names=[(a.get("author") or {}).get("display_name", "") for a in (w.get("authorships") or [])[:5]],
-            published=pub, found_by="OpenAlex",
+            published=pub, found_by="OpenAlex", cited_by=w.get("cited_by_count") or 0,
         ))
         if len(out) >= n:
             break

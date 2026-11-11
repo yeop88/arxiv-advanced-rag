@@ -134,6 +134,9 @@ class Settings:
     auto_fetch_min_score: float = float(os.getenv("AUTO_FETCH_MIN_SCORE", "0.3"))
     auto_fetch_max_papers: int = int(os.getenv("AUTO_FETCH_MAX_PAPERS", "3"))
     auto_fetch_fulltext: bool = True      # PDF 전문(섹션 청킹). 실패한 논문만 초록으로 대체
+    # 인용 수 순 검색을 후보에 더하고, 관련도가 이 값 이상인 후보 중 가장 많이 인용된 논문 1편은 반드시 선정(원 논문 우선)
+    auto_fetch_citation_search: bool = os.getenv("AUTO_FETCH_CITATION_SEARCH", "1") not in ("0", "false", "False")
+    auto_fetch_anchor_score: float = float(os.getenv("AUTO_FETCH_ANCHOR_SCORE", "0.5"))
     # 수집 논문의 참고문헌·부록은 DB 에 넣지 않음(무관한 질문의 검색에 끼어드는 주된 원인)
     auto_fetch_drop_back_matter: bool = os.getenv("AUTO_FETCH_DROP_BACK_MATTER", "1") not in ("0", "false", "False")
     # 자동 수집 논문 청크의 리랭크 점수에 곱하는 값(1.0 = 그대로). 낮추면 기존 논문이 우선한다

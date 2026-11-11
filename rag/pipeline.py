@@ -163,7 +163,7 @@ class RAGPipeline:
         # --- 3b: 답변이 '근거에서 찾을 수 없다'고 하면 논문을 찾아 추가하고 다시 작성 (2차 신호) ---
         # 점수로는 못 잡는 '비슷한 주제의 다른 논문만 있는' 경우. 한 질문에 수집은 최대 1회.
         if settings.auto_fetch and not result.auto_fetched and "2b_auto_fetch" not in result.timings \
-                and auto_fetch.answer_lacks_evidence(answer):
+                and auto_fetch.answer_signal(standalone, answer, reranked):
             new_reranked = self._fetch_and_retrieve(standalone, queries, result, emit, reason="answer")
             if new_reranked:
                 reranked = new_reranked

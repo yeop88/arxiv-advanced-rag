@@ -100,8 +100,9 @@ def main() -> None:
         return fake_light if light else fake_main3
 
     s1.get_llm = s3.get_llm = s4.get_llm = fake_get_llm3
-    orig_needs, orig_fetch = af.needs_more, af.fetch_and_ingest
+    orig_needs, orig_fetch, orig_signal = af.needs_more, af.fetch_and_ingest, af.answer_signal
     af.needs_more = lambda reranked: False  # 점수 신호는 끄고 답변 신호만 시험
+    af.answer_signal = lambda question, answer, reranked: af.answer_lacks_evidence(answer)
     af.fetch_and_ingest = lambda q, vs, emit=None: [{"source": "0000.00000", "title": "가짜 논문", "score": 0.9,
                                                     "found_by": "test", "chunks": 1, "fulltext": False}]
     settings.auto_fetch = True
@@ -111,7 +112,7 @@ def main() -> None:
                            progress=lambda ev, **kw: ev3.append(ev + (":again" if kw.get("again") else "")
                                                                    + (f":{kw['reason']}" if "reason" in kw else "")))
     finally:
-        af.needs_more, af.fetch_and_ingest = orig_needs, orig_fetch
+        af.needs_more, af.fetch_and_ingest, af.answer_signal = orig_needs, orig_fetch, orig_signal
         settings.auto_fetch = False
     flow = [e for e in ev3 if e != "token"]
     must = ["generate_done", "fetch_start:answer", "fetch_done", "retrieve_start:again", "retrieve_done",

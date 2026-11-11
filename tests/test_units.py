@@ -220,6 +220,29 @@ def test_auto_rerank_weight() -> None:
     print("  test_auto_rerank_weight ✅")
 
 
+def test_auto_fetch_decisions() -> None:
+    """답변 신호는 대상이 근거에 없을 때만, 선정은 인용이 가장 많은 관련 논문을 먼저."""
+    from types import SimpleNamespace as NS
+
+    import rag.auto_fetch as af
+    from rag.schemas import RetrievedChunk
+
+    assert af.named_terms("SimCLR와 BM25, RAG 및 Neural 모델") == ["SimCLR", "BM25"]
+    no = "제공된 논문에서는 찾을 수 없습니다."
+    ev = [RetrievedChunk(content="SPLADE and BM25 compared", source="1", title="SPLADE paper")]
+    assert af.answer_signal("SimCLR는 무엇인가요?", no, ev), "명칭이 제목에 없으면 수집"
+    assert not af.answer_signal("SPLADE는 무엇인가요?", no, ev), "제목에 있으면 수집 안 함"
+    assert not af.answer_signal("SPLADE와 BM25 차이는?", no, ev), "여러 명칭이 모두 본문에 있으면 수집 안 함"
+    assert af.answer_signal("SPLADE와 RETRO 차이는?", no, ev), "명칭 하나라도 본문에 없으면 수집"
+    assert not af.answer_signal("SimCLR는 무엇인가요?", "답입니다 [1].", ev), "답변했으면 수집 안 함"
+    assert not af.answer_signal("맛집을 추천해 주세요", no, ev), "명칭이 없으면 수집 안 함"
+
+    a, b, c, d = (NS(cited_by=n) for n in (5, 900, 50, 99999))
+    ranked = [(a, 0.99), (c, 0.9), (b, 0.6), (d, 0.4)]  # d 는 인용이 많아도 관련도 미달이라 우선하지 않음
+    assert [x[0] for x in af.select_papers(ranked)] == [b, a, c]
+    print("  test_auto_fetch_decisions ✅")
+
+
 def test_paper_search_parsers() -> None:
     """arXiv Atom 응답 해석(직접 호출 경로)과 OpenAlex 초록 역색인 복원."""
     import rag.arxiv_source as A
@@ -267,6 +290,7 @@ def main() -> None:
     test_paper_search_parsers()
     test_exclude_auto_view()
     test_auto_rerank_weight()
+    test_auto_fetch_decisions()
     print("모든 단위 테스트 통과 ✅")
 
 
