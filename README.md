@@ -227,6 +227,7 @@ exam03_Advanced_RAG/
 │   ├── auto_fetch_effect.py   # 자동 수집 전/후 검색 비교(수집을 일으킨 질문들)
 │   ├── auto_fetch_tuning.py   # 자동 수집 설정별(기준·편수·가중치) 부작용 비교
 │   ├── auto_fetch_e2e.py      # 자동 수집 실전 시험(시험용 DB 복사본)
+│   ├── auto_fetch_scenarios.py  # 자동 수집 시나리오 시험(분야·멀티턴·장애·예산 등)
 │   ├── corpus_health.py       # 코퍼스 증가에 따른 검색 품질 점검
 │   └── vector_parity.py       # Chroma vs Pinecone 검색 결과 동일성 검증
 ├── tests/                     # 단위·오프라인 테스트 (fake_pinecone.py: Pinecone 대역)
