@@ -70,6 +70,10 @@ def _handle_event(event: str, info: dict, status, stage: str) -> str:
         kind = "전문" if info.get("fulltext") else "초록(PDF 실패)"
         status.write(f"　✓ [{info['i']}/{info['n']}] {info['title'][:60]} — {kind} {info['chunks']}청크 추가")
         return stage
+    if event == "fetch_evicted":
+        papers = info.get("papers") or []
+        status.caption(f"　🧹 수집 예산을 넘어 오래 안 쓰인 논문 {len(papers)}편을 정리했습니다")
+        return stage
     if event == "fetch_done":
         n = len(info.get("added") or [])
         status.write(f"　✓ 논문 자동 수집 {'완료: ' + str(n) + '편 추가' if n else '— 추가한 논문 없음(기존 근거로 진행)'} "

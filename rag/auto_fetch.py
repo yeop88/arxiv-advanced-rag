@@ -15,7 +15,10 @@ rag/auto_fetch.py — 코퍼스에 근거가 부족할 때 arXiv 에서 논문�
 from __future__ import annotations
 
 import datetime as dt
+import json
+import os
 import re
+from pathlib import Path
 from typing import Callable
 
 from config import settings
@@ -97,6 +100,76 @@ def select_papers(ranked: list) -> list:
         anchor = max(anchors, key=lambda x: x[0].cited_by)
         eligible = [anchor] + [x for x in eligible if x is not anchor]
     return eligible[: settings.auto_fetch_max_papers]
+
+
+def load_usage() -> dict[str, dict]:
+    """논문별 근거 사용 기록 {arXiv ID: {count, last_used}}. 없거나 깨졌으면 빈 기록."""
+    try:
+        return json.loads(Path(settings.auto_usage_path).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+
+
+def _save_usage(usage: dict) -> None:
+    path = Path(settings.auto_usage_path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text(json.dumps(usage, ensure_ascii=False), encoding="utf-8")
+    os.replace(tmp, path)
+
+
+def record_usage(reranked) -> None:
+    """최종 근거로 쓰인 자동 수집 논문을 기록한다. 예산을 넘을 때 안 쓰인 논문부터 지우는 기준이 된다."""
+    sources = {c.source for c in reranked if c.origin == "auto"}
+    if not sources:
+        return
+    usage, today = load_usage(), dt.date.today().isoformat()
+    for s in sources:
+        row = usage.setdefault(s, {"count": 0})
+        row["count"] += 1
+        row["last_used"] = today
+    _save_usage(usage)
+
+
+def evict_over_budget(vectorstore, protect: set[str] | None = None) -> list[dict]:
+    """자동 수집 청크가 예산을 넘으면 오래 안 쓰인 논문부터 삭제하고, 지운 논문 목록을 돌려준다.
+
+    순서: 마지막 사용일(안 쓰였으면 수집일)이 오래된 순, 같으면 사용 횟수가 적은 순.
+    protect(방금 수집한 논문)와 수동 수집 논문은 지우지 않는다.
+    """
+    budget = settings.auto_fetch_max_chunks
+    if budget <= 0:
+        return []
+    protect = protect or set()
+    store = getattr(vectorstore, "inner", vectorstore)
+    raw = store.get()
+    papers: dict[str, dict] = {}
+    for i, m in zip(raw["ids"], raw["metadatas"]):
+        m = m or {}
+        if m.get("origin") == "auto":
+            p = papers.setdefault(m["source"], {"ids": [], "title": m.get("title", ""), "fetched_at": m.get("fetched_at", "")})
+            p["ids"].append(i)
+    total = sum(len(p["ids"]) for p in papers.values())
+    if total <= budget:
+        return []
+    usage = load_usage()
+
+    def order(item):
+        pid, p = item
+        row = usage.get(pid, {})
+        return row.get("last_used") or p["fetched_at"], row.get("count", 0)
+
+    evicted = []
+    for pid, p in sorted(((k, v) for k, v in papers.items() if k not in protect), key=order):
+        if total <= budget:
+            break
+        store.delete(ids=p["ids"])
+        total -= len(p["ids"])
+        usage.pop(pid, None)
+        evicted.append({"source": pid, "title": p["title"], "chunks": len(p["ids"])})
+    if evicted:
+        _save_usage(usage)
+    return evicted
 
 
 def make_search_queries(question: str) -> list[str]:
@@ -201,7 +274,10 @@ def fetch_and_ingest(question: str, vectorstore, emit: Emit | None = None) -> li
         added.append(info)
         emit("fetch_paper_done", i=i, n=len(chosen), **info)
 
-    # 5) 새 원문을 BM25 에 반영
+    # 5) 예산을 넘었으면 오래 안 쓰인 논문 정리 → 새 원문을 BM25 에 반영
     if added:
+        evicted = evict_over_budget(vectorstore, protect={a["source"] for a in added})
+        if evicted:
+            emit("fetch_evicted", papers=evicted)
         s2.reset_bm25()
     return added

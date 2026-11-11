@@ -76,6 +76,7 @@ UNRELATED = [
 def use_test_db() -> None:
     settings.vector_backend = "chroma"
     settings.chroma_dir = TEST_CHROMA
+    settings.auto_usage_path = "./storage/auto_usage_e2e.json"  # 시험 사용 기록이 실제 기록에 섞이지 않게
 
 
 def prepare() -> None:

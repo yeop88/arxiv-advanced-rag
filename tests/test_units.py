@@ -243,6 +243,41 @@ def test_auto_fetch_decisions() -> None:
     print("  test_auto_fetch_decisions ✅")
 
 
+def test_evict_over_budget() -> None:
+    """예산 초과 시 오래 안 쓰인 자동 수집 논문부터 지우고, 수동·방금 수집한 논문은 남겨야 한다."""
+    import tempfile
+
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from fake_pinecone import FakePineconeIndex
+
+    import rag.auto_fetch as af
+    from config import settings
+    from rag.docstore import DocStore
+    from rag.schemas import RetrievedChunk
+    from rag.vectorstore import PineconeStore
+
+    tmp = Path(tempfile.mkdtemp())
+    st = PineconeStore(FakePineconeIndex(), "t", _OneHotEmbeddings(), DocStore(tmp / "d.jsonl"))
+    rows = [("m", None, "2020-01-01"), ("old", "auto", "2026-01-01"), ("used", "auto", "2026-01-01"), ("new", "auto", "2026-11-11")]
+    for src, origin, date in rows:
+        meta = {"source": src, "fetched_at": date, **({"origin": origin} if origin else {})}
+        st.upsert_vectors([f"{src}{i}" for i in range(2)], [[1.0, 0.0, 0.0]] * 2, [f"{src} 본문"] * 2, [meta] * 2)
+    orig = (settings.auto_usage_path, settings.auto_fetch_max_chunks)
+    settings.auto_usage_path, settings.auto_fetch_max_chunks = str(tmp / "u.json"), 4
+    try:
+        af.record_usage([RetrievedChunk(content="x", source="used", origin="auto"),
+                         RetrievedChunk(content="y", source="m")])
+        assert list(af.load_usage()) == ["used"], "자동 수집 논문만 기록"
+        evicted = af.evict_over_budget(st, protect={"new"})
+        assert [e["source"] for e in evicted] == ["old"], evicted
+        left = {m["source"] for m in st.get()["metadatas"]}
+        assert left == {"m", "used", "new"}, left
+        assert af.evict_over_budget(st, protect={"new"}) == [], "예산 안이면 지우지 않음"
+    finally:
+        settings.auto_usage_path, settings.auto_fetch_max_chunks = orig
+    print("  test_evict_over_budget ✅")
+
+
 def test_paper_search_parsers() -> None:
     """arXiv Atom 응답 해석(직접 호출 경로)과 OpenAlex 초록 역색인 복원."""
     import rag.arxiv_source as A
@@ -291,6 +326,7 @@ def main() -> None:
     test_exclude_auto_view()
     test_auto_rerank_weight()
     test_auto_fetch_decisions()
+    test_evict_over_budget()
     print("모든 단위 테스트 통과 ✅")
 
 

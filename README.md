@@ -174,6 +174,7 @@ streamlit run app.py
 > **📥 논문 자동 수집** — DB 에 맞는 근거가 없으면 arXiv 에서 관련 논문을 찾아 **전문**을 DB 에 추가하고 다시 답합니다
 > (관련도 기준을 넘는 논문만, 인용이 많은 원 논문 우선, 질문당 최대 3편, 참고문헌·부록은 제외, 사이드바에서 끄기 가능). 추가된 논문은 `python scripts/manage_auto_papers.py`로 보고 지울 수 있습니다.
 > 평가는 지우지 않고도 자동 수집분을 빼고(기본) 또는 넣고 할 수 있습니다(`--corpus`, 아래 학습·평가 도구).
+> 코퍼스가 커지면 검색 품질이 조금씩 내려가므로, 자동 수집은 **2,000청크까지만** 유지하고 넘으면 오래 안 쓰인 논문부터 지웁니다(`AUTO_FETCH_MAX_CHUNKS`). `python eval/corpus_health.py`로 상태를 점검할 수 있습니다.
 > **🧠 Thinking 토글**(로컬 모델 전용) — 사이드바에서 생성·검증 / 질의변환의 thinking 을 켜고 끌 수 있습니다.
 > 켜면 다중 홉 비교에 유리하지만 느립니다(측정: 질문당 off 약 1분, on 약 3~4분).
 > (API 키는 secrets 로 주입, 벡터DB는 사전 구축).
@@ -225,6 +226,8 @@ exam03_Advanced_RAG/
 │   ├── corpus.py              # 평가 코퍼스 선택(--corpus base|all|both: 자동 수집 논문 제외/포함)
 │   ├── auto_fetch_effect.py   # 자동 수집 전/후 검색 비교(수집을 일으킨 질문들)
 │   ├── auto_fetch_tuning.py   # 자동 수집 설정별(기준·편수·가중치) 부작용 비교
+│   ├── auto_fetch_e2e.py      # 자동 수집 실전 시험(시험용 DB 복사본)
+│   ├── corpus_health.py       # 코퍼스 증가에 따른 검색 품질 점검
 │   └── vector_parity.py       # Chroma vs Pinecone 검색 결과 동일성 검증
 ├── tests/                     # 단위·오프라인 테스트 (fake_pinecone.py: Pinecone 대역)
 ├── notebooks/

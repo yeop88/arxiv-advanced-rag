@@ -176,6 +176,12 @@ class RAGPipeline:
                 result.timings["3c_generate_again"] = time.perf_counter() - t
                 emit("generate_done", sec=result.timings["3c_generate_again"], chars=len(answer))
 
+        if settings.auto_fetch:  # 평가에서는 자동 수집을 끄므로 실제 사용만 기록된다
+            try:
+                auto_fetch.record_usage(reranked)
+            except OSError as e:
+                emit("error", stage="usage", message=str(e))
+
         # --- 4단계: 검증 (+ 필요시 자기수정 재생성) ---
         # 검증 실패는 치명적이지 않음 → 답변은 유지하고 검증만 생략(graceful degrade)
         if settings.enable_verification:

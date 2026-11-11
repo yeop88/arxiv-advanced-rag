@@ -5,6 +5,8 @@
 ## [Unreleased]
 
 ### Added
+- 자동 수집 예산 `AUTO_FETCH_MAX_CHUNKS`(기본 2,000청크)와 사용 기록 기반 자동 정리: 넘으면 오래 안 쓰인 논문부터 삭제 (`rag/auto_fetch.py`, `storage/auto_usage.json`)
+- 코퍼스 상태 점검 `eval/corpus_health.py`: 자동 수집 제외·포함 검색 지표를 비교해 정상/주의/초과 판정, 추세 기록(LLM 없음, 로컬 백엔드 전용)
 - 프로젝트 필요성과 확장 방향 문서 `PROJECT_VISION.md`
 - 자동 수집 실전 시험 `eval/auto_fetch_e2e.py`(시험용 DB 복사본에서 코퍼스 밖·무관한 질문·재질문·검색 지표 측정), `backend_eval.py` 기록에 최고 리랭크 점수 추가
 - `manage_auto_papers.py --strip-back-matter`: 이미 수집한 논문의 참고문헌·부록 청크만 삭제
