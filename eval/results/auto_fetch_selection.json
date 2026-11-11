@@ -1,0 +1,138 @@
+{
+ "Kolmogorov-Arnold Network(KAN)은 기존 MLP와 구조가 어떻게 다른가요?": [
+  {
+   "pid": "2409.09653",
+   "title": "KAN v.s. MLP for Offline Reinforcement Learning",
+   "score": 0.9852713346481323
+  },
+  {
+   "pid": "2609.22506",
+   "title": "Rethinking Vision Architectures with Gated Linear Attention and KAN",
+   "score": 0.9848692417144775
+  },
+  {
+   "pid": "2606.27126",
+   "title": "Kolmogorov Arnold networks (KAN) for aerodynamic prediction: a comparison with MLPs and GNNs",
+   "score": 0.9621787071228027
+  }
+ ],
+ "FlashAttention은 GPU 메모리 접근을 줄여 어텐션 계산을 어떻게 빠르게 하나요?": [
+  {
+   "pid": "2205.14135",
+   "title": "FlashAttention: Fast and Memory-Efficient Exact Attention with IO-Awareness",
+   "score": 0.9760836362838745
+  },
+  {
+   "pid": "2505.18824",
+   "title": "FlatAttention: Dataflow and Fabric Collectives Co-Optimization for Efficient Multi-Head Attention on Tile-Based Many-PE Accelerators",
+   "score": 0.5313005447387695
+  },
+  {
+   "pid": "2604.02110",
+   "title": "FlatAttention: Dataflow and Fabric Collectives Co-Optimization for Large Attention-Based Model Inference on Tile-Based Accelerators",
+   "score": 0.41816219687461853
+  }
+ ],
+ "DPO(Direct Preference Optimization)는 보상 모델 없이 어떻게 선호 학습을 하나요?": [
+  {
+   "pid": "2405.19316",
+   "title": "Robust Preference Optimization through Reward Model Distillation",
+   "score": 0.9969956874847412
+  },
+  {
+   "pid": "2504.15843",
+   "title": "Pre-DPO: Improving Data Utilization in Direct Preference Optimization Using a Guiding Reference Model",
+   "score": 0.9949592351913452
+  },
+  {
+   "pid": "2610.07592",
+   "title": "LSC-DPO: Learning-Signal-Controlled Direct Preference Optimization",
+   "score": 0.9942920207977295
+  }
+ ],
+ "AlphaFold는 아미노산 서열에서 단백질 구조를 어떻게 예측하나요?": [
+  {
+   "pid": "2111.06340",
+   "title": "ParaFold: Paralleling AlphaFold for Large-Scale Predictions",
+   "score": 0.9909096360206604
+  },
+  {
+   "pid": "2301.11765",
+   "title": "ExplainableFold: Understanding AlphaFold Prediction with Explainable AI",
+   "score": 0.9507778882980347
+  },
+  {
+   "pid": "2410.14898",
+   "title": "Proteins with alternative folds reveal blind spots in AlphaFold-based protein structure prediction",
+   "score": 0.9493885040283203
+  }
+ ],
+ "NeRF는 여러 장의 사진으로 새로운 시점의 이미지를 어떻게 합성하나요?": [
+  {
+   "pid": "2303.01736",
+   "title": "Multi-Plane Neural Radiance Fields for Novel View Synthesis",
+   "score": 0.8649961352348328
+  },
+  {
+   "pid": "2003.08934",
+   "title": "NeRF: Representing Scenes as Neural Radiance Fields for View Synthesis",
+   "score": 0.7420480251312256
+  },
+  {
+   "pid": "2207.02363",
+   "title": "SNeRF: Stylized Neural Implicit Representations for 3D Scenes",
+   "score": 0.7283620238304138
+  }
+ ],
+ "Diffusion Policy는 로봇 행동을 확산 모델로 어떻게 생성하나요?": [
+  {
+   "pid": "2303.04137",
+   "title": "Diffusion Policy: Visuomotor Policy Learning via Action Diffusion",
+   "score": 0.9988440275192261
+  },
+  {
+   "pid": "2506.09422",
+   "title": "Time-Unified Diffusion Policy with Action Discrimination for Robotic Manipulation",
+   "score": 0.9936610460281372
+  },
+  {
+   "pid": "2305.12171",
+   "title": "Diffusion Co-Policy for Synergistic Human-Robot Collaborative Tasks",
+   "score": 0.9711290597915649
+  }
+ ],
+ "GraphCast는 그래프 신경망으로 중기 날씨 예보를 어떻게 하나요?": [
+  {
+   "pid": "2212.12794",
+   "title": "GraphCast: Learning skillful medium-range global weather forecasting",
+   "score": 0.9867772459983826
+  },
+  {
+   "pid": "2606.06348",
+   "title": "Performance Evaluation of GraphCast for Medium-Range Weather Forecasting over Brazil",
+   "score": 0.9458011984825134
+  },
+  {
+   "pid": "2506.17453",
+   "title": "UT-GraphCast Hindcast Dataset: A Global AI Forecast Archive from UT Austin for Weather and Climate Applications",
+   "score": 0.9252299070358276
+  }
+ ],
+ "Mamba의 선택적 상태 공간 모델은 트랜스포머와 어떻게 다른가요?": [
+  {
+   "pid": "2312.00752",
+   "title": "Mamba: Linear-Time Sequence Modeling with Selective State Spaces",
+   "score": 0.9919379353523254
+  },
+  {
+   "pid": "2409.18654",
+   "title": "Speech-Mamba: Long-Context Speech Recognition with Selective State Spaces Models",
+   "score": 0.9853278994560242
+  },
+  {
+   "pid": "2506.14802",
+   "title": "ss-Mamba: Semantic-Spline Selective State-Space Model",
+   "score": 0.985042929649353
+  }
+ ]
+}

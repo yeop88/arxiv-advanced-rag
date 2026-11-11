@@ -9,6 +9,7 @@ Pinecone 무료 플랜 한도(약 30만 레코드)에 가까워지면 이 스크
     python scripts/manage_auto_papers.py                  # 목록
     python scripts/manage_auto_papers.py --remove 2404.19756 2205.14135
     python scripts/manage_auto_papers.py --remove-all     # 자동 수집 논문 전부 삭제
+    python scripts/manage_auto_papers.py --strip-back-matter  # 참고문헌·부록 청크만 삭제
 """
 from __future__ import annotations
 
@@ -22,6 +23,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from config import settings  # noqa: E402
 
 settings.exclude_auto_papers = False  # 관리 대상이 자동 수집분이므로 숨기지 않는다
+from rag.auto_fetch import is_back_matter  # noqa: E402
 from rag.vectorstore import delete_sources, load_vectorstore  # noqa: E402
 
 
@@ -42,7 +44,18 @@ def main() -> None:
     ap = argparse.ArgumentParser(description="자동 수집 논문(origin=auto) 관리")
     ap.add_argument("--remove", nargs="+", metavar="ARXIV_ID", help="지울 논문 ID")
     ap.add_argument("--remove-all", action="store_true", help="자동 수집 논문 전부 삭제")
+    ap.add_argument("--strip-back-matter", action="store_true", help="자동 수집 논문의 참고문헌·부록 청크만 삭제")
     args = ap.parse_args()
+
+    if args.strip_back_matter:
+        vs = load_vectorstore()
+        raw = vs.get()
+        ids = [i for i, m in zip(raw["ids"], raw["metadatas"])
+               if (m or {}).get("origin") == "auto" and is_back_matter((m or {}).get("section"))]
+        if ids:
+            vs.delete(ids=ids)
+        print(f"참고문헌·부록 청크 {len(ids)}개 삭제. BM25 색인은 챗봇 재시작 시 다시 만들어집니다.")
+        return
 
     papers = auto_papers()
     print(f"벡터 DB: {settings.vector_backend} | 자동 수집 논문 {len(papers)}편, "

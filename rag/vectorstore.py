@@ -216,18 +216,19 @@ class ExcludeOriginStore:
 
     MARGIN = 20
 
-    def __init__(self, inner, exclude: str = "auto"):
+    def __init__(self, inner, exclude: str = "auto", keep_ids: set[str] | None = None):
         self.inner = inner
         self.exclude = exclude
+        self.keep_ids = keep_ids or set()  # 숨길 대상이어도 남길 청크 ID(수집 설정 실험용)
 
-    def _keep(self, meta: dict | None) -> bool:
-        return (meta or {}).get("origin") != self.exclude
+    def _keep(self, meta: dict | None, chunk_id: str | None = None) -> bool:
+        return (meta or {}).get("origin") != self.exclude or chunk_id in self.keep_ids
 
     def similarity_search_with_relevance_scores(self, query: str, k: int = 4) -> list[tuple[Document, float]]:
         fetch = k + self.MARGIN
         while True:
             hits = self.inner.similarity_search_with_relevance_scores(query, k=fetch)
-            kept = [(d, s) for d, s in hits if self._keep(d.metadata)]
+            kept = [(d, s) for d, s in hits if self._keep(d.metadata, d.id)]
             if len(kept) >= k or len(hits) < fetch:  # 충분하거나, 스토어 전체를 다 본 경우
                 return kept[:k]
             fetch *= 4
@@ -239,7 +240,7 @@ class ExcludeOriginStore:
         raw = self.inner.get()
         ids = raw.get("ids") or [None] * len(raw.get("documents", []))
         rows = [(i, t, m) for i, t, m in zip(ids, raw.get("documents", []), raw.get("metadatas", []))
-                if self._keep(m)]
+                if self._keep(m, i)]
         return {"ids": [r[0] for r in rows], "documents": [r[1] for r in rows],
                 "metadatas": [r[2] for r in rows]}
 

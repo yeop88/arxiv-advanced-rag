@@ -188,6 +188,36 @@ def test_exclude_auto_view() -> None:
     print("  test_exclude_auto_view ✅")
 
 
+def test_auto_rerank_weight() -> None:
+    """가중치: 자동 수집 청크 점수만 낮추고, 1.0 이면 순위가 그대로여야 한다."""
+    import rag.stage2_rerank as s2
+    from config import settings
+    from rag.schemas import RetrievedChunk
+
+    class _Fake:
+        def predict(self, pairs):
+            return [0.9, 0.8]
+
+    def cands():
+        return [RetrievedChunk(content="자동", source="A", origin="auto"), RetrievedChunk(content="기존", source="B")]
+
+    orig = (s2.get_reranker, settings.rerank_diversity, settings.auto_rerank_weight)
+    s2.get_reranker, settings.rerank_diversity = (lambda: _Fake()), False
+    try:
+        settings.auto_rerank_weight = 1.0
+        assert [c.source for c in s2.rerank("q", cands())] == ["A", "B"]
+        settings.auto_rerank_weight = 0.5
+        got = s2.rerank("q", cands())
+        assert [c.source for c in got] == ["B", "A"] and abs(got[1].rerank_score - 0.45) < 1e-9, got
+    finally:
+        s2.get_reranker, settings.rerank_diversity, settings.auto_rerank_weight = orig
+    from rag.auto_fetch import is_back_matter
+
+    assert is_back_matter("References") and is_back_matter("Appendix A") and is_back_matter("BIBLIOGRAPHY")
+    assert not is_back_matter("3.2 Method") and not is_back_matter(None)
+    print("  test_auto_rerank_weight ✅")
+
+
 def test_paper_search_parsers() -> None:
     """arXiv Atom 응답 해석(직접 호출 경로)과 OpenAlex 초록 역색인 복원."""
     import rag.arxiv_source as A
@@ -234,6 +264,7 @@ def main() -> None:
     test_pinecone_store_adapter()
     test_paper_search_parsers()
     test_exclude_auto_view()
+    test_auto_rerank_weight()
     print("모든 단위 테스트 통과 ✅")
 
 

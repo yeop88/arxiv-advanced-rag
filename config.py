@@ -128,11 +128,16 @@ class Settings:
     # 트리거: 리랭크 최고 점수가 이 값보다 낮으면 "코퍼스에 근거 부족"으로 판단 (평가셋 분포로 보정)
     auto_fetch_threshold: float = float(os.getenv("AUTO_FETCH_THRESHOLD", "0.2"))
     auto_fetch_queries: int = 2           # 만들 arXiv 검색어 수
-    auto_fetch_candidates: int = 8        # 검색어당 후보 논문 수
+    # 검색어당 후보 논문 수. arXiv 검색은 글자 일치 위주라 원 논문이 14~19위에 오는 경우가 많아 넉넉히 받는다
+    auto_fetch_candidates: int = int(os.getenv("AUTO_FETCH_CANDIDATES", "20"))
     # 후보 논문의 (질문, 제목+초록) 리랭크 점수가 이 값 이상인 것만 추가 — 엉뚱한 논문이 쌓이는 것 방지
     auto_fetch_min_score: float = float(os.getenv("AUTO_FETCH_MIN_SCORE", "0.3"))
     auto_fetch_max_papers: int = int(os.getenv("AUTO_FETCH_MAX_PAPERS", "3"))
     auto_fetch_fulltext: bool = True      # PDF 전문(섹션 청킹). 실패한 논문만 초록으로 대체
+    # 수집 논문의 참고문헌·부록은 DB 에 넣지 않음(무관한 질문의 검색에 끼어드는 주된 원인)
+    auto_fetch_drop_back_matter: bool = os.getenv("AUTO_FETCH_DROP_BACK_MATTER", "1") not in ("0", "false", "False")
+    # 자동 수집 논문 청크의 리랭크 점수에 곱하는 값(1.0 = 그대로). 낮추면 기존 논문이 우선한다
+    auto_rerank_weight: float = float(os.getenv("AUTO_RERANK_WEIGHT", "0.7"))
     # 자동 수집 논문(origin=auto)을 검색에서 숨김. 지우지 않고 '기준 코퍼스'만으로 평가할 때 쓴다
     # (평가 스크립트의 --corpus base 가 켠다. 챗봇은 꺼 둔 채로 자동 수집분까지 검색)
     exclude_auto_papers: bool = os.getenv("EXCLUDE_AUTO_PAPERS", "0") in ("1", "true", "True")

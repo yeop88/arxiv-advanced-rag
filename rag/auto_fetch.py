@@ -15,11 +15,21 @@ rag/auto_fetch.py — 코퍼스에 근거가 부족할 때 arXiv 에서 논문�
 from __future__ import annotations
 
 import datetime as dt
+import re
 from typing import Callable
 
 from config import settings
 
 Emit = Callable[..., None]
+
+
+_BACK_MATTER = re.compile(r"references|bibliograph|appendix", re.I)
+
+
+def is_back_matter(section: str | None) -> bool:
+    """참고문헌·부록 섹션인가. 온갖 논문 제목이 나열돼 있어 무관한 질문의 검색에 잘 걸린다
+    (측정: 상위 5개에 끼어든 수집 청크의 68%)."""
+    return bool(_BACK_MATTER.search(section or ""))
 
 
 def top_score(reranked) -> float:
@@ -120,8 +130,11 @@ def fetch_and_ingest(question: str, vectorstore, emit: Emit | None = None) -> li
         emit("fetch_paper_start", i=i, n=len(chosen), title=title)
         chunks, used_full = result_to_chunks(
             r, session, settings.auto_fetch_fulltext,
-            extra_meta={"origin": "auto", "fetched_at": today, "fetch_query": question[:200]},
+            extra_meta={"origin": "auto", "fetched_at": today, "fetch_query": question[:200],
+                        "fetch_score": round(s, 4)},
         )
+        if settings.auto_fetch_drop_back_matter:
+            chunks = [c for c in chunks if not is_back_matter(c.metadata.get("section"))]
         if not chunks:
             continue
         vectorstore.add_documents(chunks)

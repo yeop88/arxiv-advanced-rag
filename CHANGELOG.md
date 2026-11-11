@@ -5,6 +5,9 @@
 ## [Unreleased]
 
 ### Added
+- `manage_auto_papers.py --strip-back-matter`: 이미 수집한 논문의 참고문헌·부록 청크만 삭제
+- 자동 수집 부작용 해결 방법 비교 `eval/auto_fetch_tuning.py`(관련도 기준·편수·가중치를 294문항과 코퍼스 밖 질문으로 측정, LLM 0회)
+- 자동 수집 논문 리랭크 가중치 `AUTO_RERANK_WEIGHT`(기본 0.7), 참고문헌·부록 제외 `AUTO_FETCH_DROP_BACK_MATTER`(기본 켜짐), 수집 점수 메타데이터 `fetch_score`, arXiv ID 직접 조회 `fetch_arxiv_by_ids`
 - 평가 코퍼스 선택 `--corpus base|all|both`: 자동 수집 논문(`origin=auto`)을 지우지 않고 평가에서만 숨김(기본 base → 이전 수치와 비교 가능), all 은 실제 챗봇 상태. 숨긴 보기 `ExcludeOriginStore`는 벡터 검색·BM25 원문 목록 양쪽에서 빼 '처음부터 없던 코퍼스'와 같은 결과 (`rag/vectorstore.py`, `eval/corpus.py`, `compare.py`, `backend_eval.py`, `EXCLUDE_AUTO_PAPERS`)
 - 자동 수집 효과 측정 `eval/auto_fetch_effect.py`: 수집을 일으킨 질문들을 수집 전/후 코퍼스로 검색해 최고 점수·트리거·수집 논문 recall 비교(LLM 0회)
 - `compare.py --only`: 이름으로 설정 일부만 실행(예: `--only baseline` → LLM 0회)
@@ -61,6 +64,8 @@
 - 진행 보고서 (`docs/PROGRESS_REPORT.md`), 작업 지침 (`CLAUDE.md`)
 
 ### Changed
+- 자동 수집 검색어당 후보 8→20개(`AUTO_FETCH_CANDIDATES`): 후보에서 잘리던 원 논문 포함. 후보 20·참고문헌 제외·가중치 0.7 조합으로 평가셋 recall 하락 −0.0085→−0.0017, 원 논문 3/7→5/7
+- README 에 단계별 사용 모델·실행 위치 표와 2단계 검색 구성 요소(임베딩·BM25·RRF·리랭커·MMR) 설명 추가, GPU 안내를 현재 동작(`auto`)에 맞게 수정
 - `vector_parity.py`는 자동 수집 논문을 숨기고 비교(자동 수집분은 Pinecone 에만 있어 그대로면 두 백엔드 코퍼스가 달라짐). 자동 수집 중복 판단·`manage_auto_papers.py`는 숨김 설정과 무관하게 전체를 봄
 - arXiv 수집 공용 코드를 `rag/arxiv_source.py`로 분리(클라이언트·PDF 전문·청킹), `scripts/ingest_arxiv.py`는 이를 사용(동작 동일)
 - 2단계(검색·리랭크) 속도 개선: 리랭크+MMR 4.74s→0.06s(294문항 평균). MMR 이 후보를 CPU 로 다시 임베딩하던 것을 벡터 스토어에 저장된 벡터를 ID 로 꺼내 쓰도록 변경(Chroma `get`·Pinecone `fetch`, 결과 동일), 리랭커 GPU fp16(294문항 중 1문항 근소한 점수 뒤집힘 → recall@5 0.9711→0.9694, `RERANK_FP16=0`으로 끌 수 있음). 검색 결과에 청크 ID 를 싣도록 함 (`rag/llm.py`, `rag/stage2_rerank.py`, `rag/vectorstore.py`, `rag/schemas.py`)

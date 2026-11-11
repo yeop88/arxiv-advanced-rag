@@ -137,8 +137,6 @@ def search_arxiv(query: str, n: int, timeout: float = 8.0) -> list[Paper]:
     arxiv 라이브러리를 거치면 막혀 있을 때 실패를 알기까지 15~60초가 걸려(실측),
     사용자가 기다리는 챗봇에서는 짧은 시간 제한으로 직접 부르고 Atom 응답을 표준 XML 파서로 읽는다.
     """
-    import xml.etree.ElementTree as ET
-
     import requests
 
     try:
@@ -149,10 +147,25 @@ def search_arxiv(query: str, n: int, timeout: float = 8.0) -> list[Paper]:
     if r.status_code == 429:
         raise SearchRateLimited("HTTP 429")
     r.raise_for_status()
+    return _atom_papers(r.content)
+
+
+def fetch_arxiv_by_ids(ids: list[str], timeout: float = 30.0) -> dict[str, Paper]:
+    """arXiv ID 로 논문 정보를 직접 조회(검색 없이). {ID: Paper}."""
+    r = http_session().get("https://export.arxiv.org/api/query", timeout=timeout,
+                           params={"id_list": ",".join(ids), "max_results": len(ids)})
+    r.raise_for_status()
+    return {p.pid: p for p in _atom_papers(r.content)}
+
+
+def _atom_papers(content: bytes) -> list[Paper]:
+    """arXiv API 의 Atom 응답 → Paper 목록."""
+    import xml.etree.ElementTree as ET
+
     ns = {"a": "http://www.w3.org/2005/Atom"}
     text = lambda el, tag: " ".join((el.findtext(tag, default="", namespaces=ns) or "").split())  # noqa: E731
     out = []
-    for e in ET.fromstring(r.content).findall("a:entry", ns):
+    for e in ET.fromstring(content).findall("a:entry", ns):
         try:
             pub = date.fromisoformat(text(e, "a:published")[:10])
         except ValueError:

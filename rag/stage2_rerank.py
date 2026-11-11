@@ -50,7 +50,7 @@ def retrieve(vectorstore: VectorStoreLike, queries: list[str]) -> list[Retrieved
                 source=doc.metadata.get("source", ""),
                 title=doc.metadata.get("title", ""),
                 section=doc.metadata.get("section", ""),
-                url=doc.metadata.get("url", ""),
+                url=doc.metadata.get("url", ""), origin=doc.metadata.get("origin", ""),
                 score=float(score),
             )
     return list(seen.values())
@@ -132,7 +132,7 @@ def retrieve_hybrid(vectorstore: VectorStoreLike, queries: list[str]) -> list[Re
             source=doc.metadata.get("source", ""),
             title=doc.metadata.get("title", ""),
             section=doc.metadata.get("section", ""),
-            url=doc.metadata.get("url", ""),
+            url=doc.metadata.get("url", ""), origin=doc.metadata.get("origin", ""),
             score=float(rrf_score),  # 여기선 RRF 점수를 score 로 보관
         )
         for doc, rrf_score in fused
@@ -235,7 +235,8 @@ def rerank(question: str, candidates: list[RetrievedChunk],
     scores = reranker.predict(pairs)  # 각 쌍의 관련도 점수
 
     for c, s in zip(candidates, scores):
-        c.rerank_score = float(s)
+        # 자동 수집 논문은 가중치만큼 낮춰, 주변 논문이 무관한 질문의 상위를 차지하지 않게 한다(1.0 = 그대로)
+        c.rerank_score = float(s) * (settings.auto_rerank_weight if c.origin == "auto" else 1.0)
 
     if settings.rerank_diversity:
         # 관련도순 정렬된 후보에 MMR 적용 (내부에서 다양성 재배치)
