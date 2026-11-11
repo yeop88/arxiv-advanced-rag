@@ -70,23 +70,32 @@ def named_terms(question: str) -> list[str]:
     return list(dict.fromkeys(names))
 
 
+# 비교 질문에서 명칭이 근거 청크 몇 개 이상에 나와야 '근거에 있다'고 볼지.
+# 1이면 다른 논문이 한 번 언급만 해도 수집하지 않아 비교 질문을 놓쳤다(이슈 18).
+_MIN_MENTIONS = 2
+
+
 def answer_signal(question: str, answer: str, reranked) -> bool:
     """2차 신호: 답변이 근거 부족을 밝혔고, 질문이 묻는 대상이 근거에 정말 없을 때만 수집한다.
 
     다중 홉 질문은 일부만 못 찾아도 '찾을 수 없다'고 쓰므로 표현만으로 판단하면 과하게 켜진다(측정 47%).
     - 명칭이 하나: 그 이름이 제목에 들어간 근거 논문이 없으면 수집(다른 논문이 언급만 한 경우 포함)
-    - 명칭이 여럿: 어느 하나가 근거 본문에 전혀 없으면 수집
+    - 명칭이 여럿: 어느 하나라도 제목에 없고 근거 청크 _MIN_MENTIONS 개 미만에서만 언급되면 수집
+      (예: "RoBERTa와 XLNet 차이" — XLNet 이 다른 논문 한 곳에서 언급만 된 경우)
     """
     if not answer_lacks_evidence(answer):
         return False
     names = named_terms(question)
     if not names:
         return False
+    titles = " ".join(c.title for c in reranked).lower()
     if len(names) == 1:
-        titles = " ".join(c.title for c in reranked).lower()
         return names[0].lower() not in titles
-    text = " ".join(f"{c.title} {c.content}" for c in reranked).lower()
-    return any(n.lower() not in text for n in names)
+
+    def mentions(name: str) -> int:
+        return sum(name.lower() in f"{c.title} {c.content}".lower() for c in reranked)
+
+    return any(n.lower() not in titles and mentions(n) < _MIN_MENTIONS for n in names)
 
 
 def select_papers(ranked: list) -> list:

@@ -69,6 +69,7 @@ def ask(pipe, q, history=None):
 def info(res, events, sec, key=None) -> dict:
     added = [a["source"] for a in res.auto_fetched]
     return {"triggered": any(e == "fetch_start" for e, _ in events), "added": added,
+            "reasons": [kw.get("reason") for e, kw in events if e == "fetch_start"],
             "titles": [a["title"][:60] for a in res.auto_fetched], "fulltext": [a["fulltext"] for a in res.auto_fetched],
             "key_added": key in added if key else None,
             "key_in_topk": key in [c.source for c in res.reranked] if key else None,
@@ -129,11 +130,23 @@ def multiturn(pipe):
     r2, ev, sec = ask(pipe, q2, hist)
     d = info(r2, ev, sec, "1906.08237")
     d["note"] = f"문맥화: {r2.standalone_question[:50]}" if hasattr(r2, "standalone_question") else ""
-    log("multiturn", "후속 질문 수집", not bad_answer(r2) and "XLNet" in r2.answer, d)
+    # 원 논문을 수집했거나, 근거 부족 없이 답했으면 통과("찾을 수 없다"로 끝나면 실패)
+    collected = bool(d["key_added"])
+    log("multiturn", "후속 질문 수집", not bad_answer(r2) and (collected or not af.answer_lacks_evidence(r2.answer)), d)
     hist += [("user", q2), ("assistant", r2.answer)]
     r3, ev, sec = ask(pipe, "그 논문의 순열 언어 모델링을 더 자세히 설명해 주세요.", hist)
     d = info(r3, ev, sec, "1906.08237")
-    log("multiturn", "다음 턴 재사용", not bad_answer(r3) and not d["added"], d)
+    # 2턴에서 이미 수집했다면 다시 수집하지 않아야 한다(수집 안 했다면 이번 턴 수집은 정상)
+    log("multiturn", "다음 턴 재사용", not bad_answer(r3) and not (collected and d["key_added"]), d)
+
+
+def compare(pipe):
+    """비교 질문: 한쪽 논문은 다른 논문에 언급만 된 상태 → 근거 부족이면 원 논문을 수집해야 한다(이슈 18)."""
+    res, ev, sec = ask(pipe, "RoBERTa와 XLNet의 사전학습 방식은 어떻게 다른가요?")
+    d = info(res, ev, sec, "1906.08237")
+    lacks = af.answer_lacks_evidence(res.answer)
+    d["note"] = f"근거 부족 답변={lacks}"
+    log("compare", "RoBERTa·XLNet 비교", not bad_answer(res) and (bool(d["key_added"]) or not lacks), d)
 
 
 def paraphrase(pipe):
@@ -265,7 +278,8 @@ def concurrent(pipe):
         log("concurrent", "사용 기록 파일", False, {"note": str(e)[:150]})
 
 
-ALL = {"domains": domains, "english": english, "multiturn": multiturn, "paraphrase": paraphrase, "edge": edge,
+ALL = {"domains": domains, "english": english, "multiturn": multiturn, "compare": compare, "paraphrase": paraphrase,
+       "edge": edge,
        "failure": failure, "budget": budget, "toggle": toggle, "concurrent": concurrent}
 
 
@@ -273,6 +287,9 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--only", nargs="+", choices=list(ALL))
     args = ap.parse_args()
+    global OUT
+    if args.only:  # 일부만 돌릴 때는 전체 결과 파일을 덮어쓰지 않는다
+        OUT = OUT.with_name(f"scenarios_{'_'.join(args.only)}.jsonl")
     if settings.llm_provider != "local":
         raise SystemExit("로컬 LLM(LLM_PROVIDER=local)에서만 실행합니다.")
     prepare()  # 본 DB 를 복사해 매번 같은 상태에서 시작

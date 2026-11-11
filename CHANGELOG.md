@@ -69,6 +69,8 @@
 - 진행 보고서 (`docs/PROGRESS_REPORT.md`), 작업 지침 (`CLAUDE.md`)
 
 ### Changed
+- 비교 질문 수집 신호 보완: 명칭이 여럿일 때 제목에 있거나 근거 청크 2개 이상에 나와야 근거 있음으로 판단(다른 논문이 한 번 언급만 해도 수집하지 않던 문제, 코퍼스 안 신호 7/30 유지) (`rag/auto_fetch.py answer_signal`)
+- 시나리오 시험: 비교 질문 시나리오 추가, 멀티턴 기대값 수정, 수집 사유 기록, `--only` 결과는 별도 파일 (`eval/auto_fetch_scenarios.py`)
 - 자동 수집 답변 신호 강화: 답변이 근거 부족을 밝히고 질문의 고유 명칭이 근거에 없을 때만 수집(코퍼스 안 질문의 신호 47%→23%) (`rag/auto_fetch.py answer_signal`)
 - 자동 수집 후보에 OpenAlex 인용 수 순 검색 추가, 관련도 0.5 이상 중 최다 인용 논문 우선 선정(`AUTO_FETCH_CITATION_SEARCH`, `AUTO_FETCH_ANCHOR_SCORE`): 원 논문 수집 2/12→6/12
 - 자동 수집 검색어당 후보 8→20개(`AUTO_FETCH_CANDIDATES`): 후보에서 잘리던 원 논문 포함. 후보 20·참고문헌 제외·가중치 0.7 조합으로 평가셋 recall 하락 −0.0085→−0.0017, 원 논문 3/7→5/7

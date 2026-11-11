@@ -232,7 +232,9 @@ def test_auto_fetch_decisions() -> None:
     ev = [RetrievedChunk(content="SPLADE and BM25 compared", source="1", title="SPLADE paper")]
     assert af.answer_signal("SimCLR는 무엇인가요?", no, ev), "명칭이 제목에 없으면 수집"
     assert not af.answer_signal("SPLADE는 무엇인가요?", no, ev), "제목에 있으면 수집 안 함"
-    assert not af.answer_signal("SPLADE와 BM25 차이는?", no, ev), "여러 명칭이 모두 본문에 있으면 수집 안 함"
+    assert af.answer_signal("SPLADE와 BM25 차이는?", no, ev), "제목에 없고 한 청크에서만 언급되면 수집(이슈 18)"
+    ev2 = ev + [RetrievedChunk(content="BM25 baseline", source="2", title="Other paper")]
+    assert not af.answer_signal("SPLADE와 BM25 차이는?", no, ev2), "두 청크 이상에서 언급되면 수집 안 함"
     assert af.answer_signal("SPLADE와 RETRO 차이는?", no, ev), "명칭 하나라도 본문에 없으면 수집"
     assert not af.answer_signal("SimCLR는 무엇인가요?", "답입니다 [1].", ev), "답변했으면 수집 안 함"
     assert not af.answer_signal("맛집을 추천해 주세요", no, ev), "명칭이 없으면 수집 안 함"
