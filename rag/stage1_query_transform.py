@@ -10,6 +10,8 @@ rag/stage1_query_transform.py — 1단계: 질의 변환
 """
 from __future__ import annotations
 
+import re
+
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 
@@ -22,7 +24,8 @@ def _split_lines(text: str) -> list[str]:
     """LLM 출력(줄 단위)을 리스트로. 빈 줄·번호 접두 제거."""
     lines = []
     for raw in text.strip().splitlines():
-        s = raw.strip().lstrip("0123456789.-) ").strip()
+        # "1. "·"2) "·"- " 같은 목록 표시만 지운다. "3D ..."·"4-bit ..." 의 숫자는 검색어의 일부이므로 남긴다
+        s = re.sub(r"^(?:\d+[.)]|[-*•])\s*", "", raw.strip()).strip()
         if s:
             lines.append(s)
     return lines

@@ -5,6 +5,8 @@
 ## [Unreleased]
 
 ### Added
+- 프로젝트 필요성과 확장 방향 문서 `PROJECT_VISION.md`
+- 자동 수집 실전 시험 `eval/auto_fetch_e2e.py`(시험용 DB 복사본에서 코퍼스 밖·무관한 질문·재질문·검색 지표 측정), `backend_eval.py` 기록에 최고 리랭크 점수 추가
 - `manage_auto_papers.py --strip-back-matter`: 이미 수집한 논문의 참고문헌·부록 청크만 삭제
 - 자동 수집 부작용 해결 방법 비교 `eval/auto_fetch_tuning.py`(관련도 기준·편수·가중치를 294문항과 코퍼스 밖 질문으로 측정, LLM 0회)
 - 자동 수집 논문 리랭크 가중치 `AUTO_RERANK_WEIGHT`(기본 0.7), 참고문헌·부록 제외 `AUTO_FETCH_DROP_BACK_MATTER`(기본 켜짐), 수집 점수 메타데이터 `fetch_score`, arXiv ID 직접 조회 `fetch_arxiv_by_ids`
@@ -83,6 +85,8 @@
 - `ingest_arxiv.py`: 전문 모드가 섹션 인식 청킹을 사용하도록 변경(청크 단위로 수집, 중복 청킹 제거)
 
 ### Fixed
+- 검색어 앞 숫자가 지워지던 버그: "3D Gaussian"이 "D Gaussian", "4-bit"가 "bit"로 바뀌어 엉뚱한 논문을 검색 (`rag/stage1_query_transform.py`)
+- PDF 깨진 문자로 임베딩이 실패하면 자동 수집 전체가 조용히 중단되던 문제: 문자 정리, 논문별 예외 처리 (`rag/arxiv_source.py`, `rag/auto_fetch.py`)
 - arXiv 대량 수집 중 한 검색어의 HTTP 429가 예외로 전체 실행을 중단시켜 수집분이 전부 유실되던 문제 → 검색어별 격리(실패 검색어만 건너뛰고 나머지는 저장) (`scripts/ingest_arxiv.py`)
 - arxiv 4.x에서 제거된 `Result.download_pdf` 사용으로 `--fulltext` 실패 → `pdf_url` 직접 다운로드(클라이언트 세션의 CA 설정 재사용)로 수정 (`scripts/ingest_arxiv.py`)
 - Anthropic 최신 API 버전에서 `temperature` 파라미터 400 에러 → 제거 (`rag/llm.py`)

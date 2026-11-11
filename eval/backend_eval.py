@@ -140,6 +140,7 @@ def run(args) -> None:
             "id": rec["id"], "corpus": args.corpus, "difficulty": rec.get("difficulty"), "multi_hop": rec.get("multi_hop"),
             "recall": recall_at_k(res.reranked, exp, k) if exp else None,
             "mrr": reciprocal_rank(res.reranked, exp) if exp else None,
+            "top_score": max((c.rerank_score or 0.0 for c in res.reranked), default=0.0),
             "faithfulness": res.verification.faithfulness if res.verification else None,
             "answer_relevance": ans_rel, "context_relevance": ctx_rel,
             "answered": is_answered(res.answer), "regenerated": res.regenerated,

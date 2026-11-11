@@ -42,6 +42,8 @@ def test_split_lines() -> None:
 
     out = _split_lines("1. first\n- second\n\n  3) third  ")
     assert out == ["first", "second", "third"], out
+    assert _split_lines("3D Gaussian Splatting\n4-bit quantization\n2. 8-bit") == [  # 숫자로 시작하는 검색어 보존
+        "3D Gaussian Splatting", "4-bit quantization", "8-bit"]
     print("  test_split_lines ✅")
 
 

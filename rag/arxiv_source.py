@@ -70,7 +70,9 @@ def download_pdf_text(result: arxiv.Result, session, timeout: int = 60) -> str:
         resp = session.get(url, timeout=timeout)
         resp.raise_for_status()
         reader = PdfReader(io.BytesIO(resp.content))
-        return "\n".join(page.extract_text() or "" for page in reader.pages)
+        text = "\n".join(page.extract_text() or "" for page in reader.pages)
+        # PDF 에서 나온 깨진 문자(짝 없는 서로게이트 등)는 임베딩 토크나이저 오류를 일으키므로 제거
+        return text.encode("utf-8", "ignore").decode("utf-8").replace("\x00", "")
     except Exception as e:  # noqa: BLE001
         print(f"    (PDF 실패, 초록으로 대체: {e})")
         return ""

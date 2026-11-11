@@ -128,16 +128,20 @@ def fetch_and_ingest(question: str, vectorstore, emit: Emit | None = None) -> li
     for i, (r, s) in enumerate(chosen, 1):
         title = r.title.strip()
         emit("fetch_paper_start", i=i, n=len(chosen), title=title)
-        chunks, used_full = result_to_chunks(
-            r, session, settings.auto_fetch_fulltext,
-            extra_meta={"origin": "auto", "fetched_at": today, "fetch_query": question[:200],
-                        "fetch_score": round(s, 4)},
-        )
-        if settings.auto_fetch_drop_back_matter:
-            chunks = [c for c in chunks if not is_back_matter(c.metadata.get("section"))]
-        if not chunks:
+        try:  # 논문 한 편의 실패가 나머지 수집을 막지 않게
+            chunks, used_full = result_to_chunks(
+                r, session, settings.auto_fetch_fulltext,
+                extra_meta={"origin": "auto", "fetched_at": today, "fetch_query": question[:200],
+                            "fetch_score": round(s, 4)},
+            )
+            if settings.auto_fetch_drop_back_matter:
+                chunks = [c for c in chunks if not is_back_matter(c.metadata.get("section"))]
+            if not chunks:
+                continue
+            vectorstore.add_documents(chunks)
+        except Exception as e:  # noqa: BLE001
+            emit("fetch_warn", message=f"논문 추가 실패({r.pid}): {type(e).__name__}: {str(e)[:120]}")
             continue
-        vectorstore.add_documents(chunks)
         info = {"source": r.pid, "title": title, "score": s, "found_by": r.found_by,
                 "chunks": len(chunks), "fulltext": used_full}
         added.append(info)
