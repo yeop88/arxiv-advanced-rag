@@ -241,6 +241,10 @@ def test_auto_fetch_decisions() -> None:
     assert not af.answer_signal("GraphRAG의 장점은?", no, ev3), "띄어쓰기가 달라도 제목에 있으면 수집 안 함"
     assert not af.answer_signal("VQA 기법은?", no, ev3), "약어가 제목 머리글자와 맞으면 수집 안 함"
     assert af.answer_signal("SAM 구조는?", no, ev3), "머리글자가 맞지 않으면 수집"
+    hyde = [RetrievedChunk(content="We propose HyDE. HyDE generates a hypothetical document.", source="5",
+                           title="Precise Zero-Shot Dense Retrieval without Relevance Labels")]
+    assert not af.answer_signal("HyDE는 무엇인가요?", no, hyde), "제목에 없어도 한 청크에 여러 번 나오면 원 논문으로 봄"
+    assert af._word_count("RETRO", "retrocausal RETRO, Retro") == 2 and af._word_count("FiD", "fidelity") == 0
     assert not af._is_acronym("RL") and af._is_acronym("VQA") and not af._is_acronym("XLNet"), "약어는 대문자 3~6자"
     assert not af.answer_signal("SimCLR는 무엇인가요?", "답입니다 [1].", ev), "답변했으면 수집 안 함"
     assert not af.answer_signal("맛집을 추천해 주세요", no, ev), "명칭이 없으면 수집 안 함"

@@ -98,11 +98,19 @@ def _in_title(name: str, title: str) -> bool:
     return _is_acronym(name) and name.lower() in _initials(title)
 
 
+_DEFINE_MENTIONS = 2  # 한 청크에 이름이 단어로 이만큼 나오면 그 논문이 이름의 주인으로 본다
+
+
+def _word_count(name: str, text: str) -> int:
+    """단어 경계를 지킨 등장 횟수("RETRO" 가 "retrocausal" 에, "FiD" 가 "fidelity" 에 걸리지 않게)."""
+    return len(re.findall(r"(?<![A-Za-z0-9])" + re.escape(name) + r"(?![A-Za-z0-9])", text or "", flags=re.I))
+
+
 def answer_signal(question: str, answer: str, reranked) -> bool:
     """2차 신호: 답변이 근거 부족을 밝혔고, 질문이 묻는 대상이 근거에 정말 없을 때만 수집한다.
 
     다중 홉 질문은 일부만 못 찾아도 '찾을 수 없다'고 쓰므로 표현만으로 판단하면 과하게 켜진다(측정 47%).
-    - 명칭이 하나: 그 이름이 제목에 들어간 근거 논문이 없으면 수집(다른 논문이 언급만 한 경우 포함)
+    - 명칭이 하나: 그 이름이 제목에 들어간 근거 논문도, 이름을 여러 번 쓴 근거 청크도 없으면 수집(다른 논문이 언급만 한 경우 포함)
     - 명칭이 여럿: 어느 하나라도 제목에 없고 근거 청크 _MIN_MENTIONS 개 미만에서만 언급되면 수집
       (예: "RoBERTa와 XLNet 차이" — XLNet 이 다른 논문 한 곳에서 언급만 된 경우)
     제목 비교는 띄어쓰기를 무시하고 약어는 머리글자로도 맞춘다("GraphRAG"↔"Graph RAG", "VQA"↔"Visual Question Answering").
@@ -113,16 +121,18 @@ def answer_signal(question: str, answer: str, reranked) -> bool:
     if not names:
         return False
 
-    def in_titles(name: str) -> bool:
-        return any(_in_title(name, c.title) for c in reranked)
+    def covered(name: str) -> bool:
+        # 제목에 있거나, 한 근거 청크 안에 단어로 여러 번 나오면(그 논문이 이름을 정의한 원 논문) 근거 있음.
+        # 제목에 이름이 없는 원 논문(HyDE: "Precise Zero-Shot Dense Retrieval…")이 근거에 있는데도 켜지던 경우(§5.31)
+        return any(_in_title(name, c.title) or _word_count(name, c.content) >= _DEFINE_MENTIONS for c in reranked)
 
     if len(names) == 1:
-        return not in_titles(names[0])
+        return not covered(names[0])
 
     def mentions(name: str) -> int:
         return sum(_norm(name) in _norm(f"{c.title} {c.content}") for c in reranked)
 
-    return any(not in_titles(n) and mentions(n) < _MIN_MENTIONS for n in names)
+    return any(not covered(n) and mentions(n) < _MIN_MENTIONS for n in names)
 
 
 def select_papers(ranked: list) -> list:
