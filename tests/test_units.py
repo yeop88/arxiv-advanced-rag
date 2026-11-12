@@ -504,6 +504,42 @@ def test_watch() -> None:
     print("  test_watch ✅")
 
 
+def test_visual_parse() -> None:
+    """표·그림: 모델 응답 해석, 숫자 대조, 페이지 캡션에 없는 항목 버리기(모델 호출 없이)."""
+    from rag import visual as V
+
+    raw = chr(10).join(["### Table 2: Top-20 accuracy", "```markdown", "| Model | NQ |", "|---|---|", "| DPR | 78.4 |",
+                   "| BM25 | 59.1 |", "```", "### Figure 1: Overview", "그림은 두 인코더를 보여 준다.", "### Table 9: 지어낸 표",
+                   "| a | 12.5 |"])
+    items = V.parse(raw, page=5)
+    assert [(i.kind, i.label) for i in items] == [("table", "Table 2"), ("figure", "Figure 1"), ("table", "Table 9")]
+    assert "```" not in items[0].body and items[0].text.startswith("Table 2: Top-20 accuracy")
+    page = "Table 2: Top-20 accuracy ... DPR 78.4 79.4 BM25 59.1"
+    assert V.number_match(items[0].body, page) == 1.0 and V.number_match("| x | 99.9 | 78.4 |", page) == 0.5
+    assert [m.group(2) for m in V.CAPTION.finditer("Table 2: a" + chr(10) + "see Table 3. here" + chr(10) + "Figure1: b")] == ["2", "1"]
+
+    orig = V._ask
+    V._ask = lambda png, caps: raw
+    try:
+        import io
+
+        import pdfplumber
+        from pypdf import PdfWriter
+
+        buf = io.BytesIO()
+        w = PdfWriter()
+        w.add_blank_page(200, 200)
+        w.write(buf)
+        orig_cp = V.caption_pages
+        V.caption_pages = lambda pdf: [(1, ["Table 2", "Figure 1"], page)]
+        got = V.extract(buf.getvalue())
+        V.caption_pages = orig_cp
+    finally:
+        V._ask = orig
+    assert [i.label for i in got] == ["Table 2", "Figure 1"], "페이지 캡션에 없는 Table 9 는 버림"
+    print("  test_visual_parse ✅")
+
+
 def main() -> None:
     print("단위 테스트 실행:")
     test_rrf()
@@ -522,6 +558,7 @@ def main() -> None:
     test_survey()
     test_bm25_tokenize()
     test_watch()
+    test_visual_parse()
     print("모든 단위 테스트 통과 ✅")
 
 
