@@ -111,6 +111,8 @@ class Settings:
     # --- 하이브리드 검색 (BM25 키워드 + 벡터 의미) ---
     # True 면 BM25(정확 매칭)와 벡터(의미)를 RRF 로 융합 → 고유명사·약어에 강해짐
     use_hybrid: bool = True
+    # BM25 단어 나누기: whitespace(이전) | regex(영문·한글 분리 + 조사 제거, 기본) | kiwi(한글 형태소 분석). 측정 §5.32
+    bm25_tokenizer: str = os.getenv("BM25_TOKENIZER", "regex")
     rrf_k: int = 60            # RRF 상수(클수록 순위차 영향 완화, 통상 60)
 
     # --- 질의 변환 ---

@@ -446,6 +446,23 @@ def test_survey() -> None:
     print("  test_survey ✅")
 
 
+def test_bm25_tokenize() -> None:
+    """BM25 단어 나누기: 조사·문장부호가 붙은 영어 용어를 원래 용어로."""
+    from config import settings
+    from rag.stage2_rerank import bm25_tokenize
+
+    keep = settings.bm25_tokenizer
+    try:
+        settings.bm25_tokenizer = "regex"
+        toks = bm25_tokenize("HyDE의 가설 문서는 RETRO, GPT-3와 다른가요?")
+        assert {"hyde", "retro", "gpt", "3", "가설", "문서"} <= set(toks) and "의" not in toks and "와" not in toks, toks
+        settings.bm25_tokenizer = "whitespace"
+        assert bm25_tokenize("HyDE의 RETRO,") == ["HyDE의", "RETRO,"]
+    finally:
+        settings.bm25_tokenizer = keep
+    print("  test_bm25_tokenize ✅")
+
+
 def main() -> None:
     print("단위 테스트 실행:")
     test_rrf()
@@ -462,6 +479,7 @@ def main() -> None:
     test_citation_graph()
     test_compare_table()
     test_survey()
+    test_bm25_tokenize()
     print("모든 단위 테스트 통과 ✅")
 
 

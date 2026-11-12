@@ -13,6 +13,7 @@ rag/stage2_rerank.py — 2단계: 검색 + 리랭킹
 """
 from __future__ import annotations
 
+import re
 from functools import lru_cache
 
 from langchain_core.documents import Document
@@ -59,6 +60,47 @@ def retrieve(vectorstore: VectorStoreLike, queries: list[str]) -> list[Retrieved
 # ---------------------------------------------------------------------------
 # 하이브리드 검색: BM25(키워드) + 벡터(의미) 를 RRF 로 융합
 # ---------------------------------------------------------------------------
+_LATIN = re.compile(r"[a-z0-9]+")
+_HANGUL = re.compile(r"[가-힣]+")
+# 한국어 질문에서 영어 용어 뒤에 붙는 조사·어미("HyDE의", "RETRO는")와 한글 단어 끝의 흔한 조사
+_PARTICLES = ("에서는", "으로는", "에서", "으로", "에게", "까지", "부터", "보다", "처럼", "이란", "이나",
+              "은", "는", "이", "가", "을", "를", "의", "에", "와", "과", "로", "도", "만", "란")
+
+
+def _strip_particle(word: str) -> str:
+    for p in _PARTICLES:
+        if word.endswith(p) and len(word) > len(p) + 1:
+            return word[: -len(p)]
+    return word
+
+
+@lru_cache(maxsize=1)
+def _kiwi():
+    from kiwipiepy import Kiwi
+
+    return Kiwi()
+
+
+def bm25_tokenize(text: str) -> list[str]:
+    """BM25 단어 나누기(설정 BM25_TOKENIZER).
+
+    whitespace: 공백만(이전 방식) — "HyDE의"·"RETRO," 처럼 조사·문장부호가 붙어 영어 용어가 안 맞았다.
+    regex: 영문·숫자와 한글을 따로 떼고 한글 끝 조사를 뗀다.
+    kiwi: 영문·숫자는 regex 와 같고, 한글은 형태소 분석으로 명사·동사 어간 등 실질 형태소만.
+    """
+    mode = settings.bm25_tokenizer
+    if mode == "whitespace":
+        return text.split()
+    low = (text or "").lower()
+    tokens = _LATIN.findall(low)
+    if mode == "kiwi":
+        for hangul in _HANGUL.findall(low):
+            tokens += [t.form for t in _kiwi().tokenize(hangul) if t.tag[0] in "NVX" or t.tag in ("SL", "SN")]
+    else:
+        tokens += [_strip_particle(w) for w in _HANGUL.findall(low)]
+    return [t for t in tokens if t not in _PARTICLES]  # 영어 용어에서 떨어져 나온 조사만 남은 토큰은 버린다
+
+
 @lru_cache(maxsize=1)
 def _get_bm25(vectorstore_id: int):
     """BM25 리트리버를 1회만 구축해 캐싱.
@@ -70,7 +112,7 @@ def _get_bm25(vectorstore_id: int):
     from langchain_community.retrievers import BM25Retriever
 
     docs = get_all_documents(_BM25_STORE["vs"])
-    retriever = BM25Retriever.from_documents(docs)
+    retriever = BM25Retriever.from_documents(docs, preprocess_func=bm25_tokenize)
     retriever.k = settings.top_k_retrieve
     return retriever
 
