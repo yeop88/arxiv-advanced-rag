@@ -463,6 +463,47 @@ def test_bm25_tokenize() -> None:
     print("  test_bm25_tokenize ✅")
 
 
+def test_watch() -> None:
+    """관심 분야 알림: 기간·이미 본 논문·DB 논문 제외, 관련도 기준, 두 번째 실행은 새 논문만(네트워크·LLM 없이)."""
+    import datetime as dt
+    import tempfile
+
+    import rag.arxiv_source as A
+    from config import settings
+    from rag import watch as W
+
+    today = dt.date(2026, 11, 12)
+    papers = [A.Paper(pid="n1", title="RAG new", summary="rag", published=dt.date(2026, 11, 11)),
+              A.Paper(pid="old", title="RAG old", summary="rag", published=dt.date(2026, 10, 1)),
+              A.Paper(pid="indb", title="RAG db", summary="rag", published=dt.date(2026, 11, 11)),
+              A.Paper(pid="off", title="Astro", summary="stars", published=dt.date(2026, 11, 11))]
+    keep = (settings.watch_path, settings.watch_digest_dir)
+    orig = (A.search_arxiv, W._summarize)
+    calls = []
+    with tempfile.TemporaryDirectory() as d:
+        settings.watch_path, settings.watch_digest_dir = f"{d}/w.json", f"{d}/dg"
+        A.search_arxiv = lambda q, n, **kw: (calls.append((q, kw.get("sort"))), papers)[1]
+        W._summarize = lambda topic, title, abstract: f"요약:{title}"
+        import rag.llm as L
+        orig_rr = L.get_reranker
+        L.get_reranker = lambda: type("R", (), {"predict": staticmethod(lambda pairs: [0.9 if "rag" in t.lower() else 0.0 for _, t in pairs])})()
+        try:
+            W.save({"topics": [{"topic": "RAG", "query": "retrieval augmented", "last_checked": None, "seen": []}]})
+            digest = W.check_topic(W.load()["topics"][0], {"indb"}, 7, today)
+            assert [i.pid for i in digest.items] == ["n1"] and digest.checked == 2, digest
+            assert calls[0] == ("retrieval AND all:augmented", "submittedDate")
+            md1, _ = W.run(None, today=today)
+            assert "요약:RAG new" in md1 and "RAG old" not in md1 and "Astro" not in md1
+            md, path = W.run(None, today=today)
+            assert path.exists() and "새로 실을 만한 논문이 없습니다" in md, "두 번째 실행: 이미 본 논문은 다시 싣지 않음"
+            assert W.latest_digest()[0] == "2026-11-12"
+        finally:
+            A.search_arxiv, W._summarize = orig
+            L.get_reranker = orig_rr
+            settings.watch_path, settings.watch_digest_dir = keep
+    print("  test_watch ✅")
+
+
 def main() -> None:
     print("단위 테스트 실행:")
     test_rrf()
@@ -480,6 +521,7 @@ def main() -> None:
     test_compare_table()
     test_survey()
     test_bm25_tokenize()
+    test_watch()
     print("모든 단위 테스트 통과 ✅")
 
 

@@ -178,6 +178,7 @@ streamlit run app.py
 > OpenAlex는 기본으로 꺼져 있어(`OPENALEX_ENABLED=0`) 후보는 arXiv에서만 찾습니다. 켜면 인용 순 검색이 더해지지만, 회사망처럼 여럿이 같은 IP를 쓰면 무료 예산이 금방 바닥납니다(429) — 이때는 openalex.org 무료 키를 `OPENALEX_API_KEY`에 넣으세요.
 > 평가는 지우지 않고도 자동 수집분을 빼고(기본) 또는 넣고 할 수 있습니다(`--corpus`, 아래 학습·평가 도구).
 > 코퍼스가 커지면 검색 품질이 조금씩 내려가므로, 자동 수집은 **2,000청크까지만** 유지하고 넘으면 오래 안 쓰인 논문부터 지웁니다(`AUTO_FETCH_MAX_CHUNKS`). `python eval/corpus_health.py`로 상태를 점검할 수 있습니다.
+> **📬 관심 분야 알림** — 사이드바에 주제를 등록하면 arXiv 의 새 논문을 골라 한국어 요약 소식지를 만듭니다(아래 "관심 분야 알림").
 > **📝 문헌 조사 초안** — 사이드바에 주제를 넣으면 DB 의 관련 논문 5~8편을 소주제별 흐름으로 묶어 인용이 달린 초안을 씁니다.
 > 참고문헌은 근거 목록에서 자동으로 붙고, 검증 결과와 함께 마크다운으로 저장할 수 있습니다(로컬 모델 약 1~2분).
 > **📊 논문 비교표** — 근거 논문이 2편 이상이면 답변 아래 버튼으로 방법·데이터·결과·한계를 비교하는 표를 만듭니다.
@@ -191,6 +192,21 @@ streamlit run app.py
 
 > 💡 첫 실행 시 HuggingFace 임베딩(bge-m3)·리랭커 모델을 다운로드하므로 몇 분 걸립니다.
 > GPU 가 있으면 자동으로 사용합니다(`EMBED_DEVICE`·`RERANK_DEVICE`, 기본 `auto`).
+
+### 관심 분야 알림 (새 논문 소식지)
+
+```bash
+python scripts/watch_papers.py --add "검색 증강 생성" --query "retrieval augmented generation"   # 검색어 생략 시 로컬 모델이 만듦
+python scripts/watch_papers.py --run            # 새 논문 확인 → storage/digests/YYYY-MM-DD.md
+```
+
+주제마다 arXiv 최신 논문 중 검색어의 단어를 모두 포함하고 관련도가 기준을 넘는 논문을 최대 5편 골라, 초록을 한국어 2~3문장으로 요약합니다.
+이미 실은 논문과 DB 에 있는 논문은 빼고, DB 에는 넣지 않습니다. 챗봇 사이드바에서도 주제를 추가하고 바로 확인할 수 있습니다.
+매일 받으려면 Windows 작업 스케줄러에 등록하세요(경로는 자기 환경에 맞게):
+
+```bat
+schtasks /Create /SC DAILY /ST 09:00 /TN "arxiv-watch" /TR "cmd /c cd /d D:\path	o\exam03_Advanced_RAG && python scripts\watch_papers.py --run"
+```
 
 ### 평가 실행
 
@@ -219,6 +235,7 @@ exam03_Advanced_RAG/
 │   ├── citations.py           # 인용 그래프(선행·후속 연구, 공통 참고문헌)
 │   ├── compare_table.py       # 논문 비교표(방법·데이터·결과·한계)
 │   ├── survey.py              # 문헌 조사 초안(소주제별 흐름 + 참고문헌)
+│   ├── watch.py               # 관심 분야 알림(새 논문 소식지)
 │   └── pipeline.py            # 4단계 오케스트레이터
 ├── rag/chunking.py            # 섹션 인식 청킹 (영문/국문 섹션 감지)
 ├── scripts/
@@ -227,7 +244,8 @@ exam03_Advanced_RAG/
 │   ├── ingest_local.py        # 로컬 PDF/텍스트 폴더 수집 (한국어 논문)
 │   ├── migrate_to_pinecone.py # Chroma → Pinecone 이전(벡터 그대로 복사, --dry-run)
 │   ├── manage_auto_papers.py  # 자동 수집 논문(origin=auto) 목록·삭제
-│   └── build_citation_graph.py # 인용 그래프(OpenAlex 참고문헌·피인용) 생성
+│   ├── build_citation_graph.py # 인용 그래프(OpenAlex 참고문헌·피인용) 생성
+│   └── watch_papers.py        # 관심 분야 알림(주제 등록·새 논문 소식지)
 ├── eval/
 │   ├── eval_set.jsonl         # 평가셋 단일 소스(질문+정답논문+난이도)
 │   ├── dataset.py             # 평가셋 로더(난이도/카테고리 필터)

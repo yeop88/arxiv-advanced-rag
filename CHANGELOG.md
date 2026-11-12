@@ -5,6 +5,7 @@
 ## [Unreleased]
 
 ### Added
+- 관심 분야 알림 `rag/watch.py`·`scripts/watch_papers.py`: 등록한 주제의 arXiv 새 논문을 최신순으로 찾아(검색어 단어 AND) 관련도로 거르고 초록을 한국어로 요약한 소식지 생성, 이미 본 논문·DB 논문 제외. 챗봇 사이드바 등록·확인, arXiv 검색 최신순 정렬 옵션
 - 문헌 조사 초안 `rag/survey.py`: 주제의 관련 논문을 넓게 모아 연도·DB 안 인용 관계와 함께 소주제별 흐름 초안 작성(문장마다 [n], 참고문헌은 코드가 생성, 4단계 검증). 챗봇 사이드바 입력·마크다운 저장, 측정 도구 `eval/survey_eval.py`
 - 논문 비교표 `rag/compare_table.py`: 근거 논문 2~5편을 방법·데이터·결과·한계로 비교, 칸마다 근거 번호, 채운 칸만 4단계 검증 후 걸린 칸 ⚠ 표시. 챗봇 답변 아래 "비교표 만들기" 버튼, 측정 도구 `eval/compare_table_eval.py`
 - 원 논문 찾기 보강(A3, 기본 꺼짐): 경량 LLM 원 논문 제목 추정 → arXiv 제목 검색(`AUTO_FETCH_TITLE_GUESS`), 근거 논문들의 공통 참고문헌 후보(`AUTO_FETCH_COMMON_REFS`), 후보 찾기 분리 `find_candidates`, 측정 도구 `eval/original_paper_eval.py`

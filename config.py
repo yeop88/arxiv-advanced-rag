@@ -153,6 +153,9 @@ class Settings:
     openalex_enabled: bool = os.getenv("OPENALEX_ENABLED", "0") not in ("0", "false", "False")
     # OpenAlex API 키(선택). 없으면 같은 네트워크 IP 가 나눠 쓰는 하루 무료 예산(검색 약 100회)을 쓴다
     openalex_api_key: str = os.getenv("OPENALEX_API_KEY", "")
+    # 관심 분야 알림: 주제 목록·본 논문 기록 / 소식지 폴더 (scripts/watch_papers.py)
+    watch_path: str = os.getenv("WATCH_PATH", "./storage/watchlist.json")
+    watch_digest_dir: str = os.getenv("WATCH_DIGEST_DIR", "./storage/digests")
     # 인용 그래프(OpenAlex 참고문헌·피인용 관계). scripts/build_citation_graph.py 로 만든다
     citation_graph_path: str = os.getenv("CITATION_GRAPH_PATH", "./storage/citation_graph.json")
     # 수집 논문의 참고문헌·부록은 DB 에 넣지 않음(무관한 질문의 검색에 끼어드는 주된 원인)

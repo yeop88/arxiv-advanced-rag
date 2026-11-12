@@ -105,6 +105,20 @@ with st.sidebar:
     st.caption("DB 의 관련 논문 5~8편을 소주제별 흐름으로 묶어 인용이 달린 초안을 씁니다(로컬 모델 약 1~2분).")
 
     st.markdown("---")
+    st.subheader("📬 관심 분야 알림")
+    from rag import watch as _watch
+
+    _topics = _watch.load()["topics"]
+    for _t in _topics:
+        st.caption(f"• {_t['topic']} — 마지막 확인 {_t.get('last_checked') or '아직 없음'}")
+    watch_new = st.text_input("주제 추가", placeholder="예: 검색 증강 생성", key="watch_new")
+    _c1, _c2 = st.columns(2)
+    watch_add = _c1.button("추가", disabled=not watch_new.strip())
+    watch_run = _c2.button("새 논문 확인", disabled=not _topics)
+    st.caption("arXiv 최신 논문 중 관련 있는 것을 골라 초록을 한국어로 요약합니다(주제당 약 30초). "
+               "정기 실행은 `scripts/watch_papers.py --run`.")
+
+    st.markdown("---")
     st.caption(f"LLM: `{settings.llm_provider}` / {settings.llm_model}")
     st.caption(f"임베딩: `{settings.embed_model}`")
     if st.button("🗑️ 대화 초기화"):
@@ -155,6 +169,32 @@ def render_survey() -> None:
 
 
 render_survey()
+
+
+def render_watch() -> None:
+    """관심 분야: 주제 추가·새 논문 확인(버튼을 누른 실행에서), 최신 소식지 표시."""
+    from rag import watch
+
+    if watch_add:
+        with st.spinner("검색어를 만드는 중"):
+            watch.add_topic(watch_new.strip())
+        st.rerun()
+    if watch_run:
+        if not loader.ready:
+            st.info("모델·DB 를 준비하는 중입니다. 잠시 뒤 다시 눌러 주세요.")
+        else:
+            with st.status("관심 분야 새 논문 확인", expanded=True) as box:
+                watch.run(loader.pipe.vectorstore,
+                          progress=lambda ev, **kw: box.write(f"{kw['i']}/{kw['n']} {kw['topic']}"))
+                box.update(label="소식지 완성", state="complete", expanded=False)
+    latest = watch.latest_digest()
+    if latest:
+        day, md = latest
+        with st.expander(f"📬 관심 분야 소식 ({day})", expanded=bool(watch_run)):
+            st.markdown(md, unsafe_allow_html=True)
+
+
+render_watch()
 
 
 def _thinking_label() -> str:

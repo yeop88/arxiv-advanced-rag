@@ -150,18 +150,20 @@ class OpenAlexDisabled(Exception):
     pass
 
 
-def search_arxiv(query: str, n: int, timeout: float = 8.0, field: str = "all") -> list[Paper]:
+def search_arxiv(query: str, n: int, timeout: float = 8.0, field: str = "all", sort: str = "relevance") -> list[Paper]:
     """arXiv 검색 API 를 직접 1회 호출(재시도 없음, 시간 제한). 429·시간 초과면 SearchRateLimited.
 
     arxiv 라이브러리를 거치면 막혀 있을 때 실패를 알기까지 15~60초가 걸려(실측),
     사용자가 기다리는 챗봇에서는 짧은 시간 제한으로 직접 부르고 Atom 응답을 표준 XML 파서로 읽는다.
+    sort: relevance(기본) | submittedDate(최신순, 관심 분야 알림용)
     """
     import requests
 
     _arxiv_throttle()
     try:
         r = http_session().get("https://export.arxiv.org/api/query", timeout=timeout, params={
-            "search_query": f"{field}:{query}", "max_results": n, "sortBy": "relevance"})
+            "search_query": f"{field}:{query}", "max_results": n, "sortBy": sort,
+            "sortOrder": "descending"})
     except requests.Timeout as e:
         raise SearchRateLimited(f"시간 초과({timeout:.0f}초)") from e
     if r.status_code == 429:
