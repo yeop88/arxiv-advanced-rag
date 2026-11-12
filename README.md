@@ -8,6 +8,7 @@
 - **특징**: LLM 백엔드 교체 가능, 단계별 하이퍼파라미터 실험, 검증(자기수정) 내장
 - **성격**: 비영리 — 학습·연구·개인용. 상업적 수익 모델은 다루지 않습니다.
 - **필요성과 확장 방향**: [PROJECT_VISION.md](PROJECT_VISION.md)
+- **목표 달성률**: [docs/ACHIEVEMENT.md](docs/ACHIEVEMENT.md) · 발표 자료: [docs/presentation/SLIDES.md](docs/presentation/SLIDES.md)
 
 ---
 

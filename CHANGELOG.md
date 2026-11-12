@@ -5,6 +5,7 @@
 ## [Unreleased]
 
 ### Added
+- 목표 달성률 문서 `docs/ACHIEVEMENT.md`(PROJECT_VISION 항목별 판정, 현재 목표 95%·로드맵 17%)와 발표 자료 `docs/presentation/`(슬라이드 구성안·대본, 그래프 6종과 생성 스크립트)
 - 자동 수집 시나리오 시험 `eval/auto_fetch_scenarios.py`: 다른 학문 분야, 영어, 멀티턴, 이상한 입력, 장애, 예산 초과, 토글, 동시 질문
 - 자동 수집 예산 `AUTO_FETCH_MAX_CHUNKS`(기본 2,000청크)와 사용 기록 기반 자동 정리: 넘으면 오래 안 쓰인 논문부터 삭제 (`rag/auto_fetch.py`, `storage/auto_usage.json`)
 - 코퍼스 상태 점검 `eval/corpus_health.py`: 자동 수집 제외·포함 검색 지표를 비교해 정상/주의/초과 판정, 추세 기록(LLM 없음, 로컬 백엔드 전용)
