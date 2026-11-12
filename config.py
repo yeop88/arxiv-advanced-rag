@@ -137,8 +137,8 @@ class Settings:
     # 인용 수 순 검색을 후보에 더하고, 관련도가 이 값 이상인 후보 중 가장 많이 인용된 논문 1편은 반드시 선정(원 논문 우선)
     auto_fetch_citation_search: bool = os.getenv("AUTO_FETCH_CITATION_SEARCH", "1") not in ("0", "false", "False")
     auto_fetch_anchor_score: float = float(os.getenv("AUTO_FETCH_ANCHOR_SCORE", "0.5"))
-    # 1 이면 경량 LLM 이 원 논문 제목을 추정해 제목으로도 찾고, 맞는 후보를 먼저 넣는다(A3)
-    auto_fetch_title_guess: bool = os.getenv("AUTO_FETCH_TITLE_GUESS", "0") not in ("0", "false", "False")
+    # 1 이면 경량 LLM 이 원 논문 제목을 추정해 제목으로도 찾고, 맞는 후보를 먼저 넣는다(A3, 측정 §5.25: 26%→62%, 확인용 58%→100%)
+    auto_fetch_title_guess: bool = os.getenv("AUTO_FETCH_TITLE_GUESS", "1") not in ("0", "false", "False")
     # 1 이면 근거 논문들이 공통으로 인용한 논문도 후보에 더한다(인용 그래프 필요)
     auto_fetch_common_refs: bool = os.getenv("AUTO_FETCH_COMMON_REFS", "0") not in ("0", "false", "False")
     # 자동 수집 청크 예산(0 = 제한 없음). 넘으면 오래 안 쓰인 논문부터 삭제.
