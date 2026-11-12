@@ -185,7 +185,7 @@ streamlit run app.py
 > 체크하면 DB 밖의 많이 인용된 선행·후속 논문도 OpenAlex 에서 조회합니다. 처음 한 번 `python scripts/build_citation_graph.py`로
 > 인용 그래프를 만들어 두세요(LLM 없음, 약 2분). 자동 수집 논문은 수집될 때 그래프에 추가됩니다.
 > **🧠 Thinking 토글**(로컬 모델 전용) — 사이드바에서 생성·검증 / 질의변환의 thinking 을 켜고 끌 수 있습니다.
-> 켜면 다중 홉 비교에 유리하지만 느립니다(측정: 질문당 off 약 1분, on 약 3~4분).
+> 켜면 다중 홉 비교에 유리하지만 느립니다(측정: 질문당 off 약 1분, on 약 3~4분. 같은 채점 기준으로 hard 30문항 answer_relevance 0.640 → 0.697).
 > (API 키는 secrets 로 주입, 벡터DB는 사전 구축).
 
 > 💡 첫 실행 시 HuggingFace 임베딩(bge-m3)·리랭커 모델을 다운로드하므로 몇 분 걸립니다.
