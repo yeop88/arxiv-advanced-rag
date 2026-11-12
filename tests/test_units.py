@@ -403,6 +403,36 @@ def test_compare_table() -> None:
     print("  test_compare_table ✅")
 
 
+def test_survey() -> None:
+    """문헌 조사 초안: 근거 머리의 연도·선행 관계, 참고문헌은 코드가 생성, 검색 폭 설정 복원(LLM 없이)."""
+    from config import settings
+    from rag import survey as S
+    from rag.schemas import RetrievedChunk
+
+    g = {"papers": {"A": {"oa": "W1", "title": "A", "cited_by": 9, "year": 2017, "refs": []},
+                    "B": {"oa": "W2", "title": "B", "cited_by": 1, "year": 2019, "refs": ["W1"]}},
+         "works": {}, "later": {}, "missing": []}
+    chunks = [RetrievedChunk(content="a", source="A", title="Paper A"), RetrievedChunk(content="b", source="B", title="Paper B")]
+    ctx = S.format_context(chunks, g)
+    assert "[1] Paper A, 2017\n" in ctx and "[2] Paper B, 2019 · 인용: [1]" in ctx, ctx
+    assert S.year_of("2103.00020", g) == 2021 and S.year_of("math/0211159", g) == 2002
+    assert S.year_of("quant-ph/9508027", g) == 1995 and S.year_of("A", g) == 2017 and S.year_of("x", g) is None
+    keep = (settings.top_k_rerank, settings.rerank_max_per_source, settings.top_k_retrieve)
+    orig_gather, orig_write = S.gather, S._write
+    S.gather = lambda topic, vs: chunks
+    S._write = lambda topic, ctx: "## 개요\nA가 먼저 나왔다 [1]."
+    try:
+        sv = S.build_survey("주제", None, verify=False)
+    finally:
+        S.gather, S._write = orig_gather, orig_write
+    assert sv.cited == {1} and "(본문 미인용)" in sv.references_md().splitlines()[1]
+    assert sv.to_markdown().startswith("# 문헌 조사 초안: 주제") and "## 참고문헌" in sv.to_markdown()
+    with S._wide_retrieval():
+        assert settings.top_k_rerank == S.SURVEY_CHUNKS and settings.rerank_max_per_source == 1
+    assert (settings.top_k_rerank, settings.rerank_max_per_source, settings.top_k_retrieve) == keep
+    print("  test_survey ✅")
+
+
 def main() -> None:
     print("단위 테스트 실행:")
     test_rrf()
@@ -418,6 +448,7 @@ def main() -> None:
     test_evict_over_budget()
     test_citation_graph()
     test_compare_table()
+    test_survey()
     print("모든 단위 테스트 통과 ✅")
 
 

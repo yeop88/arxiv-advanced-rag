@@ -99,6 +99,12 @@ with st.sidebar:
                    "Claude·OpenAI 는 .env 의 effort 설정을 쓰세요.")
 
     st.markdown("---")
+    st.subheader("📝 문헌 조사 초안")
+    survey_topic = st.text_input("주제", placeholder="예: 검색 증강 생성(RAG)의 발전 흐름", key="survey_topic")
+    survey_clicked = st.button("초안 만들기", disabled=not survey_topic.strip())
+    st.caption("DB 의 관련 논문 5~8편을 소주제별 흐름으로 묶어 인용이 달린 초안을 씁니다(로컬 모델 약 1~2분).")
+
+    st.markdown("---")
     st.caption(f"LLM: `{settings.llm_provider}` / {settings.llm_model}")
     st.caption(f"임베딩: `{settings.embed_model}`")
     if st.button("🗑️ 대화 초기화"):
@@ -116,6 +122,39 @@ st.caption("학술논문 근거 기반 질의응답 · 질의변환→리랭킹�
 # ---------------------------------------------------------------------------
 if "messages" not in st.session_state:
     st.session_state.messages = []  # [{role, content, result?}]
+
+
+def render_survey() -> None:
+    """사이드바에서 요청한 문헌 조사 초안을 만들고(버튼을 누른 실행에서) 화면 위쪽에 보여 준다."""
+    if survey_clicked:
+        if not loader.ready:
+            st.info("모델·DB 를 준비하는 중입니다. 잠시 뒤 다시 눌러 주세요.")
+            return
+        from rag.survey import build_survey
+
+        with st.status(f"문헌 조사 초안: {survey_topic}", expanded=True) as box:
+            def progress(ev, **kw):
+                msgs = {"survey_gather": "관련 논문 모으는 중", "survey_verify": "초안 검증 중"}
+                if ev == "survey_write":
+                    box.write(f"근거 {kw['n']}개(논문 {kw['papers']}편)로 초안 작성 중")
+                elif ev in msgs:
+                    box.write(msgs[ev])
+
+            st.session_state.survey = build_survey(survey_topic.strip(), loader.pipe.vectorstore, progress=progress)
+            box.update(label="초안 완성", state="complete", expanded=False)
+    sv = st.session_state.get("survey")
+    if not sv:
+        return
+    with st.expander(f"📝 문헌 조사 초안 — {sv.topic}", expanded=True):
+        st.markdown(sv.text)
+        st.markdown("**참고문헌**  \n" + "  \n".join(sv.references_md().splitlines()))
+        v = sv.verification
+        st.caption(("✅ 검증 통과" if v.grounded else "⚠️ 근거와 다를 수 있는 문장: " + "; ".join(v.unsupported_claims))
+                   if v else "검증 생략")
+        st.download_button("마크다운으로 저장", sv.to_markdown(), file_name="survey_draft.md", mime="text/markdown")
+
+
+render_survey()
 
 
 def _thinking_label() -> str:
