@@ -145,6 +145,8 @@ class Settings:
     # 측정(§5.18): 2,000청크에서 MRR −0.0048, 3,000청크부터 −0.0088 로 허용치 0.01 에 근접
     auto_fetch_max_chunks: int = int(os.getenv("AUTO_FETCH_MAX_CHUNKS", "2000"))
     auto_usage_path: str = os.getenv("AUTO_USAGE_PATH", "./storage/auto_usage.json")  # 논문별 근거 사용 기록
+    # OpenAlex 사용 여부(2026-11-12 사용자 결정으로 기본 끔). 끄면 자동 수집은 arXiv 만, 인용 그래프는 저장된 것만 쓴다
+    openalex_enabled: bool = os.getenv("OPENALEX_ENABLED", "0") not in ("0", "false", "False")
     # OpenAlex API 키(선택). 없으면 같은 네트워크 IP 가 나눠 쓰는 하루 무료 예산(검색 약 100회)을 쓴다
     openalex_api_key: str = os.getenv("OPENALEX_API_KEY", "")
     # 인용 그래프(OpenAlex 참고문헌·피인용 관계). scripts/build_citation_graph.py 로 만든다

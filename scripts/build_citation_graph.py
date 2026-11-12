@@ -50,6 +50,8 @@ def main() -> None:
     if args.stats:
         stats(citations.load())
         return
+    if not settings.openalex_enabled:
+        raise SystemExit("OpenAlex 사용이 꺼져 있습니다(OPENALEX_ENABLED=0). 켜고 다시 실행하세요. 저장된 그래프 요약: --stats")
     papers = db_papers()
     sources = sorted(papers)
     g = citations.build(sources, titles=papers, progress=lambda i, n: print(f"  {i}/{n}", flush=True))

@@ -56,6 +56,9 @@ def save(g: dict) -> None:
 
 
 def _get(session, params: dict, retries: int = 3) -> list[dict]:
+    if not settings.openalex_enabled:
+        from rag.arxiv_source import OpenAlexDisabled
+        raise OpenAlexDisabled("OpenAlex 사용 꺼짐(OPENALEX_ENABLED=0)")
     for attempt in range(retries + 1):
         from rag.arxiv_source import openalex_params
 

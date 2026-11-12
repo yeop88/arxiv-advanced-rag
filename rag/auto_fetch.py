@@ -130,14 +130,16 @@ def select_papers(ranked: list) -> list:
 
     파생 논문이 원 논문보다 점수가 높은 경우가 많아, 관련도가 충분한 후보 중 가장 많이 인용된 논문을 먼저 넣는다.
     """
-    eligible = [x for x in ranked if x[1] >= settings.auto_fetch_min_score]
+    eligible = [x for x in ranked if x[1] >= settings.auto_fetch_min_score
+                or float(getattr(x[0], "title_match", 0) or 0) >= _TITLE_EXACT]
     anchors = [x for x in eligible if x[1] >= settings.auto_fetch_anchor_score and x[0].cited_by > 0]
     if anchors:
         anchor = max(anchors, key=lambda x: x[0].cited_by)
         eligible = [anchor] + [x for x in eligible if x is not anchor]
     titled = [x for x in eligible if getattr(x[0], "title_match", False)]  # 추정한 원 논문 제목과 맞으면 맨 앞(A3)
     if titled:
-        eligible = titled[:1] + [x for x in eligible if x is not titled[0]]
+        best = max(titled, key=lambda x: (float(x[0].title_match), x[1]))  # 제목이 더 정확히 맞는 쪽, 같으면 관련도
+        eligible = [best] + [x for x in eligible if x is not best]
     return eligible[: settings.auto_fetch_max_papers]
 
 
@@ -257,13 +259,22 @@ def _title_words(t: str) -> set[str]:
     return {w for w in re.findall(r"[a-z0-9]+", (t or "").lower()) if len(w) > 2}
 
 
-def title_similar(a: str, b: str, min_overlap: float = 0.7) -> bool:
-    """두 제목이 같은 논문인가: 3자 이상 단어의 겹침 비율(긴 쪽 기준)이 기준 이상.
-    긴 쪽 기준이라 "Vision Transformer" 같은 짧은 추정이 "Vision Transformer with ..." 파생 논문과 맞지 않는다."""
+def title_overlap(a: str, b: str) -> float:
+    """두 제목의 3자 이상 단어 겹침 비율(긴 쪽 기준, 0~1)."""
     wa, wb = _title_words(a), _title_words(b)
     if not wa or not wb:
-        return False
-    return len(wa & wb) / max(len(wa), len(wb)) >= min_overlap
+        return 0.0
+    return len(wa & wb) / max(len(wa), len(wb))
+
+
+_TITLE_MATCH = 0.6     # 같은 논문으로 볼 제목 겹침 비율(긴 쪽 기준). "Nets"↔"Networks" 같은 차이를 허용
+_TITLE_EXACT = 0.9     # 이 이상이면 관련도 기준 없이 선정(한국어 질문과 영어 초록의 관련도가 낮게 나오는 원 논문 대비)
+
+
+def title_similar(a: str, b: str, min_overlap: float = _TITLE_MATCH) -> bool:
+    """두 제목이 같은 논문인가: 겹침 비율(긴 쪽 기준)이 기준 이상.
+    긴 쪽 기준이라 "Vision Transformer" 같은 짧은 추정이 "Vision Transformer with ..." 파생 논문과 맞지 않는다."""
+    return title_overlap(a, b) >= min_overlap
 
 
 def title_candidates(title: str, warn=None) -> list:
@@ -284,7 +295,7 @@ def title_candidates(title: str, warn=None) -> list:
     out = {}
     for p in found:
         if p.pid not in out and title_similar(p.title, title):
-            p.title_match = True
+            p.title_match = round(title_overlap(p.title, title), 3)  # 참(0보다 큼)이면서 얼마나 정확히 맞는지
             out[p.pid] = p
     return list(out.values())
 
@@ -298,8 +309,9 @@ def common_ref_candidates(evidence_sources: list[str], n: int = 3) -> list:
     common = citations.common_references(evidence_sources, g)[: n * 2]
     if not common:
         return []
-    citations._resolve([w for w, _ in common], g, http_session())
-    citations.save(g)
+    if settings.openalex_enabled:  # 끈 상태면 저장해 둔 정보만 쓴다
+        citations._resolve([w for w, _ in common], g, http_session())
+        citations.save(g)
     works = [g["works"].get(w) or {} for w, _ in common]
     ids = list(dict.fromkeys(w["arxiv"] for w in works if w.get("arxiv")))[:n]
     if not ids:
@@ -346,7 +358,7 @@ def find_candidates(question: str, existing: set[str], emit: Emit | None = None,
         elif p.pid in candidates:
             old = candidates[p.pid]
             old.cited_by = max(old.cited_by, p.cited_by)
-            old.title_match = old.title_match or p.title_match
+            old.title_match = max(old.title_match, p.title_match)
         else:
             candidates[p.pid] = p
 
@@ -356,7 +368,7 @@ def find_candidates(question: str, existing: set[str], emit: Emit | None = None,
                 add(p)
         except Exception as e:  # noqa: BLE001 — 한 검색어 실패가 전체를 막지 않게
             warn(f"검색 실패({q}): {str(e)[:120]}")
-    if settings.auto_fetch_citation_search:  # 원 논문은 글자 일치 순서에서 밀리므로 인용 수 순으로도 찾는다
+    if settings.auto_fetch_citation_search and settings.openalex_enabled:  # 원 논문은 글자 일치 순서에서 밀려 인용 수 순으로도 찾는다
         for q in queries:
             try:
                 for p in search_openalex(q, 50, by_citations=True):
@@ -429,12 +441,13 @@ def fetch_and_ingest(question: str, vectorstore, emit: Emit | None = None,
         emit("fetch_paper_done", i=i, n=len(chosen), **info)
 
     # 5) 예산을 넘었으면 오래 안 쓰인 논문 정리 → 새 원문을 BM25 에 반영
-    if added:
+    if added and settings.openalex_enabled:
         try:  # 인용 그래프에도 추가(실패해도 수집 결과에는 영향 없음)
             from rag import citations
             citations.build([a["source"] for a in added], titles={a["source"]: a["title"] for a in added}, session=session)
         except Exception as e:  # noqa: BLE001
             emit("fetch_warn", message=f"인용 그래프 갱신 실패: {type(e).__name__}")
+    if added:
         evicted = evict_over_budget(vectorstore, protect={a["source"] for a in added})
         if evicted:
             emit("fetch_evicted", papers=evicted)

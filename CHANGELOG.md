@@ -74,6 +74,8 @@
 - 진행 보고서 (`docs/PROGRESS_REPORT.md`), 작업 지침 (`CLAUDE.md`)
 
 ### Changed
+- OpenAlex 사용을 설정으로 끌 수 있게 함(`OPENALEX_ENABLED`, 기본 꺼짐): 자동 수집은 arXiv 만, 인용 그래프는 저장된 것만, DB 밖 인용 조회 옵션 숨김. arXiv API 요청 사이 3초 간격
+- 원 논문 제목 추정: 프롬프트에 약어 예시, 제목 일치 기준 0.6, 거의 정확한 제목(0.9 이상)은 관련도 기준 면제, 더 정확히 맞는 후보 우선 (`rag/auto_fetch.py`, `rag/prompts.py`)
 - 수집 신호의 제목 비교 보완: 띄어쓰기·하이픈 무시, 대문자 약어는 제목 머리글자와도 대조(GraphRAG↔Graph RAG, VQA↔Visual Question Answering). 코퍼스 안 질문의 신호 8/30 → 6/30 (`rag/auto_fetch.py`)
 - 비교 질문 수집 신호 보완: 명칭이 여럿일 때 제목에 있거나 근거 청크 2개 이상에 나와야 근거 있음으로 판단(다른 논문이 한 번 언급만 해도 수집하지 않던 문제, 코퍼스 안 신호 7/30 유지) (`rag/auto_fetch.py answer_signal`)
 - 시나리오 시험: 비교 질문 시나리오 추가, 멀티턴 기대값 수정, 수집 사유 기록, `--only` 결과는 별도 파일 (`eval/auto_fetch_scenarios.py`)

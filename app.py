@@ -155,7 +155,7 @@ def render_citations(result, key: str) -> None:
     if not papers:
         return
     with st.expander(f"🔗 인용 관계 — 근거 논문 {len(papers)}편의 선행·후속 연구", expanded=False):
-        external = st.checkbox("코퍼스 밖 주요 논문도 보기 (OpenAlex 조회)", key=f"cite_ext_{key}")
+        external = settings.openalex_enabled and st.checkbox("코퍼스 밖 주요 논문도 보기 (OpenAlex 조회)", key=f"cite_ext_{key}")
         for src in papers:
             me = g["papers"][src]
             rel = citations.related_in_corpus(src, g)

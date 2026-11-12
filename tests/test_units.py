@@ -251,7 +251,12 @@ def test_auto_fetch_decisions() -> None:
     t = NS(cited_by=1, title_match=True)
     ranked2 = [(a, 0.99), (c, 0.9), (b, 0.6), (t, 0.35)]  # 추정 제목과 맞는 후보는 관련도 기준만 넘으면 맨 앞
     assert [x[0] for x in af.select_papers(ranked2)] == [t, b, a]
-    assert af.select_papers([(NS(cited_by=1, title_match=True), 0.1)]) == [], "관련도 기준 미달이면 제목이 맞아도 제외"
+    assert af.select_papers([(NS(cited_by=1, title_match=0.7), 0.1)]) == [], "제목이 비슷한 정도면 관련도 기준 적용"
+    exact_low = NS(cited_by=1, title_match=1.0)
+    assert af.select_papers([(exact_low, 0.01)])[0][0] is exact_low, "제목이 거의 정확히 맞으면 관련도 기준 면제"
+    assert af.title_similar("Generative Adversarial Nets", "Generative Adversarial Networks"), "Nets/Networks 차이 허용"
+    near, exact = NS(cited_by=1, title_match=0.8), NS(cited_by=1, title_match=1.0)
+    assert af.select_papers([(near, 0.9), (exact, 0.5)])[0][0] is exact, "제목이 더 정확히 맞는 후보가 먼저"
     assert af.title_similar("Proximal Policy Optimization Algorithms", "Proximal policy optimization algorithms.")
     assert af.title_similar("Deep Residual Learning for Image Recognition", "Deep residual learning for image recognition")
     assert not af.title_similar("Proximal Policy Optimization Algorithms", "Policy Optimization for Robots with PPO")

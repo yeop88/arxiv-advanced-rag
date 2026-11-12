@@ -89,6 +89,8 @@ from dataclasses import dataclass, field
 from datetime import date
 from types import SimpleNamespace
 
+_ARXIV_MIN_INTERVAL = 3.0         # arXiv API 이용 규칙: 요청 사이 3초
+_ARXIV_LAST_CALL = 0.0
 _ARXIV_COOLDOWN_UNTIL = 0.0      # arXiv 검색 API 가 429 를 준 뒤 다시 시도하기까지 기다릴 시각
 ARXIV_COOLDOWN_SEC = 30 * 60
 
@@ -107,7 +109,7 @@ class Paper:
     published: date = field(default_factory=date.today)
     found_by: str = ""
     cited_by: int = 0
-    title_match: bool = False  # LLM 이 추정한 원 논문 제목과 맞는 후보
+    title_match: float = 0.0  # LLM 이 추정한 원 논문 제목과의 겹침 비율(0 = 해당 없음)
 
     def get_short_id(self) -> str:
         return self.pid
@@ -135,6 +137,19 @@ def http_session():
     return s
 
 
+def _arxiv_throttle() -> None:
+    """arXiv API 요청 사이를 3초 이상 띄운다(이용 규칙)."""
+    global _ARXIV_LAST_CALL
+    wait = _ARXIV_LAST_CALL + _ARXIV_MIN_INTERVAL - _time.time()
+    if wait > 0:
+        _time.sleep(wait)
+    _ARXIV_LAST_CALL = _time.time()
+
+
+class OpenAlexDisabled(Exception):
+    pass
+
+
 def search_arxiv(query: str, n: int, timeout: float = 8.0, field: str = "all") -> list[Paper]:
     """arXiv 검색 API 를 직접 1회 호출(재시도 없음, 시간 제한). 429·시간 초과면 SearchRateLimited.
 
@@ -143,6 +158,7 @@ def search_arxiv(query: str, n: int, timeout: float = 8.0, field: str = "all") -
     """
     import requests
 
+    _arxiv_throttle()
     try:
         r = http_session().get("https://export.arxiv.org/api/query", timeout=timeout, params={
             "search_query": f"{field}:{query}", "max_results": n, "sortBy": "relevance"})
@@ -156,6 +172,7 @@ def search_arxiv(query: str, n: int, timeout: float = 8.0, field: str = "all") -
 
 def fetch_arxiv_by_ids(ids: list[str], timeout: float = 30.0) -> dict[str, Paper]:
     """arXiv ID 로 논문 정보를 직접 조회(검색 없이). {ID: Paper}."""
+    _arxiv_throttle()
     r = http_session().get("https://export.arxiv.org/api/query", timeout=timeout,
                            params={"id_list": ",".join(ids), "max_results": len(ids)})
     r.raise_for_status()
@@ -202,6 +219,8 @@ def search_openalex(query: str, n: int, session=None, by_citations: bool = False
 
     by_citations: 인용 수 순으로 받는다. 글자 일치 순서에서 파생 논문에 밀리는 원 논문을 찾는 데 쓴다.
     """
+    if not settings.openalex_enabled:
+        raise OpenAlexDisabled("OpenAlex 사용 꺼짐(OPENALEX_ENABLED=0)")
     session = session or http_session()
     params = {
         "search": query, "per-page": 50 if by_citations else 25,
@@ -242,9 +261,13 @@ def search_papers(query: str, n: int, warn=None) -> list[Paper]:
             return search_arxiv(query, n)
         except SearchRateLimited:
             _ARXIV_COOLDOWN_UNTIL = _time.time() + ARXIV_COOLDOWN_SEC
-            warn("arXiv 검색 API 가 요청 제한(429) 중 → 30분간 OpenAlex 로 검색합니다")
+            warn("arXiv 검색 API 가 요청 제한(429) 중 → 30분간 "
+                 + ("OpenAlex 로 검색합니다" if settings.openalex_enabled else "검색을 건너뜁니다(OpenAlex 꺼짐)"))
         except Exception as e:  # noqa: BLE001
-            warn(f"arXiv 검색 실패({type(e).__name__}) → OpenAlex 로 검색합니다")
+            warn(f"arXiv 검색 실패({type(e).__name__})"
+                 + (" → OpenAlex 로 검색합니다" if settings.openalex_enabled else ""))
+    if not settings.openalex_enabled:
+        return []  # OpenAlex 를 끈 상태: arXiv 가 막히면 후보 없음
     return search_openalex(query, n)
 
 
