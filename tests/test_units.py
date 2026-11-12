@@ -250,7 +250,16 @@ def test_auto_fetch_decisions() -> None:
     assert [x[0] for x in af.select_papers(ranked)] == [b, a, c]
     t = NS(cited_by=1, title_match=True)
     ranked2 = [(a, 0.99), (c, 0.9), (b, 0.6), (t, 0.35)]  # 추정 제목과 맞는 후보는 관련도 기준만 넘으면 맨 앞
+    from config import settings as _cfg
+    _only = _cfg.auto_fetch_title_only
+    _cfg.auto_fetch_title_only = False
     assert [x[0] for x in af.select_papers(ranked2)] == [t, b, a]
+    _cfg.auto_fetch_title_only = True
+    assert [x[0] for x in af.select_papers(ranked2)] == [t], "원 논문을 찾으면 그 1편만"
+    assert [x[0] for x in af.select_papers(ranked)] == [b, a, c], "제목이 맞는 후보가 없으면 기존대로"
+    low = NS(cited_by=1, title_match=1.0)  # 제목은 맞지만 관련도 미달(추정이 틀렸을 수 있음) → 다른 후보도 함께
+    assert [x[0] for x in af.select_papers([(a, 0.99), (low, 0.0001)])] == [low, a]
+    _cfg.auto_fetch_title_only = _only
     assert af.select_papers([(NS(cited_by=1, title_match=0.7), 0.1)]) == [], "제목이 비슷한 정도면 관련도 기준 적용"
     exact_low = NS(cited_by=1, title_match=1.0)
     assert af.select_papers([(exact_low, 0.01)])[0][0] is exact_low, "제목이 거의 정확히 맞으면 관련도 기준 면제"

@@ -139,6 +139,10 @@ def select_papers(ranked: list) -> list:
     titled = [x for x in eligible if getattr(x[0], "title_match", False)]  # 추정한 원 논문 제목과 맞으면 맨 앞(A3)
     if titled:
         best = max(titled, key=lambda x: (float(x[0].title_match), x[1]))  # 제목이 더 정확히 맞는 쪽, 같으면 관련도
+        # 원 논문을 찾았으면 그것만 — 함께 넣던 파생 논문이 다른 질문 근거에 끼어들었다(§5.28).
+        # 단, 관련도 기준 미달인데 제목만 맞아 뽑힌 경우는 추정이 틀렸을 수 있어(MuZero → AlphaZero, §5.29) 다른 후보도 함께 넣는다
+        if settings.auto_fetch_title_only and best[1] >= settings.auto_fetch_min_score:
+            return [best]
         eligible = [best] + [x for x in eligible if x is not best]
     return eligible[: settings.auto_fetch_max_papers]
 

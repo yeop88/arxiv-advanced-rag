@@ -139,6 +139,8 @@ class Settings:
     auto_fetch_anchor_score: float = float(os.getenv("AUTO_FETCH_ANCHOR_SCORE", "0.5"))
     # 1 이면 경량 LLM 이 원 논문 제목을 추정해 제목으로도 찾고, 맞는 후보를 먼저 넣는다(A3, 측정 §5.25: 26%→62%, 확인용 58%→100%)
     auto_fetch_title_guess: bool = os.getenv("AUTO_FETCH_TITLE_GUESS", "1") not in ("0", "false", "False")
+    # 1 이면 추정 제목과 맞는 원 논문을 찾았을 때 그 1편만 넣는다(파생 논문이 다른 질문에 끼어드는 것을 줄임, §5.29)
+    auto_fetch_title_only: bool = os.getenv("AUTO_FETCH_TITLE_ONLY", "1") not in ("0", "false", "False")
     # 1 이면 근거 논문들이 공통으로 인용한 논문도 후보에 더한다(인용 그래프 필요)
     auto_fetch_common_refs: bool = os.getenv("AUTO_FETCH_COMMON_REFS", "0") not in ("0", "false", "False")
     # 자동 수집 청크 예산(0 = 제한 없음). 넘으면 오래 안 쓰인 논문부터 삭제.
