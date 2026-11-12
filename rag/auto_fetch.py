@@ -73,6 +73,29 @@ def named_terms(question: str) -> list[str]:
 # 비교 질문에서 명칭이 근거 청크 몇 개 이상에 나와야 '근거에 있다'고 볼지.
 # 1이면 다른 논문이 한 번 언급만 해도 수집하지 않아 비교 질문을 놓쳤다(이슈 18).
 _MIN_MENTIONS = 2
+_SMALL_WORDS = {"a", "an", "the", "of", "for", "and", "with", "in", "on", "to", "via", "by", "from"}
+
+
+def _norm(text: str) -> str:
+    """띄어쓰기·하이픈·밑줄을 지운 소문자("Graph RAG" == "GraphRAG")."""
+    return re.sub(r"[\s\-_]+", "", text.lower())
+
+
+def _is_acronym(name: str) -> bool:
+    """대문자 3~6자로만 된 약어(VQA, NER). 2자는 우연히 맞는 경우가 많아 뺀다."""
+    return 3 <= len(name) <= 6 and name.isalpha() and name.isupper()
+
+
+def _initials(title: str) -> str:
+    """제목 단어의 머리글자(관사·전치사 제외): "Visual Question Answering" → "vqa"."""
+    return "".join(w[0] for w in re.findall(r"[A-Za-z]+", title) if w.lower() not in _SMALL_WORDS).lower()
+
+
+def _in_title(name: str, title: str) -> bool:
+    """제목에 명칭이 있는가: 띄어쓰기 무시 일치, 또는 약어가 제목 머리글자와 일치."""
+    if _norm(name) in _norm(title):
+        return True
+    return _is_acronym(name) and name.lower() in _initials(title)
 
 
 def answer_signal(question: str, answer: str, reranked) -> bool:
@@ -82,20 +105,24 @@ def answer_signal(question: str, answer: str, reranked) -> bool:
     - 명칭이 하나: 그 이름이 제목에 들어간 근거 논문이 없으면 수집(다른 논문이 언급만 한 경우 포함)
     - 명칭이 여럿: 어느 하나라도 제목에 없고 근거 청크 _MIN_MENTIONS 개 미만에서만 언급되면 수집
       (예: "RoBERTa와 XLNet 차이" — XLNet 이 다른 논문 한 곳에서 언급만 된 경우)
+    제목 비교는 띄어쓰기를 무시하고 약어는 머리글자로도 맞춘다("GraphRAG"↔"Graph RAG", "VQA"↔"Visual Question Answering").
     """
     if not answer_lacks_evidence(answer):
         return False
     names = named_terms(question)
     if not names:
         return False
-    titles = " ".join(c.title for c in reranked).lower()
+
+    def in_titles(name: str) -> bool:
+        return any(_in_title(name, c.title) for c in reranked)
+
     if len(names) == 1:
-        return names[0].lower() not in titles
+        return not in_titles(names[0])
 
     def mentions(name: str) -> int:
-        return sum(name.lower() in f"{c.title} {c.content}".lower() for c in reranked)
+        return sum(_norm(name) in _norm(f"{c.title} {c.content}") for c in reranked)
 
-    return any(n.lower() not in titles and mentions(n) < _MIN_MENTIONS for n in names)
+    return any(not in_titles(n) and mentions(n) < _MIN_MENTIONS for n in names)
 
 
 def select_papers(ranked: list) -> list:

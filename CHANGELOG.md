@@ -70,6 +70,7 @@
 - 진행 보고서 (`docs/PROGRESS_REPORT.md`), 작업 지침 (`CLAUDE.md`)
 
 ### Changed
+- 수집 신호의 제목 비교 보완: 띄어쓰기·하이픈 무시, 대문자 약어는 제목 머리글자와도 대조(GraphRAG↔Graph RAG, VQA↔Visual Question Answering). 코퍼스 안 질문의 신호 8/30 → 6/30 (`rag/auto_fetch.py`)
 - 비교 질문 수집 신호 보완: 명칭이 여럿일 때 제목에 있거나 근거 청크 2개 이상에 나와야 근거 있음으로 판단(다른 논문이 한 번 언급만 해도 수집하지 않던 문제, 코퍼스 안 신호 7/30 유지) (`rag/auto_fetch.py answer_signal`)
 - 시나리오 시험: 비교 질문 시나리오 추가, 멀티턴 기대값 수정, 수집 사유 기록, `--only` 결과는 별도 파일 (`eval/auto_fetch_scenarios.py`)
 - 자동 수집 답변 신호 강화: 답변이 근거 부족을 밝히고 질문의 고유 명칭이 근거에 없을 때만 수집(코퍼스 안 질문의 신호 47%→23%) (`rag/auto_fetch.py answer_signal`)
