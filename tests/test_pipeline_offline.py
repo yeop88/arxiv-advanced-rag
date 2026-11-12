@@ -103,7 +103,7 @@ def main() -> None:
     orig_needs, orig_fetch, orig_signal = af.needs_more, af.fetch_and_ingest, af.answer_signal
     af.needs_more = lambda reranked: False  # 점수 신호는 끄고 답변 신호만 시험
     af.answer_signal = lambda question, answer, reranked: af.answer_lacks_evidence(answer)
-    af.fetch_and_ingest = lambda q, vs, emit=None: [{"source": "0000.00000", "title": "가짜 논문", "score": 0.9,
+    af.fetch_and_ingest = lambda q, vs, emit=None, evidence_sources=None: [{"source": "0000.00000", "title": "가짜 논문", "score": 0.9,
                                                     "found_by": "test", "chunks": 1, "fulltext": False}]
     settings.auto_fetch = True
     try:

@@ -58,13 +58,14 @@ class RAGPipeline:
         self.vectorstore = vectorstore or load_vectorstore()
 
     def _fetch_and_retrieve(self, standalone: str, queries: list[str], result: PipelineResult,
-                            emit, reason: str, **info):
+                            emit, reason: str, evidence=None, **info):
         """논문 자동 수집 → (추가된 게 있으면) 다시 검색. 새 리랭크 결과를 돌려주고, 추가 없으면 None.
         실패해도 예외를 올리지 않는다(기존 근거로 계속 진행 — graceful degrade)."""
         t = time.perf_counter()
         emit("fetch_start", reason=reason, **info)
         try:
-            added = auto_fetch.fetch_and_ingest(standalone, self.vectorstore, emit)
+            added = auto_fetch.fetch_and_ingest(standalone, self.vectorstore, emit,
+                                                evidence_sources=[c.source for c in (evidence or [])])
         except Exception as e:  # noqa: BLE001
             added = []
             emit("error", stage="fetch", message=str(e))
@@ -138,7 +139,7 @@ class RAGPipeline:
 
         # --- 2b: 근거 부족 시 논문 자동 수집 → 다시 검색 (자기 확장, 1차 신호: 리랭크 점수) ---
         if settings.auto_fetch and auto_fetch.needs_more(reranked):
-            reranked = self._fetch_and_retrieve(standalone, queries, result, emit, reason="score",
+            reranked = self._fetch_and_retrieve(standalone, queries, result, emit, reason="score", evidence=reranked,
                                                 top_score=auto_fetch.top_score(reranked),
                                                 threshold=settings.auto_fetch_threshold) or reranked
 
@@ -164,7 +165,8 @@ class RAGPipeline:
         # 점수로는 못 잡는 '비슷한 주제의 다른 논문만 있는' 경우. 한 질문에 수집은 최대 1회.
         if settings.auto_fetch and not result.auto_fetched and "2b_auto_fetch" not in result.timings \
                 and auto_fetch.answer_signal(standalone, answer, reranked):
-            new_reranked = self._fetch_and_retrieve(standalone, queries, result, emit, reason="answer")
+            new_reranked = self._fetch_and_retrieve(standalone, queries, result, emit, reason="answer",
+                                                    evidence=reranked)
             if new_reranked:
                 reranked = new_reranked
                 t = time.perf_counter()

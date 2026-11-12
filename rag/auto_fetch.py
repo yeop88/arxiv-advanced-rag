@@ -135,6 +135,9 @@ def select_papers(ranked: list) -> list:
     if anchors:
         anchor = max(anchors, key=lambda x: x[0].cited_by)
         eligible = [anchor] + [x for x in eligible if x is not anchor]
+    titled = [x for x in eligible if getattr(x[0], "title_match", False)]  # 추정한 원 논문 제목과 맞으면 맨 앞(A3)
+    if titled:
+        eligible = titled[:1] + [x for x in eligible if x is not titled[0]]
     return eligible[: settings.auto_fetch_max_papers]
 
 
@@ -231,49 +234,150 @@ def _existing_sources(vectorstore) -> set[str]:
     return {(m or {}).get("source") for m in raw.get("metadatas", []) if (m or {}).get("source")}
 
 
-def fetch_and_ingest(question: str, vectorstore, emit: Emit | None = None) -> list[dict]:
-    """근거 보강: 관련 논문을 찾아 DB 에 추가하고, 추가한 논문 정보를 돌려준다(없으면 빈 목록)."""
-    from rag import stage2_rerank as s2
-    from rag.arxiv_source import Paper, http_session, result_to_chunks, search_openalex, search_papers
+def guess_original_title(question: str) -> str | None:
+    """경량 LLM 이 질문의 원 논문 제목을 추정(모르면 None)."""
+    from langchain_core.output_parsers import StrOutputParser
+    from langchain_core.prompts import ChatPromptTemplate
+
+    from rag import prompts
+    from rag.llm import get_llm
+
+    try:
+        chain = ChatPromptTemplate.from_template(prompts.ORIGINAL_TITLE_PROMPT) | get_llm(light=True) | StrOutputParser()
+        lines = chain.invoke({"question": question}).strip().splitlines()
+    except Exception:  # noqa: BLE001
+        return None
+    title = (lines[0] if lines else "").strip().strip("\"'*").strip()
+    if len(title) < 8 or title.upper().startswith("NONE"):
+        return None
+    return title
+
+
+def _title_words(t: str) -> set[str]:
+    return {w for w in re.findall(r"[a-z0-9]+", (t or "").lower()) if len(w) > 2}
+
+
+def title_similar(a: str, b: str, min_overlap: float = 0.7) -> bool:
+    """두 제목이 같은 논문인가: 3자 이상 단어의 겹침 비율(긴 쪽 기준)이 기준 이상.
+    긴 쪽 기준이라 "Vision Transformer" 같은 짧은 추정이 "Vision Transformer with ..." 파생 논문과 맞지 않는다."""
+    wa, wb = _title_words(a), _title_words(b)
+    if not wa or not wb:
+        return False
+    return len(wa & wb) / max(len(wa), len(wb)) >= min_overlap
+
+
+def title_candidates(title: str, warn=None) -> list:
+    """추정 제목으로 arXiv 제목 검색(실패 시 OpenAlex) → 제목이 비슷한 논문만(title_match 표시)."""
+    from rag.arxiv_source import search_arxiv, search_openalex
+
+    warn = warn or (lambda m: None)
+    q = re.sub(r"[^A-Za-z0-9 \-]", " ", title).strip()
+    found = []
+    try:  # arXiv 제목 검색 먼저, 실패할 때만 OpenAlex(하루 무료 예산이 작다)
+        found = search_arxiv(f'"{q}"', 5, field="ti")
+    except Exception as e:  # noqa: BLE001
+        warn(f"arXiv 제목 검색 실패: {type(e).__name__}")
+        try:
+            found = search_openalex(title, 10)
+        except Exception as e2:  # noqa: BLE001
+            warn(f"OpenAlex 제목 검색 실패: {type(e2).__name__}")
+    out = {}
+    for p in found:
+        if p.pid not in out and title_similar(p.title, title):
+            p.title_match = True
+            out[p.pid] = p
+    return list(out.values())
+
+
+def common_ref_candidates(evidence_sources: list[str], n: int = 3) -> list:
+    """근거 논문들이 공통으로 인용한 논문 상위 n편(arXiv 에 있는 것만). 인용 그래프가 없으면 빈 목록."""
+    from rag import citations
+    from rag.arxiv_source import fetch_arxiv_by_ids, http_session
+
+    g = citations.load()
+    common = citations.common_references(evidence_sources, g)[: n * 2]
+    if not common:
+        return []
+    citations._resolve([w for w, _ in common], g, http_session())
+    citations.save(g)
+    works = [g["works"].get(w) or {} for w, _ in common]
+    ids = list(dict.fromkeys(w["arxiv"] for w in works if w.get("arxiv")))[:n]
+    if not ids:
+        return []
+    cited = {w["arxiv"]: w.get("cited_by", 0) for w in works if w.get("arxiv")}
+    papers = fetch_arxiv_by_ids(ids)
+    for pid, p in papers.items():
+        p.cited_by, p.found_by = cited.get(pid, 0), "인용 그래프"
+    return list(papers.values())
+
+
+def find_candidates(question: str, existing: set[str], emit: Emit | None = None,
+                    evidence_sources: list[str] | None = None, title_guess: bool | None = None,
+                    common_refs: bool | None = None) -> dict:
+    """수집 후보를 모아 관련도로 채점하고 넣을 논문을 고른다(DB 는 바꾸지 않음 — 평가에서도 그대로 쓴다).
+
+    후보 출처: ① 검색어(경량 LLM)로 arXiv(막히면 OpenAlex) ② 같은 검색어로 OpenAlex 인용 순
+    ③ 원 논문 제목 추정 → 제목 검색(A3) ④ 근거 논문들의 공통 참고문헌(A3, 인용 그래프).
+    """
+    from rag.arxiv_source import Paper, search_openalex, search_papers
     from rag.llm import get_reranker
 
     emit = emit or (lambda *a, **k: None)
+    title_guess = settings.auto_fetch_title_guess if title_guess is None else title_guess
+    common_refs = settings.auto_fetch_common_refs if common_refs is None else common_refs
+
+    def warn(m: str) -> None:
+        emit("fetch_warn", message=m)
 
     # 1) 검색어
     queries = make_search_queries(question)
     emit("fetch_queries", queries=queries)
 
-    # 2) 후보 (arXiv 검색 → 막히면 OpenAlex). DB 에 이미 있는 논문 제외
-    existing = _existing_sources(vectorstore)
+    # 2) 후보. DB 에 이미 있는 논문 제외
     candidates: dict[str, Paper] = {}
     n_skipped = 0
     sources_used: set[str] = set()
+
+    def add(p: Paper) -> None:
+        nonlocal n_skipped
+        sources_used.add(p.found_by)
+        if p.pid in existing:
+            n_skipped += 1
+        elif p.pid in candidates:
+            old = candidates[p.pid]
+            old.cited_by = max(old.cited_by, p.cited_by)
+            old.title_match = old.title_match or p.title_match
+        else:
+            candidates[p.pid] = p
+
     for q in queries:
         try:
-            for p in search_papers(q, settings.auto_fetch_candidates,
-                                   warn=lambda m: emit("fetch_warn", message=m)):
-                sources_used.add(p.found_by)
-                if p.pid in existing:
-                    n_skipped += 1
-                elif p.pid not in candidates:
-                    candidates[p.pid] = p
+            for p in search_papers(q, settings.auto_fetch_candidates, warn=warn):
+                add(p)
         except Exception as e:  # noqa: BLE001 — 한 검색어 실패가 전체를 막지 않게
-            emit("fetch_warn", message=f"검색 실패({q}): {str(e)[:120]}")
+            warn(f"검색 실패({q}): {str(e)[:120]}")
     if settings.auto_fetch_citation_search:  # 원 논문은 글자 일치 순서에서 밀리므로 인용 수 순으로도 찾는다
         for q in queries:
             try:
                 for p in search_openalex(q, 50, by_citations=True):
-                    sources_used.add(p.found_by)
-                    if p.pid in candidates:
-                        candidates[p.pid].cited_by = max(candidates[p.pid].cited_by, p.cited_by)
-                    elif p.pid not in existing:
-                        candidates[p.pid] = p
+                    add(p)
             except Exception as e:  # noqa: BLE001
-                emit("fetch_warn", message=f"인용 순 검색 실패({q}): {str(e)[:120]}")
+                warn(f"인용 순 검색 실패({q}): {str(e)[:120]}")
+    guessed = guess_original_title(question) if title_guess else None
+    if guessed:
+        emit("fetch_title_guess", title=guessed)
+        for p in title_candidates(guessed, warn=warn):
+            add(p)
+    if common_refs and evidence_sources:
+        try:
+            for p in common_ref_candidates(evidence_sources):
+                add(p)
+        except Exception as e:  # noqa: BLE001
+            warn(f"공통 참고문헌 후보 실패: {type(e).__name__}")
     emit("fetch_candidates", n=len(candidates), n_existing_skipped=n_skipped, sources=sorted(sources_used))
+    result = {"queries": queries, "guessed": guessed, "ranked": [], "chosen": []}
     if not candidates:
-        return []
-    session = http_session()  # PDF 는 arxiv.org 에서(사내 CA 로 검증 유지)
+        return result
 
     # 3) 선별: (질문, 제목+초록) 리랭크 점수
     items = list(candidates.values())
@@ -282,8 +386,22 @@ def fetch_and_ingest(question: str, vectorstore, emit: Emit | None = None) -> li
     chosen = select_papers(ranked)
     emit("fetch_selected", papers=[(r.title.strip(), s) for r, s in chosen],
          best_rejected=(ranked[len(chosen)][1] if len(ranked) > len(chosen) else None))
+    result.update(ranked=ranked, chosen=chosen)
+    return result
+
+
+def fetch_and_ingest(question: str, vectorstore, emit: Emit | None = None,
+                     evidence_sources: list[str] | None = None) -> list[dict]:
+    """근거 보강: 관련 논문을 찾아 DB 에 추가하고, 추가한 논문 정보를 돌려준다(없으면 빈 목록).
+    evidence_sources: 지금 근거 논문들(공통 참고문헌 후보에 쓴다)."""
+    from rag import stage2_rerank as s2
+    from rag.arxiv_source import http_session, result_to_chunks
+
+    emit = emit or (lambda *a, **k: None)
+    chosen = find_candidates(question, _existing_sources(vectorstore), emit, evidence_sources)["chosen"]
     if not chosen:
         return []
+    session = http_session()  # PDF 는 arxiv.org 에서(사내 CA 로 검증 유지)
 
     # 4) 전문 수집 → DB 추가
     added: list[dict] = []

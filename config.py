@@ -137,10 +137,16 @@ class Settings:
     # 인용 수 순 검색을 후보에 더하고, 관련도가 이 값 이상인 후보 중 가장 많이 인용된 논문 1편은 반드시 선정(원 논문 우선)
     auto_fetch_citation_search: bool = os.getenv("AUTO_FETCH_CITATION_SEARCH", "1") not in ("0", "false", "False")
     auto_fetch_anchor_score: float = float(os.getenv("AUTO_FETCH_ANCHOR_SCORE", "0.5"))
+    # 1 이면 경량 LLM 이 원 논문 제목을 추정해 제목으로도 찾고, 맞는 후보를 먼저 넣는다(A3)
+    auto_fetch_title_guess: bool = os.getenv("AUTO_FETCH_TITLE_GUESS", "0") not in ("0", "false", "False")
+    # 1 이면 근거 논문들이 공통으로 인용한 논문도 후보에 더한다(인용 그래프 필요)
+    auto_fetch_common_refs: bool = os.getenv("AUTO_FETCH_COMMON_REFS", "0") not in ("0", "false", "False")
     # 자동 수집 청크 예산(0 = 제한 없음). 넘으면 오래 안 쓰인 논문부터 삭제.
     # 측정(§5.18): 2,000청크에서 MRR −0.0048, 3,000청크부터 −0.0088 로 허용치 0.01 에 근접
     auto_fetch_max_chunks: int = int(os.getenv("AUTO_FETCH_MAX_CHUNKS", "2000"))
     auto_usage_path: str = os.getenv("AUTO_USAGE_PATH", "./storage/auto_usage.json")  # 논문별 근거 사용 기록
+    # OpenAlex API 키(선택). 없으면 같은 네트워크 IP 가 나눠 쓰는 하루 무료 예산(검색 약 100회)을 쓴다
+    openalex_api_key: str = os.getenv("OPENALEX_API_KEY", "")
     # 인용 그래프(OpenAlex 참고문헌·피인용 관계). scripts/build_citation_graph.py 로 만든다
     citation_graph_path: str = os.getenv("CITATION_GRAPH_PATH", "./storage/citation_graph.json")
     # 수집 논문의 참고문헌·부록은 DB 에 넣지 않음(무관한 질문의 검색에 끼어드는 주된 원인)

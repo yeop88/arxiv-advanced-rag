@@ -159,6 +159,15 @@ arXiv 검색에 넣을 **영어 검색어를 {n}개** 만드세요.
 질문: {question}"""
 
 
+# 자동 수집 A3: 원 논문 제목 추정(검색 순위에서 파생 논문에 밀리는 원 논문을 제목으로 직접 찾기)
+ORIGINAL_TITLE_PROMPT = """질문에 나온 핵심 기법·모델·알고리즘 이름을 **처음 제안한 논문**의 영어 제목을 한 줄로만 쓰세요.
+(예: "Transformer" → Attention Is All You Need, "BERT" → BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding)
+여러 개가 나오면 질문이 주로 묻는 것 하나만. 제목은 검색으로 다시 확인하므로 가장 그럴듯한 제목을 쓰면 됩니다.
+기법·모델 이름이 없는 일반 질문이면 NONE 한 단어만 쓰세요. 설명은 쓰지 마세요.
+
+질문: {question}"""
+
+
 # 검증 실패 시 재생성용 — 문제점을 피드백으로 넣어 다시 생성.
 REGENERATION_USER = """[근거]
 {context}

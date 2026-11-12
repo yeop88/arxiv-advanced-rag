@@ -57,7 +57,9 @@ def save(g: dict) -> None:
 
 def _get(session, params: dict, retries: int = 3) -> list[dict]:
     for attempt in range(retries + 1):
-        r = session.get(API, params=params, timeout=30)
+        from rag.arxiv_source import openalex_params
+
+        r = session.get(API, params=openalex_params(params), timeout=30)
         if r.status_code == 429 and attempt < retries:
             time.sleep(2 * (attempt + 1))
             continue

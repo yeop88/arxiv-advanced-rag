@@ -248,6 +248,21 @@ def test_auto_fetch_decisions() -> None:
     a, b, c, d = (NS(cited_by=n) for n in (5, 900, 50, 99999))
     ranked = [(a, 0.99), (c, 0.9), (b, 0.6), (d, 0.4)]  # d 는 인용이 많아도 관련도 미달이라 우선하지 않음
     assert [x[0] for x in af.select_papers(ranked)] == [b, a, c]
+    t = NS(cited_by=1, title_match=True)
+    ranked2 = [(a, 0.99), (c, 0.9), (b, 0.6), (t, 0.35)]  # 추정 제목과 맞는 후보는 관련도 기준만 넘으면 맨 앞
+    assert [x[0] for x in af.select_papers(ranked2)] == [t, b, a]
+    assert af.select_papers([(NS(cited_by=1, title_match=True), 0.1)]) == [], "관련도 기준 미달이면 제목이 맞아도 제외"
+    assert af.title_similar("Proximal Policy Optimization Algorithms", "Proximal policy optimization algorithms.")
+    assert af.title_similar("Deep Residual Learning for Image Recognition", "Deep residual learning for image recognition")
+    assert not af.title_similar("Proximal Policy Optimization Algorithms", "Policy Optimization for Robots with PPO")
+    assert not af.title_similar("Vision Transformer", "Vision Transformer with Deformable Attention"), "짧은 추정은 파생 논문과 안 맞음"
+    from config import settings as _s
+    from rag.arxiv_source import openalex_params
+    _k, _s.openalex_api_key = _s.openalex_api_key, ""
+    assert openalex_params({"a": 1}) == {"a": 1}
+    _s.openalex_api_key = "k"
+    assert openalex_params({"a": 1}) == {"a": 1, "api_key": "k"}
+    _s.openalex_api_key = _k
     print("  test_auto_fetch_decisions ✅")
 
 

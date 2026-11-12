@@ -107,6 +107,7 @@ class Paper:
     published: date = field(default_factory=date.today)
     found_by: str = ""
     cited_by: int = 0
+    title_match: bool = False  # LLM 이 추정한 원 논문 제목과 맞는 후보
 
     def get_short_id(self) -> str:
         return self.pid
@@ -134,7 +135,7 @@ def http_session():
     return s
 
 
-def search_arxiv(query: str, n: int, timeout: float = 8.0) -> list[Paper]:
+def search_arxiv(query: str, n: int, timeout: float = 8.0, field: str = "all") -> list[Paper]:
     """arXiv 검색 API 를 직접 1회 호출(재시도 없음, 시간 제한). 429·시간 초과면 SearchRateLimited.
 
     arxiv 라이브러리를 거치면 막혀 있을 때 실패를 알기까지 15~60초가 걸려(실측),
@@ -144,7 +145,7 @@ def search_arxiv(query: str, n: int, timeout: float = 8.0) -> list[Paper]:
 
     try:
         r = http_session().get("https://export.arxiv.org/api/query", timeout=timeout, params={
-            "search_query": f"all:{query}", "max_results": n, "sortBy": "relevance"})
+            "search_query": f"{field}:{query}", "max_results": n, "sortBy": "relevance"})
     except requests.Timeout as e:
         raise SearchRateLimited(f"시간 초과({timeout:.0f}초)") from e
     if r.status_code == 429:
@@ -189,6 +190,13 @@ def _abstract_from_inverted(inv: dict | None) -> str:
     return " ".join(w for _, w in words)
 
 
+def openalex_params(params: dict) -> dict:
+    """OpenAlex 요청 인자에 API 키를 붙인다(설정돼 있을 때만). 키는 OpenAlex 요청에만 쓰고 다른 사이트로 보내지 않는다."""
+    if settings.openalex_api_key:
+        return {**params, "api_key": settings.openalex_api_key}
+    return params
+
+
 def search_openalex(query: str, n: int, session=None, by_citations: bool = False) -> list[Paper]:
     """OpenAlex 검색 → arXiv 에 올라온 논문만(arXiv ID 추출). 초록은 역색인으로 복원.
 
@@ -201,7 +209,7 @@ def search_openalex(query: str, n: int, session=None, by_citations: bool = False
     }
     if by_citations:
         params["sort"] = "cited_by_count:desc"
-    r = session.get("https://api.openalex.org/works", timeout=30, params=params)
+    r = session.get("https://api.openalex.org/works", timeout=30, params=openalex_params(params))
     r.raise_for_status()
     out: list[Paper] = []
     for w in r.json().get("results", []):
