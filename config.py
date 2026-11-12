@@ -141,6 +141,8 @@ class Settings:
     # 측정(§5.18): 2,000청크에서 MRR −0.0048, 3,000청크부터 −0.0088 로 허용치 0.01 에 근접
     auto_fetch_max_chunks: int = int(os.getenv("AUTO_FETCH_MAX_CHUNKS", "2000"))
     auto_usage_path: str = os.getenv("AUTO_USAGE_PATH", "./storage/auto_usage.json")  # 논문별 근거 사용 기록
+    # 인용 그래프(OpenAlex 참고문헌·피인용 관계). scripts/build_citation_graph.py 로 만든다
+    citation_graph_path: str = os.getenv("CITATION_GRAPH_PATH", "./storage/citation_graph.json")
     # 수집 논문의 참고문헌·부록은 DB 에 넣지 않음(무관한 질문의 검색에 끼어드는 주된 원인)
     auto_fetch_drop_back_matter: bool = os.getenv("AUTO_FETCH_DROP_BACK_MATTER", "1") not in ("0", "false", "False")
     # 자동 수집 논문 청크의 리랭크 점수에 곱하는 값(1.0 = 그대로). 낮추면 기존 논문이 우선한다

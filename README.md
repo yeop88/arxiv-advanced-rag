@@ -176,6 +176,9 @@ streamlit run app.py
 > (관련도 기준을 넘는 논문만, 인용이 많은 원 논문 우선, 질문당 최대 3편, 참고문헌·부록은 제외, 사이드바에서 끄기 가능). 추가된 논문은 `python scripts/manage_auto_papers.py`로 보고 지울 수 있습니다.
 > 평가는 지우지 않고도 자동 수집분을 빼고(기본) 또는 넣고 할 수 있습니다(`--corpus`, 아래 학습·평가 도구).
 > 코퍼스가 커지면 검색 품질이 조금씩 내려가므로, 자동 수집은 **2,000청크까지만** 유지하고 넘으면 오래 안 쓰인 논문부터 지웁니다(`AUTO_FETCH_MAX_CHUNKS`). `python eval/corpus_health.py`로 상태를 점검할 수 있습니다.
+> **🔗 인용 관계 패널** — 근거 논문마다 DB 안의 선행 연구(이 논문이 인용)·후속 연구(이 논문을 인용)를 보여 줍니다.
+> 체크하면 DB 밖의 많이 인용된 선행·후속 논문도 OpenAlex 에서 조회합니다. 처음 한 번 `python scripts/build_citation_graph.py`로
+> 인용 그래프를 만들어 두세요(LLM 없음, 약 2분). 자동 수집 논문은 수집될 때 그래프에 추가됩니다.
 > **🧠 Thinking 토글**(로컬 모델 전용) — 사이드바에서 생성·검증 / 질의변환의 thinking 을 켜고 끌 수 있습니다.
 > 켜면 다중 홉 비교에 유리하지만 느립니다(측정: 질문당 off 약 1분, on 약 3~4분).
 > (API 키는 secrets 로 주입, 벡터DB는 사전 구축).
@@ -207,6 +210,7 @@ exam03_Advanced_RAG/
 │   ├── stage2_rerank.py
 │   ├── stage3_generate.py
 │   ├── stage4_verify.py
+│   ├── citations.py           # 인용 그래프(선행·후속 연구, 공통 참고문헌)
 │   └── pipeline.py            # 4단계 오케스트레이터
 ├── rag/chunking.py            # 섹션 인식 청킹 (영문/국문 섹션 감지)
 ├── scripts/
@@ -214,7 +218,8 @@ exam03_Advanced_RAG/
 │   ├── ingest_sample.py       # 번들 샘플 수집 (네트워크 불필요)
 │   ├── ingest_local.py        # 로컬 PDF/텍스트 폴더 수집 (한국어 논문)
 │   ├── migrate_to_pinecone.py # Chroma → Pinecone 이전(벡터 그대로 복사, --dry-run)
-│   └── manage_auto_papers.py  # 자동 수집 논문(origin=auto) 목록·삭제
+│   ├── manage_auto_papers.py  # 자동 수집 논문(origin=auto) 목록·삭제
+│   └── build_citation_graph.py # 인용 그래프(OpenAlex 참고문헌·피인용) 생성
 ├── eval/
 │   ├── eval_set.jsonl         # 평가셋 단일 소스(질문+정답논문+난이도)
 │   ├── dataset.py             # 평가셋 로더(난이도/카테고리 필터)
@@ -307,7 +312,7 @@ python eval/gen_questions.py --n 20   # 코퍼스에서 질문 후보 생성(사
 
 1. **데이터 확대**: 초록 → PDF 전문(`--fulltext`, 섹션 청킹) ✅ / 로컬 PDF 폴더 수집 ✅
 2. **한국어 강화**: 국내 논문 PDF 로컬 수집(RISS·DBpia에서 본인 권한으로 내려받아 폴더 투입)
-3. **품질**: 하이브리드 검색 ✅ / 멀티턴 ✅ / 인용 출처 패널 ✅ / RAGAS 평가 ✅ / 응답 캐싱 ✅
+3. **품질**: 하이브리드 검색 ✅ / 멀티턴 ✅ / 인용 출처 패널 ✅ / RAGAS 평가 ✅ / 응답 캐싱 ✅ / 인용 그래프 ✅
 4. **학습·공개**: 노트북형 설명 ✅ / 평가셋 외부화·무료 검색지표 ✅ / 평가셋 대량 확대(진행) / 공개 데모(배포)
 
 ---

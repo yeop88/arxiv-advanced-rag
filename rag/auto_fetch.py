@@ -312,6 +312,11 @@ def fetch_and_ingest(question: str, vectorstore, emit: Emit | None = None) -> li
 
     # 5) 예산을 넘었으면 오래 안 쓰인 논문 정리 → 새 원문을 BM25 에 반영
     if added:
+        try:  # 인용 그래프에도 추가(실패해도 수집 결과에는 영향 없음)
+            from rag import citations
+            citations.build([a["source"] for a in added], titles={a["source"]: a["title"] for a in added}, session=session)
+        except Exception as e:  # noqa: BLE001
+            emit("fetch_warn", message=f"인용 그래프 갱신 실패: {type(e).__name__}")
         evicted = evict_over_budget(vectorstore, protect={a["source"] for a in added})
         if evicted:
             emit("fetch_evicted", papers=evicted)

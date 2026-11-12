@@ -145,6 +145,44 @@ def render_sources(result) -> None:
             st.caption(snippet[:300] + ("..." if len(snippet) > 300 else ""))
 
 
+def render_citations(result, key: str) -> None:
+    """근거 논문의 인용 관계: 코퍼스 안 선행(이 논문이 인용)·후속(이 논문을 인용) 논문.
+    코퍼스 밖 주요 논문은 체크하면 OpenAlex 에서 조회(처음 한 번, 이후 캐시)."""
+    from rag import citations
+
+    g = citations.load()
+    papers = [s for s in dict.fromkeys(c.source for c in result.reranked) if s in g["papers"]]
+    if not papers:
+        return
+    with st.expander(f"🔗 인용 관계 — 근거 논문 {len(papers)}편의 선행·후속 연구", expanded=False):
+        external = st.checkbox("코퍼스 밖 주요 논문도 보기 (OpenAlex 조회)", key=f"cite_ext_{key}")
+        for src in papers:
+            me = g["papers"][src]
+            rel = citations.related_in_corpus(src, g)
+            st.markdown(f"**{me['title']}** <small>({me.get('year') or '-'}, 피인용 {me['cited_by']:,})</small>",
+                        unsafe_allow_html=True)
+
+            def names(ids):
+                return " · ".join(f"[{g['papers'][a]['title'][:50]}](https://arxiv.org/abs/{a})" for a in ids[:3]) or "없음"
+
+            st.markdown(f"- 선행(DB 안 {len(rel['prior'])}편): {names(rel['prior'])}\n"
+                        f"- 후속(DB 안 {len(rel['later'])}편): {names(rel['later'])}")
+            if external:
+                try:
+                    pri, lat = citations.prior_external(src, 3), citations.later_external(src, 3)
+                except Exception as e:  # noqa: BLE001  (네트워크 실패는 화면만 알림)
+                    st.caption(f"OpenAlex 조회 실패: {type(e).__name__}")
+                    continue
+
+                def ext(items):
+                    return " · ".join(
+                        (f"[{w['title'][:50]}](https://arxiv.org/abs/{w['arxiv']})" if w.get("arxiv") else w["title"][:50])
+                        + f" ({w['cited_by']:,})" for w in items) or "없음"
+
+                st.caption(f"주요 선행: {ext(pri)}")
+                st.caption(f"주요 후속: {ext(lat)}")
+
+
 def render_inspector(result) -> None:
     """한 답변의 검증 배지 + 단계별 내부 동작을 렌더."""
     if getattr(result, "auto_fetched", None):
@@ -178,13 +216,14 @@ def render_inspector(result) -> None:
 
 
 # --- 지난 대화 렌더 ---
-for msg in st.session_state.messages:
+for idx, msg in enumerate(st.session_state.messages):
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
         if msg.get("mode"):
             st.caption(msg["mode"])  # 이 답변을 만든 thinking 모드
         if msg["role"] == "assistant" and msg.get("result"):
             render_sources(msg["result"])
+            render_citations(msg["result"], str(idx))
             render_inspector(msg["result"])
 
 # --- 입력 ---
@@ -207,6 +246,7 @@ if prompt := st.chat_input("논문에 대해 물어보세요 (예: 리랭킹은 
         if mode:
             st.caption(mode)
         render_sources(result)
+        render_citations(result, str(len(st.session_state.messages)))
         render_inspector(result)
 
     st.session_state.messages.append(

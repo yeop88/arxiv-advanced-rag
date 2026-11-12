@@ -322,6 +322,38 @@ def test_paper_search_parsers() -> None:
     print("  test_paper_search_parsers ✅")
 
 
+def test_citation_graph() -> None:
+    """인용 그래프: 코퍼스 안 선행·후속, 공통 참고문헌, arXiv ID 판별(네트워크 없이 임시 파일로)."""
+    import tempfile
+
+    from config import settings
+    from rag import citations as C
+
+    orig = settings.citation_graph_path
+    with tempfile.TemporaryDirectory() as d:
+        settings.citation_graph_path = str(Path(d) / "g.json")
+        try:
+            g = C._empty()
+            g["papers"] = {
+                "1706.03762": {"oa": "W1", "title": "Attention", "cited_by": 900, "year": 2017, "arxiv": "1706.03762", "refs": ["W9"]},
+                "1810.04805": {"oa": "W2", "title": "BERT", "cited_by": 500, "year": 2018, "arxiv": "1810.04805", "refs": ["W1", "W9"]},
+                "1907.11692": {"oa": "W3", "title": "RoBERTa", "cited_by": 100, "year": 2019, "arxiv": "1907.11692", "refs": ["W1", "W2", "W9"]},
+            }
+            C.save(g)
+            rel = C.related_in_corpus("1810.04805")
+            assert rel == {"prior": ["1706.03762"], "later": ["1907.11692"]}, rel
+            assert C.related_in_corpus("9999.99999") == {"prior": [], "later": []}
+            assert sorted(C.common_references(["1810.04805", "1907.11692"])) == [("W1", 2), ("W9", 2)]
+        finally:
+            settings.citation_graph_path = orig
+    assert C.is_arxiv_id("2103.00020") and C.is_arxiv_id("math/0211159") and C.is_arxiv_id("quant-ph/9508027")
+    assert not C.is_arxiv_id("local_ko_001")
+    assert C._arxiv_of({"doi": "https://doi.org/10.48550/arXiv.2103.00020"}) == "2103.00020"
+    assert C._arxiv_of({"doi": "x", "locations": [{"landing_page_url": "https://arxiv.org/abs/1512.03385v1"}]}) == "1512.03385"
+    assert C._same_title("Attention Is All You Need", "attention is all you need.")
+    print("  test_citation_graph ✅")
+
+
 def main() -> None:
     print("단위 테스트 실행:")
     test_rrf()
@@ -335,6 +367,7 @@ def main() -> None:
     test_auto_rerank_weight()
     test_auto_fetch_decisions()
     test_evict_over_budget()
+    test_citation_graph()
     print("모든 단위 테스트 통과 ✅")
 
 
