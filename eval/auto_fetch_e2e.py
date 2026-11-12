@@ -115,6 +115,7 @@ def _row(kind: str, question: str, key: str | None, res, events, sec: float) -> 
     added = [a["source"] for a in res.auto_fetched]
     return {
         "kind": kind, "question": question, "key": key, "triggered": bool(reasons), "reasons": reasons,
+        "title_guess": next((kw.get("title") for ev, kw in events if ev == "fetch_title_guess"), None),
         "search_sources": sources, "warnings": [kw.get("message") for ev, kw in events if ev in ("fetch_warn", "error")],
         "added": added, "added_titles": [a["title"] for a in res.auto_fetched],
         "key_added": key in added if key else None,
@@ -142,6 +143,8 @@ def run() -> None:
             _append(run_out, row)
             print(f"[{kind}] {sec:.0f}초 수집={row['triggered']} 추가={row['added']} 원논문={row['key_added']} "
                   f"top5={row['key_in_topk']} 근거부족={row['lacks_evidence']} | {q[:30]}", flush=True)
+            if row["triggered"]:
+                time.sleep(15)  # 회사망 공용 IP 에서 arXiv 요청 제한을 피하려고 수집 뒤 쉰다
 
 
 def repeat() -> None:

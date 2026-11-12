@@ -76,6 +76,7 @@
 - 진행 보고서 (`docs/PROGRESS_REPORT.md`), 작업 지침 (`CLAUDE.md`)
 
 ### Changed
+- 실전 시험 `auto_fetch_e2e.py`: 수집 뒤 15초 쉬어 arXiv 요청 제한 회피, 추정한 원 논문 제목 기록
 - 원 논문 제목 추정 기본 켬(`AUTO_FETCH_TITLE_GUESS=1`): 확인용 12문항에서 원 논문 선정 58% → 100%
 - OpenAlex 사용을 설정으로 끌 수 있게 함(`OPENALEX_ENABLED`, 기본 꺼짐): 자동 수집은 arXiv 만, 인용 그래프는 저장된 것만, DB 밖 인용 조회 옵션 숨김. arXiv API 요청 사이 3초 간격
 - 원 논문 제목 추정: 프롬프트에 약어 예시, 제목 일치 기준 0.6, 거의 정확한 제목(0.9 이상)은 관련도 기준 면제, 더 정확히 맞는 후보 우선 (`rag/auto_fetch.py`, `rag/prompts.py`)
