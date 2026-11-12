@@ -183,6 +183,42 @@ def render_citations(result, key: str) -> None:
                 st.caption(f"주요 후속: {ext(lat)}")
 
 
+def render_compare_table(msg: dict, key: str) -> None:
+    """근거 논문이 2편 이상이면 '비교표 만들기' 버튼. 만든 표는 메시지에 저장해 다시 그린다."""
+    result = msg["result"]
+    papers = list(dict.fromkeys(c.source for c in result.reranked if c.source))
+    if len(papers) < 2:
+        return
+    table = msg.get("table")
+    if table is None:
+        if not st.button(f"📊 근거 논문 {min(len(papers), 5)}편 비교표 만들기", key=f"table_{key}"):
+            return
+        if not loader.ready:
+            st.info("모델·DB 를 준비하는 중입니다. 잠시 뒤 다시 눌러 주세요.")
+            return
+        from rag.compare_table import build_table
+
+        with st.status("비교표를 만드는 중 (논문마다 요약 → 검증)", expanded=True) as box:
+            def progress(ev, **kw):
+                if ev == "table_paper":
+                    box.write(f"{kw['i']}/{kw['n']} {kw['title'][:60]}")
+                elif ev == "table_verify":
+                    box.write("표 검증 중")
+
+            table = build_table(papers, loader.pipe.vectorstore, progress=progress)
+            box.update(label="비교표 완성", state="complete", expanded=False)
+        msg["table"] = table
+    with st.expander("📊 논문 비교표 (방법·데이터·결과·한계)", expanded=True):
+        st.markdown(table.to_markdown(marks=True))
+        v = table.verification
+        badge = ("✅ 검증 통과" if v.grounded else "⚠️ 일부 칸이 근거와 다를 수 있음") if v else "검증 생략"
+        st.caption(f"{badge} · 채운 칸 {table.cells_filled}/{table.cells_total} · ⚠ 칸은 근거 원문을 확인하세요 · "
+                   f"[n]은 아래 근거 번호")
+        for i, c in enumerate(table.chunks, 1):
+            sec = f" · {c.section}" if c.section else ""
+            st.markdown(f"<small>[{i}] {c.title[:60]}{sec}</small>", unsafe_allow_html=True)
+
+
 def render_inspector(result) -> None:
     """한 답변의 검증 배지 + 단계별 내부 동작을 렌더."""
     if getattr(result, "auto_fetched", None):
@@ -224,6 +260,7 @@ for idx, msg in enumerate(st.session_state.messages):
         if msg["role"] == "assistant" and msg.get("result"):
             render_sources(msg["result"])
             render_citations(msg["result"], str(idx))
+            render_compare_table(msg, str(idx))
             render_inspector(msg["result"])
 
 # --- 입력 ---
@@ -245,10 +282,11 @@ if prompt := st.chat_input("논문에 대해 물어보세요 (예: 리랭킹은 
 
         if mode:
             st.caption(mode)
+        new_msg = {"role": "assistant", "content": result.answer, "result": result, "mode": mode}
+        key = str(len(st.session_state.messages))  # 다음 실행에서 이 메시지의 위치(idx)와 같은 키
         render_sources(result)
-        render_citations(result, str(len(st.session_state.messages)))
+        render_citations(result, key)
+        render_compare_table(new_msg, key)
         render_inspector(result)
 
-    st.session_state.messages.append(
-        {"role": "assistant", "content": result.answer, "result": result, "mode": mode}
-    )
+    st.session_state.messages.append(new_msg)

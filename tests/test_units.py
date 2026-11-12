@@ -374,6 +374,35 @@ def test_citation_graph() -> None:
     print("  test_citation_graph ✅")
 
 
+def test_compare_table() -> None:
+    """비교표: 칸별 인용 점검, 표 형식, 논문별 전역 번호(LLM 없이 요약 함수를 바꿔 끼움)."""
+    from rag import compare_table as T
+    from rag.schemas import RetrievedChunk
+
+    assert T.check_citations({"방법": "A를 제안 [2]", "데이터": "근거 없음", "결과": "좋음", "한계": "범위 밖 [9]"},
+                             range(1, 4)) == ["결과", "한계"]
+    chunks = {"a": [RetrievedChunk(content="m", source="a", title="Paper A", section="Method")],
+              "b": [RetrievedChunk(content="r", source="b", title="Paper B | x")]}
+    orig_pc, orig_sum = T._paper_chunks, T._summarize
+    seen = []
+    T._paper_chunks = lambda vs, srcs: chunks
+    T._summarize = lambda title, ctx: (seen.append(ctx), {"방법": f"{title} 방법 [{len(seen)}]", "데이터": "근거 없음",
+                                                          "결과": "수치 없음", "한계": "근거 없음"})[1]
+    try:
+        t = T.build_table(["a", "b", "a"], vectorstore=None, verify=False)
+    finally:
+        T._paper_chunks, T._summarize = orig_pc, orig_sum
+    assert [r.source for r in t.rows] == ["a", "b"] and len(t.chunks) == 2
+    assert seen[0].startswith("[1]") and seen[1].startswith("[2]"), "논문별 근거 번호가 이어져야 함"
+    assert t.rows[0].uncited == ["결과"] and t.cells_uncited == 2 and t.cells_filled == 4
+    md = t.to_markdown()
+    assert md.splitlines()[0] == "| 논문 | 방법 | 데이터 | 결과 | 한계 |" and "Paper B \| x" in md
+    T.flag_cells(t.rows, ["Paper A 방법 [1] 은 틀림", "전혀 다른 주장"])
+    assert t.rows[0].flagged == ["방법"] and t.rows[1].flagged == []
+    assert "⚠ Paper A 방법" in t.to_markdown(marks=True) and "⚠" not in t.to_markdown()
+    print("  test_compare_table ✅")
+
+
 def main() -> None:
     print("단위 테스트 실행:")
     test_rrf()
@@ -388,6 +417,7 @@ def main() -> None:
     test_auto_fetch_decisions()
     test_evict_over_budget()
     test_citation_graph()
+    test_compare_table()
     print("모든 단위 테스트 통과 ✅")
 
 

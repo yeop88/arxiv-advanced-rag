@@ -5,6 +5,7 @@
 ## [Unreleased]
 
 ### Added
+- 논문 비교표 `rag/compare_table.py`: 근거 논문 2~5편을 방법·데이터·결과·한계로 비교, 칸마다 근거 번호, 채운 칸만 4단계 검증 후 걸린 칸 ⚠ 표시. 챗봇 답변 아래 "비교표 만들기" 버튼, 측정 도구 `eval/compare_table_eval.py`
 - 원 논문 찾기 보강(A3, 기본 꺼짐): 경량 LLM 원 논문 제목 추정 → arXiv 제목 검색(`AUTO_FETCH_TITLE_GUESS`), 근거 논문들의 공통 참고문헌 후보(`AUTO_FETCH_COMMON_REFS`), 후보 찾기 분리 `find_candidates`, 측정 도구 `eval/original_paper_eval.py`
 - OpenAlex API 키 지원 `OPENALEX_API_KEY`(키 없는 요청은 네트워크 공유 하루 예산이라 금방 429)
 - 인용 그래프 `rag/citations.py`·`scripts/build_citation_graph.py`: OpenAlex 참고문헌·피인용 관계 저장(arXiv DOI로 찾고 안 되면 제목 검색, 513편 중 504편), 챗봇 근거별 선행·후속 연구 패널, 코퍼스 밖 주요 논문 조회(캐시), 공통 참고문헌 계산. 자동 수집 논문은 수집 때 추가 (`CITATION_GRAPH_PATH`)
