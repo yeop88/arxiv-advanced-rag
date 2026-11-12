@@ -6,3 +6,6 @@ storage/
 venv/
 *.egg-info/
 .streamlit/secrets.toml
+
+# 논문 본문 조각이 들어간 평가 기록(공개 저장소에 올리지 않음)
+eval/results/fetch_signal_record.jsonl

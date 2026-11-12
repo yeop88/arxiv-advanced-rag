@@ -5,6 +5,7 @@
 ## [Unreleased]
 
 ### Added
+- 수집 신호 평가 세트 `eval/fetch_signal_set.py`(81문항, 자동 수집·검증을 끈 첫 답변과 근거 기록 → 규칙을 LLM 없이 재판정). 기록 파일은 논문 본문 조각이 있어 git 제외
 - 목표 달성률 문서 `docs/ACHIEVEMENT.md`(PROJECT_VISION 항목별 판정, 현재 목표 95%·로드맵 17%)와 발표 자료 `docs/presentation/`(슬라이드 구성안·대본, 그래프 6종과 생성 스크립트)
 - 자동 수집 시나리오 시험 `eval/auto_fetch_scenarios.py`: 다른 학문 분야, 영어, 멀티턴, 이상한 입력, 장애, 예산 초과, 토글, 동시 질문
 - 자동 수집 예산 `AUTO_FETCH_MAX_CHUNKS`(기본 2,000청크)와 사용 기록 기반 자동 정리: 넘으면 오래 안 쓰인 논문부터 삭제 (`rag/auto_fetch.py`, `storage/auto_usage.json`)
