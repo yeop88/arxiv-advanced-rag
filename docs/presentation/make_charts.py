@@ -1,11 +1,13 @@
 """
 발표 자료용 그래프 생성 — docs/presentation/charts/*.png
 
-수치는 docs/PROGRESS_REPORT.md·docs/ACHIEVEMENT.md 의 측정값을 그대로 옮긴 것이다(LLM·네트워크 사용 없음).
+수치는 docs/PROGRESS_REPORT.md·docs/ACHIEVEMENT.md 의 측정값을 옮긴 것이고, 07·08 은 eval/results 의 측정 결과 JSON 을
+직접 읽는다(측정을 다시 하면 그림도 바뀜). LLM·네트워크 사용 없음.
 실행: python docs/presentation/make_charts.py
 """
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import matplotlib
@@ -14,6 +16,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 
 OUT = Path(__file__).resolve().parent / "charts"
+RESULTS = Path(__file__).resolve().parents[2] / "eval" / "results"
 
 # 색: 검증된 기본 팔레트(dataviz) 고정 순서. 텍스트는 잉크 색만 쓴다.
 BLUE, ORANGE, AQUA, YELLOW = "#2a78d6", "#eb6834", "#1baf7a", "#eda100"
@@ -41,8 +44,8 @@ def save(fig, name: str) -> None:
 def achievement() -> None:
     """구분별 달성률(ACHIEVEMENT.md 요약표)."""
     rows = [("해결하려는 문제", 90, "현재"), ("접근 방식", 90, "현재"), ("현재 기능", 100, "현재"),
-            ("확장 원칙 준수", 100, "현재"), ("단기 과제", 20, "로드맵"), ("중기 과제", 0, "로드맵"),
-            ("다른 도메인 이전", 50, "로드맵"), ("장기 과제", 25, "로드맵")]
+            ("확장 원칙 준수", 100, "현재"), ("단기 과제", 50, "로드맵"), ("중기 과제", 100, "로드맵"),
+            ("다른 도메인 이전", 50, "로드맵"), ("장기 과제", 38, "로드맵")]
     fig, ax = plt.subplots(figsize=(10, 5.2))
     y = range(len(rows))[::-1]
     for yi, (name, v, kind) in zip(y, rows):
@@ -55,9 +58,9 @@ def achievement() -> None:
     ax.grid(axis="y", visible=False)
     h, lab = ax.get_legend_handles_labels()
     uniq = dict(zip(lab, h))
-    ax.legend([uniq["현재"], uniq["로드맵"]], ["현재 목표 (합계 95%)", "로드맵 (합계 17%)"],
+    ax.legend([uniq["현재"], uniq["로드맵"]], ["현재 목표 (합계 95%)", "로드맵 (합계 63%)"],
               loc="lower right", frameon=False)
-    ax.set_title("PROJECT_VISION 달성률")
+    ax.set_title("PROJECT_VISION 달성률 (2026-11-15)")
     save(fig, "01_achievement.png")
 
 
@@ -177,6 +180,66 @@ def kpi_table() -> None:
     save(fig, "06_kpi_table.png")
 
 
+def citation_check() -> None:
+    """문장 단위 인용 확인 기준값 보정(§5.40): 기준값별 통과율 — 맞는 인용은 통과, 다른·무관한 근거는 걸러야 한다."""
+    d = json.loads((RESULTS / "citation_check_eval.json").read_text(encoding="utf-8"))
+    grid = d["grid"]
+    t = [g["threshold"] for g in grid]
+    fig, ax = plt.subplots(figsize=(10, 5.2))
+    for key, color, lab in [("pos_pass", BLUE, "맞는 인용 (통과해야 함)"), ("hard_neg_pass", ORANGE, "같은 질문의 다른 논문 근거"),
+                            ("easy_neg_pass", AQUA, "무관한 근거 (걸러야 함)")]:
+        v = [g[key] * 100 for g in grid]
+        ax.plot(t, v, color=color, lw=2, marker="o", ms=7, mec=SURFACE, mew=2, label=lab)
+    chosen = d["threshold_used"]
+    ax.axvline(chosen, color=MUTED, lw=1.2, ls=":")
+    sel = next(g for g in grid if g["threshold"] == chosen)
+    note = (f"기준 {chosen}: 맞는 인용 {sel['pos_pass']:.0%} 통과",
+            f"다른 논문 {sel['hard_neg_pass']:.0%} · 무관 {sel['easy_neg_pass']:.1%}")
+    ax.text(chosen + 0.01, 8, "\n".join(note), color=INK2, fontsize=11)
+    ax.set_xscale("log")
+    ax.set_xticks(t, [str(x) for x in t])
+    ax.minorticks_off()
+    ax.set_ylim(0, 105)
+    ax.set_yticks([0, 25, 50, 75, 100], ["0", "25", "50", "75", "100%"])
+    ax.set_xlabel("리랭커 점수 기준값 (로그 눈금)")
+    ax.set_ylabel("통과율")
+    ax.legend(frameon=False, loc="center right")
+    ax.set_title(f"문장 단위 인용 확인 — 실제 답변 {d['answers']}개, 인용 문장 {d['cited_sentences']}개로 보정")
+    save(fig, "07_citation_check.png")
+
+
+def reranker_title() -> None:
+    """본문 청크 맥락 실험(§5.41·§5.42): 기준 대비 recall@5·MRR 변화. 1차(임베딩까지 바꿈) vs 2차(리랭커만, 적용)."""
+    r1 = json.loads((RESULTS / "contextual_header_eval.json").read_text(encoding="utf-8"))["results"]
+    r2 = json.loads((RESULTS / "contextual_header_eval_r2.json").read_text(encoding="utf-8"))["results"]
+    base = r2["A_baseline"]["eval294"]
+    nl = "\n"
+    rows = [("임베딩", r1["B_embed"]), ("임베딩+BM25", r1["C_embed_bm25"]), (f"임베딩+BM25{nl}+리랭커", r1["D_embed_bm25_rerank"]),
+            (f"리랭커만{nl}(적용)", r2["E2_rerank_title"]), (f"리랭커 점수{nl}평균", r2["G_rerank_blend"])]
+    names = [n for n, _ in rows]
+    d_rec = [r["eval294"]["recall"] - base["recall"] for _, r in rows]
+    d_mrr = [r["eval294"]["mrr"] - base["mrr"] for _, r in rows]
+    fig, ax = plt.subplots(figsize=(10, 5.2))
+    x = range(len(rows))
+    w = 0.36
+    for off, vals, color, lab in [(-w / 2, d_rec, BLUE, "recall@5 변화"), (w / 2, d_mrr, ORANGE, "MRR 변화")]:
+        bars = ax.bar([i + off for i in x], vals, width=w, color=color, label=lab, edgecolor=SURFACE, linewidth=2)
+        for b, v in zip(bars, vals):
+            ax.text(b.get_x() + b.get_width() / 2, v + (0.0006 if v >= 0 else -0.0006), f"{v:+.4f}",
+                    ha="center", va="bottom" if v >= 0 else "top", fontsize=9, color=INK2)
+    ax.axhline(0, color=AXIS, lw=1)
+    ax.axvline(2.5, color=MUTED, lw=1, ls=":")
+    ax.text(1.0, 0.027, "1차: 시험용 DB 사본", ha="center", color=INK2, fontsize=11)
+    ax.text(3.5, 0.027, "2차: DB 그대로", ha="center", color=INK2, fontsize=11)
+    ax.set_xticks(list(x), names, color=INK2)
+    ax.set_ylim(-0.012, 0.031)
+    ax.set_ylabel(f"기준(recall {base['recall']}, MRR {base['mrr']}) 대비")
+    ax.grid(axis="x", visible=False)
+    ax.legend(frameon=False, loc="upper left")
+    ax.set_title("논문 제목은 리랭커에만 — MRR 은 오르고 recall 은 지킨다")
+    save(fig, "08_reranker_title.png")
+
+
 if __name__ == "__main__":
     achievement()
     query_transform()
@@ -184,3 +247,5 @@ if __name__ == "__main__":
     auto_fetch_progress()
     latency()
     kpi_table()
+    citation_check()
+    reranker_title()
