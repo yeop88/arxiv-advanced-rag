@@ -1,5 +1,6 @@
-// 사이드바: 상태 · 설정 · 문헌 조사 · 관심 분야 · 모델 정보 · 대화 초기화.
-import type { AppConfig, ChatOptions, ServerStatus, WatchState } from "../../api/types";
+// 사이드바: 상태 · 대화 목록 · 설정 · 문헌 조사 · 관심 분야 · 모델 정보.
+import type { AppConfig, ChatOptions, ConversationInfo, ServerStatus, WatchState } from "../../api/types";
+import { ConversationPanel } from "./ConversationPanel";
 import { SettingsPanel } from "./SettingsPanel";
 import { StatusPanel } from "./StatusPanel";
 import { SurveyPanel } from "./SurveyPanel";
@@ -20,6 +21,13 @@ interface Props {
   watchRunning: boolean;
   onWatchRun: () => void;
   onClear: () => void;
+  conversations: ConversationInfo[];
+  convId: string;
+  convEnabled: boolean;
+  chatRunning: boolean;
+  onNewChat: () => void;
+  onOpenChat: (id: string) => void;
+  onDeleteChat: (id: string) => void;
 }
 
 export function Sidebar(p: Props) {
@@ -32,6 +40,18 @@ export function Sidebar(p: Props) {
         </button>
       </div>
       <StatusPanel status={p.status} offline={p.offline} />
+      <section>
+        <h3>💬 대화</h3>
+        <ConversationPanel
+          items={p.conversations}
+          current={p.convId}
+          enabled={p.convEnabled}
+          running={p.chatRunning}
+          onNew={p.onNewChat}
+          onOpen={p.onOpenChat}
+          onDelete={p.onDeleteChat}
+        />
+      </section>
       <section>
         <SettingsPanel config={p.config} options={p.options} onChange={p.onOptions} />
       </section>
@@ -56,7 +76,7 @@ export function Sidebar(p: Props) {
         )}
       </section>
       <button type="button" className="btn ghost" onClick={p.onClear}>
-        🗑️ 대화 초기화
+        🗑️ 지금 대화 지우기
       </button>
     </aside>
   );

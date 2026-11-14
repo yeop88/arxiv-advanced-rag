@@ -3,11 +3,12 @@ import type { ChatResult, SentenceCheck, SentenceStatus } from "../../api/types"
 import type { CiteHandler } from "../common/Markdown";
 import { Collapsible } from "../common/Collapsible";
 
-const LABEL: Record<Exclude<SentenceStatus, "supported">, string> = {
+const LABEL: Record<Exclude<SentenceStatus, "supported" | "table_row">, string> = {
   weak: "근거가 약함 — 근거를 넘어선 종합·추론일 수 있어요",
   miscited: "다른 근거가 더 맞음",
   uncited: "인용 번호 없음",
   bad_ref: "없는 근거 번호",
+  contradicted: "근거와 반대되거나 다른 말일 수 있어요(함의 판정)",
 };
 
 function CiteButton({ n, onCite, suggest }: { n: number; onCite?: CiteHandler; suggest?: boolean }) {
@@ -24,14 +25,17 @@ function CiteButton({ n, onCite, suggest }: { n: number; onCite?: CiteHandler; s
 }
 
 function Item({ s, onCite }: { s: SentenceCheck; onCite?: CiteHandler }) {
-  const scoreIssue = s.status !== "supported";
+  const scoreIssue = s.status !== "supported" && s.status !== "table_row"; // 표 행은 점수 없이 숫자만
   const numIssue = s.numbers_missing.length > 0;
   return (
     <li className={`cc-item cc-${s.status}${numIssue ? " cc-number" : ""}`}>
-      <span className="cc-text">{s.text}</span>
+      <span className="cc-text">
+        {s.status === "table_row" && <span className="muted">표 행 · </span>}
+        {s.text}
+      </span>
       {scoreIssue && (
         <span className="cc-why">
-          {LABEL[s.status as Exclude<SentenceStatus, "supported">]}
+          {LABEL[s.status as Exclude<SentenceStatus, "supported" | "table_row">]}
           {s.cites.map((n) => (
             <CiteButton key={n} n={n} onCite={onCite} />
           ))}
@@ -41,7 +45,11 @@ function Item({ s, onCite }: { s: SentenceCheck; onCite?: CiteHandler }) {
               <CiteButton n={s.best} onCite={onCite} suggest />
             </>
           )}
-          {s.support != null && <span className="muted"> · 점수 {s.support.toFixed(2)}</span>}
+          {s.status === "contradicted" && s.contradiction != null ? (
+            <span className="muted"> · 모순 확률 {s.contradiction.toFixed(2)}</span>
+          ) : (
+            s.support != null && <span className="muted"> · 점수 {s.support.toFixed(2)}</span>
+          )}
         </span>
       )}
       {numIssue && (
@@ -71,7 +79,7 @@ export function CitationCheckPanel({ result, onCite }: { result: ChatResult; onC
       <div className="verify-row">
         <span
           className={`pill ${supported === claims ? "ok" : "warn"}`}
-          title={`문장마다 인용한 근거와 맞는지 리랭커 점수(기준 ${cc.threshold})로 확인했습니다. LLM 채점과 별개입니다.`}
+          title={`문장마다 인용한 근거와 맞는지 리랭커 점수(기준 ${cc.threshold})와 함의 판정으로 확인했습니다. LLM 채점과 별개입니다.`}
         >
           🔎 인용 확인 {supported}/{claims}문장
         </span>

@@ -362,9 +362,41 @@ def retrieve_and_rerank(
     config.use_hybrid 에 따라 순수 벡터검색 또는 하이브리드(BM25+벡터) 사용.
     어느 쪽이든 결과를 크로스인코더로 재정렬하는 흐름은 동일.
     """
-    if settings.use_hybrid:
-        retrieved = retrieve_hybrid(vectorstore, queries)
-    else:
-        retrieved = retrieve(vectorstore, queries)
+    search = retrieve_hybrid if settings.use_hybrid else retrieve
+    retrieved = search(vectorstore, queries)
     reranked = rerank(question, retrieved, vectorstore)
+    # 보충 검색(§5.45): 질문이 이름으로 묻는 대상 중 근거에 없는 것이 있으면 그 대상으로 다시 찾아 후보에 더한다(LLM 없음)
+    for _ in range(settings.followup_rounds if settings.followup_retrieval else 0):
+        missing = missing_names(question, reranked)
+        if not missing:
+            break
+        seen = {_chunk_key(c.content) for c in retrieved}
+        extra = [c for c in search(vectorstore, [followup_query(question, n) for n in missing])
+                 if _chunk_key(c.content) not in seen]
+        if not extra:
+            break
+        retrieved = retrieved + extra
+        reranked = rerank(question, retrieved, vectorstore)
     return retrieved, reranked
+
+
+def missing_names(question: str, reranked: list[RetrievedChunk]) -> list[str]:
+    """여러 대상을 이름으로 묻는 질문에서, 근거(제목 또는 본문에 여러 번)에 없는 이름. 대상이 하나면 보충하지 않는다."""
+    from rag.ingest.auto_fetch import _DEFINE_MENTIONS, _in_title, _word_count, named_terms
+
+    names = named_terms(question)
+    if len(names) < 2:
+        return []
+    return [n for n in names
+            if not any(_in_title(n, c.title) or _word_count(n, c.content) >= _DEFINE_MENTIONS for c in reranked)]
+
+
+def followup_query(question: str, name: str) -> str:
+    """빠진 대상 하나에 맞춘 검색어: 질문에서 다른 대상 이름을 지운다(그 이름들이 검색을 끌어가지 않게)."""
+    from rag.ingest.auto_fetch import named_terms
+
+    q = question
+    for other in named_terms(question):
+        if other != name:
+            q = re.sub(re.escape(other), " ", q)
+    return re.sub(r"\s+", " ", q).strip()

@@ -1,0 +1,409 @@
+{
+ "조정용": {
+  "n": 34,
+  "single": 15,
+  "multi": 17,
+  "rows": [
+   {
+    "id": "ooc01",
+    "single_found": true,
+    "multi_found": true,
+    "titles": [
+     "Learning Transferable Visual Models From Natural Language Supervision"
+    ]
+   },
+   {
+    "id": "ooc02",
+    "single_found": true,
+    "multi_found": true,
+    "titles": [
+     "Segment Anything",
+     "Segment Anything in One Forward Pass",
+     "Segmenter: Transformers for Semantic Segmentation"
+    ]
+   },
+   {
+    "id": "ooc03",
+    "single_found": false,
+    "multi_found": false,
+    "titles": [
+     "Mastering Chess and Shogi by Self-Play with a General Reinforcement Learning Algorithm"
+    ]
+   },
+   {
+    "id": "ooc04",
+    "single_found": true,
+    "multi_found": true,
+    "titles": [
+     "3D Gaussian Splatting for Real-Time Radiance Field Rendering",
+     "Gaussian Splatting: Real-Time High-Performance Surface Reconstruction with Gaussians",
+     "EWA Splatting"
+    ]
+   },
+   {
+    "id": "ooc05",
+    "single_found": true,
+    "multi_found": false,
+    "titles": []
+   },
+   {
+    "id": "ooc06",
+    "single_found": true,
+    "multi_found": true,
+    "titles": [
+     "Denoising Diffusion Probabilistic Models"
+    ]
+   },
+   {
+    "id": "ooc07",
+    "single_found": true,
+    "multi_found": true,
+    "titles": [
+     "You Only Look Once: Unified, Real-Time Object Detection",
+     "Realtime Object Detection with YOLO"
+    ]
+   },
+   {
+    "id": "ooc08",
+    "single_found": false,
+    "multi_found": false,
+    "titles": [
+     "Deep Residual Learning for Image Recognition",
+     "Identity Mappings in Deep Residual Networks",
+     "Aggregated Residual Transformations for Deep Neural Networks"
+    ]
+   },
+   {
+    "id": "ooc09",
+    "single_found": true,
+    "multi_found": true,
+    "titles": [
+     "Neural Ordinary Differential Equations",
+     "Solving Ordinary Differential Equations I: Nonstiff Problems",
+     "Differential Equations as Optimization: Theory, Algorithms, and Applications"
+    ]
+   },
+   {
+    "id": "ooc10",
+    "single_found": true,
+    "multi_found": true,
+    "titles": [
+     "A Simple Framework for Contrastive Learning of Visual Representations"
+    ]
+   },
+   {
+    "id": "ooc11",
+    "single_found": true,
+    "multi_found": false,
+    "titles": [
+     "Decision Transformer: Reinforcement Learning via Language Modeling",
+     "Language Models are Few-Shot Learners",
+     "Attention Is All You Need"
+    ]
+   },
+   {
+    "id": "ooc12",
+    "single_found": true,
+    "multi_found": true,
+    "titles": [
+     "Semi-Supervised Classification with Graph Convolutional Networks"
+    ]
+   },
+   {
+    "id": "ooc13",
+    "single_found": true,
+    "multi_found": true,
+    "titles": [
+     "High-Resolution Image Synthesis with Latent Diffusion Models"
+    ]
+   },
+   {
+    "id": "ooc14",
+    "single_found": false,
+    "multi_found": true,
+    "titles": [
+     "An Image is Worth 16x16 Words: Transformers for Image Recognition at Scale"
+    ]
+   },
+   {
+    "id": "ooc15",
+    "single_found": true,
+    "multi_found": false,
+    "titles": [
+     "Masked Autoencoders Are Vision Learning Experts",
+     "Masked Autoencoder Is a Devourer: Learning Robust Visual Representations by Masking Patch Blocks",
+     "Masked Autoencoders: A Survey"
+    ]
+   },
+   {
+    "id": "ooc16",
+    "single_found": false,
+    "multi_found": true,
+    "titles": [
+     "World Models"
+    ]
+   },
+   {
+    "id": "ooc17",
+    "single_found": false,
+    "multi_found": false,
+    "titles": [
+     "DreamerV3: Mastering Diverse Domains through World Models",
+     "DreamerV3: Scalable World Models for Generalist Agents",
+     "Efficient Learning in World Models"
+    ]
+   },
+   {
+    "id": "ooc18",
+    "single_found": false,
+    "multi_found": false,
+    "titles": [
+     "An RNN for the 21st Century"
+    ]
+   },
+   {
+    "id": "ooc19",
+    "single_found": false,
+    "multi_found": false,
+    "titles": [
+     "Solving Differential Equations Using Neural Networks"
+    ]
+   },
+   {
+    "id": "ooc20",
+    "single_found": false,
+    "multi_found": false,
+    "titles": [
+     "Generative Adversarial Nets",
+     "Auto-Encoding Variational Bayes",
+     "Generative Visual Manipulation on the Natural Image Manifold"
+    ]
+   },
+   {
+    "id": "dom_물리",
+    "single_found": false,
+    "multi_found": false,
+    "titles": []
+   },
+   {
+    "id": "dom_천문",
+    "single_found": false,
+    "multi_found": false,
+    "titles": []
+   },
+   {
+    "id": "dom_양자",
+    "single_found": true,
+    "multi_found": true,
+    "titles": [
+     "Polynomial-Time Algorithms for Prime Factorization and Discrete Logarithms on a Quantum Computer",
+     "A fast quantum mechanical algorithm for database search"
+    ]
+   },
+   {
+    "id": "dom_수학",
+    "single_found": false,
+    "multi_found": false,
+    "titles": []
+   },
+   {
+    "id": "dom_금융",
+    "single_found": true,
+    "multi_found": true,
+    "titles": [
+     "Deep Hedging"
+    ]
+   },
+   {
+    "id": "dom_생물",
+    "single_found": false,
+    "multi_found": false,
+    "titles": [
+     "ProtTrans: Towards Cracking the Language of Lifes Millions Sequences",
+     "Language Models of Proteins Are Few-Shot Few-Shot Learners",
+     "Transformer Protein Language Models Are Pre-Trained on Sequences"
+    ]
+   },
+   {
+    "id": "dom_음성",
+    "single_found": false,
+    "multi_found": false,
+    "titles": [
+     "Whisper: Robust Speech Recognition via Large-Scale Weak Supervision"
+    ]
+   },
+   {
+    "id": "dom_음성2",
+    "single_found": false,
+    "multi_found": false,
+    "titles": [
+     "wav2vec 2.0: Learning Structured Sound Representations from Unlabeled Audio Data"
+    ]
+   },
+   {
+    "id": "dom_로봇",
+    "single_found": false,
+    "multi_found": false,
+    "titles": [
+     "RT-2: Vision-Language-Action Models Transfer Web Knowledge to Robotic Control",
+     "Robotic Manipulation with Vision-Language Models"
+    ]
+   },
+   {
+    "id": "dom_보안",
+    "single_found": false,
+    "multi_found": true,
+    "titles": [
+     "Explaining and Harnessing Adversarial Examples",
+     "Fast Adversarial Training",
+     "Adversarial Examples in the Physical World"
+    ]
+   },
+   {
+    "id": "en1",
+    "single_found": false,
+    "multi_found": true,
+    "titles": [
+     "Mixtral of Experts"
+    ]
+   },
+   {
+    "id": "en2",
+    "single_found": false,
+    "multi_found": true,
+    "titles": [
+     "Speculative Decoding: A Fast Decoding Scheme for Large Language Models",
+     "Fast Inference from Transformers via Speculative Decoding",
+     "Accelerating Large Language Model Decoding with Speculative Sampling"
+    ]
+   },
+   {
+    "id": "cmp1",
+    "single_found": false,
+    "multi_found": false,
+    "titles": [
+     "RoBERTa: Rethinking Pre-training with Contextual Representations",
+     "XLNet: XLNet: Generalized Autoregressive Pretraining for Language Understanding"
+    ]
+   },
+   {
+    "id": "mt1",
+    "single_found": true,
+    "multi_found": true,
+    "titles": [
+     "XLNet: Generalized Autoregressive Pretraining for Language Understanding"
+    ]
+   }
+  ],
+  "union": 20
+ },
+ "확인용": {
+  "n": 12,
+  "single": 9,
+  "multi": 10,
+  "rows": [
+   {
+    "id": "held01",
+    "single_found": true,
+    "multi_found": true,
+    "titles": [
+     "U-Net: Convolutional Networks for Biomedical Image Segmentation"
+    ]
+   },
+   {
+    "id": "held02",
+    "single_found": true,
+    "multi_found": true,
+    "titles": [
+     "Playing Atari with Deep Reinforcement Learning",
+     "Human-level control through deep reinforcement learning",
+     "Deep Reinforcement Learning with Double Q-learning"
+    ]
+   },
+   {
+    "id": "held03",
+    "single_found": true,
+    "multi_found": true,
+    "titles": [
+     "WaveNet: A Generative Model for Raw Audio"
+    ]
+   },
+   {
+    "id": "held04",
+    "single_found": true,
+    "multi_found": true,
+    "titles": [
+     "BLIP-2: Bootstrapping Language-Image Pre-training with Frozen Image Encoders and Large Language Models"
+    ]
+   },
+   {
+    "id": "held05",
+    "single_found": false,
+    "multi_found": false,
+    "titles": [
+     "ControlNet: Adding Conditional Control to Text-to-Image Diffusion Models"
+    ]
+   },
+   {
+    "id": "held06",
+    "single_found": true,
+    "multi_found": true,
+    "titles": [
+     "Swin Transformer: Hierarchical Vision Transformer using Shifted Windows"
+    ]
+   },
+   {
+    "id": "held07",
+    "single_found": true,
+    "multi_found": true,
+    "titles": [
+     "Batch Normalization: Accelerating Deep Network Training by Reducing Internal Covariate Shift"
+    ]
+   },
+   {
+    "id": "held08",
+    "single_found": true,
+    "multi_found": true,
+    "titles": [
+     "EfficientNet: Rethinking Model Scaling for Convolutional Neural Networks"
+    ]
+   },
+   {
+    "id": "held09",
+    "single_found": false,
+    "multi_found": true,
+    "titles": [
+     "Rethinking the Inception Architecture for Computer Vision",
+     "Faster R-CNN: Towards Real-Time Object Detection with Region Proposal Networks",
+     "Deep Residual Learning for Image Recognition"
+    ]
+   },
+   {
+    "id": "held10",
+    "single_found": true,
+    "multi_found": true,
+    "titles": [
+     "DETR: End-to-End Object Detection with Transformers",
+     "End-to-End Object Detection with Transformers"
+    ]
+   },
+   {
+    "id": "held11",
+    "single_found": false,
+    "multi_found": false,
+    "titles": [
+     "Denoising Autoencoder with Bidirectional Encoder-Decoder Transformers"
+    ]
+   },
+   {
+    "id": "held12",
+    "single_found": true,
+    "multi_found": true,
+    "titles": [
+     "FlashAttention-2: Faster Attention with Better Parallelism and Work Partitioning"
+    ]
+   }
+  ],
+  "union": 10
+ }
+}

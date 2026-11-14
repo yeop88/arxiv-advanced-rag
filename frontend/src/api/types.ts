@@ -31,6 +31,42 @@ export interface ServerStatus {
     seconds: number;
   };
   llm: { state: "ok" | "loading" | "down" | "n/a"; desc: string };
+  enrich?: EnrichStatus | null;
+}
+
+// 자동 수집 논문의 표·그림·수식 백그라운드 처리(server/enricher.py)
+export interface EnrichStatus {
+  enabled: boolean;
+  queue: number;
+  current: { source: string; title: string; page: number; pages: number } | null;
+  recent: { source: string; title: string; added?: number; sec?: number; error?: string }[];
+}
+
+// 사용 지표(/api/metrics, 질문 기록에서 계산)
+export interface Metrics {
+  enabled: boolean;
+  total: number;
+  errors: number;
+  error_rate: number | null;
+  up: number;
+  down: number;
+  mean_total_sec: number | null;
+  verify_grounded_rate: number | null;
+  citation_precision: number | null;
+  number_mismatch_rate: number | null;
+  auto_fetch_rate: number | null;
+  stages: { key: string; label: string; mean_sec: number | null; runs: number }[];
+  by_day: { date: string; n: number }[];
+  recent: {
+    id: string;
+    ts: number;
+    question: string;
+    rating: number | null;
+    error: string | null;
+    sec: number;
+    citation: CitationCheck["summary"] | null;
+    grounded: boolean | null;
+  }[];
 }
 
 export interface SourceChunk {
@@ -50,7 +86,7 @@ export interface Verification {
   unsupported: string[];
 }
 
-export type SentenceStatus = "supported" | "miscited" | "weak" | "uncited" | "bad_ref";
+export type SentenceStatus = "supported" | "miscited" | "weak" | "uncited" | "bad_ref" | "table_row" | "contradicted";
 
 export interface SentenceCheck {
   text: string;
@@ -61,6 +97,8 @@ export interface SentenceCheck {
   best_score: number | null;
   numbers_missing: string[]; // 인용한 근거에 없는 숫자
   numbers_found_in: number[]; // 그 숫자가 있는 다른 근거 번호
+  entail?: number | null; // 함의(NLI) 확률 — 인용한 근거 중 최고
+  contradiction?: number | null; // 모순 확률 — 인용한 근거 중 최저
 }
 
 // 4b 문장 단위 인용 확인(rag/stages/citation_check.py) — 리랭커로 문장과 인용한 근거를 대조, LLM 없음
@@ -111,6 +149,7 @@ export interface CompareTableResult {
   verification: Verification | null;
   cells_filled: number;
   cells_total: number;
+  number_check?: { rows: number; mismatch: SentenceCheck[] }; // 칸 숫자가 단 근거 원문에 있는지
   chunks: { title: string; section: string; source: string }[];
 }
 
@@ -154,4 +193,40 @@ export interface CitationPaper {
 export interface CitationsResponse {
   papers: CitationPaper[];
   openalex_enabled: boolean;
+}
+
+// 서버에 저장한 대화(server/conversations.py)
+export interface ConversationInfo {
+  id: string;
+  title: string;
+  created: number;
+  updated: number;
+  n: number;
+}
+
+// 사람 판정 기준 세트(eval/human_set.py, server/routes/label.py)
+export type HumanSentenceLabel = "supported" | "unsupported" | "miscited";
+export type HumanOverall = "correct" | "partial" | "wrong";
+
+export interface HumanItem {
+  id: string;
+  kind: string;
+  question: string;
+  expected_sources: string[];
+  answer: string;
+  sources: { source: string; title: string; section: string; kind: string; content: string }[];
+  llm_verification: { grounded: boolean; faithfulness: number; unsupported: string[] } | null;
+  citation_check: { threshold: number; sentences: SentenceCheck[] };
+}
+
+export interface HumanLabel {
+  sentences: Record<string, HumanSentenceLabel>;
+  overall: HumanOverall | null;
+  note: string | null;
+}
+
+export interface LabelState {
+  items: HumanItem[];
+  labels: Record<string, HumanLabel>;
+  done: number;
 }

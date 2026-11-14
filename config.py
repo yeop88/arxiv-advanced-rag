@@ -112,6 +112,10 @@ class Settings:
     # recall 0.9711→0.9700, 코퍼스 안 질문의 수집 신호 4.1%→3.4%(§5.42). 0 이면 끔
     rerank_title_prefix: bool = os.getenv("RERANK_TITLE_PREFIX", "1") not in ("0", "false", "False")
 
+    # 보충 검색: 여러 대상을 이름으로 묻는 질문에서 근거에 없는 대상을 따로 다시 찾는다(LLM 없음, §5.45)
+    followup_retrieval: bool = os.getenv("FOLLOWUP_RETRIEVAL", "0") not in ("0", "false", "False")
+    followup_rounds: int = int(os.getenv("FOLLOWUP_ROUNDS", "1"))
+
     # --- 하이브리드 검색 (BM25 키워드 + 벡터 의미) ---
     # True 면 BM25(정확 매칭)와 벡터(의미)를 RRF 로 융합 → 고유명사·약어에 강해짐
     use_hybrid: bool = True
@@ -134,6 +138,12 @@ class Settings:
     # (문장, 인용한 근거) 리랭커 점수가 이 값 이상이면 '뒷받침됨'. eval/citation_check_eval.py 로 보정
     # 측정(81개 실제 답변): 0.05 에서 맞는 인용 91% 통과, 다른 논문 근거 40%·무관 근거 0% 통과. 걸리는 문장은 대부분 근거를 넘는 종합·추론
     citation_support_threshold: float = float(os.getenv("CITATION_SUPPORT_THRESHOLD", "0.05"))
+    # 함의(NLI) 판정 모델로 '같은 주제지만 근거와 반대·다른 말'인 문장도 표시(§5.44). 빈 값이면 기본 모델.
+    # 기본 끔: 방향을 뒤집은 문장은 리랭커보다 4배 잘 잡지만(45% vs 11%), 실제 답변의 맞는 한국어 바꿔 쓰기도 모순으로
+    # 보는 경우가 많다(원래 문장 7.5% 경보, 상위 16개 대부분 오경보). 사람 판정 일치율을 본 뒤 결정
+    citation_nli: bool = os.getenv("CITATION_NLI", "0") not in ("0", "false", "False")
+    citation_nli_model: str = os.getenv("CITATION_NLI_MODEL", "")
+    citation_nli_contradiction: float = float(os.getenv("CITATION_NLI_CONTRADICTION", "0.7"))
 
     # --- 논문 자동 수집 (근거가 부족하면 arXiv 에서 찾아 전문을 DB 에 추가하고 다시 검색) ---
     auto_fetch: bool = os.getenv("AUTO_FETCH", "1") not in ("0", "false", "False")
@@ -152,6 +162,9 @@ class Settings:
     # 1 이면 경량 LLM 이 원 논문 제목을 추정해 제목으로도 찾고, 맞는 후보를 먼저 넣는다(A3, 측정 §5.25: 26%→62%, 확인용 58%→100%)
     auto_fetch_title_guess: bool = os.getenv("AUTO_FETCH_TITLE_GUESS", "1") not in ("0", "false", "False")
     # 1 이면 추정 제목과 맞는 원 논문을 찾았을 때 그 1편만 넣는다(파생 논문이 다른 질문에 끼어드는 것을 줄임, §5.29)
+    # 첫 추정 제목으로 원 논문을 못 찾으면 경량 LLM 에 제목 후보를 이만큼 더 받아 찾는다(0 = 끔). 측정 §5.43:
+    # 원 논문이 제목 검색 후보에 드는 질문 조정용 15/34 → 20/34, 확인용 9/12 → 10/12
+    auto_fetch_title_candidates: int = int(os.getenv("AUTO_FETCH_TITLE_CANDIDATES", "3"))
     auto_fetch_title_only: bool = os.getenv("AUTO_FETCH_TITLE_ONLY", "1") not in ("0", "false", "False")
     # 1 이면 근거 논문들이 공통으로 인용한 논문도 후보에 더한다(인용 그래프 필요)
     auto_fetch_common_refs: bool = os.getenv("AUTO_FETCH_COMMON_REFS", "0") not in ("0", "false", "False")
@@ -167,6 +180,9 @@ class Settings:
     # 영어 설명 + 후보 분리 + 제목 붙이기로 294문항 지표 손해 없이 켬(§5.38)
     visual_figures: bool = os.getenv("VISUAL_FIGURES", "1") not in ("0", "false", "False")
     visual_equations: bool = os.getenv("VISUAL_EQUATIONS", "1") not in ("0", "false", "False")
+    # 자동 수집한 전문 논문의 표·그림·수식을 챗봇 서버가 한가할 때 백그라운드로 처리(server/enricher.py, 로컬 모델 전용)
+    visual_auto_enrich: bool = os.getenv("VISUAL_AUTO_ENRICH", "1") not in ("0", "false", "False")
+    visual_auto_idle: float = float(os.getenv("VISUAL_AUTO_IDLE", "60"))   # 마지막 질문 뒤 이만큼(초) 조용하면 시작
     # 표·그림 근거 청크(scripts/enrich_visuals.py)를 처리한 논문 기록
     visual_done_path: str = os.getenv("VISUAL_DONE_PATH", "./storage/visual_done.json")
     # 관심 분야 알림: 주제 목록·본 논문 기록 / 소식지 폴더 (scripts/watch_papers.py)
@@ -191,6 +207,14 @@ class Settings:
     # --- 실제 사용 질문 기록(server/querylog.py) — 질문·답변·근거·검증과 👍/👎 피드백을 로컬 SQLite 에 ---
     query_log: bool = os.getenv("QUERY_LOG", "1") not in ("0", "false", "False")
     query_log_path: str = os.getenv("QUERY_LOG_PATH", "./storage/query_log.db")
+
+    # 대화 저장(server/conversations.py) — 화면의 대화를 로컬 SQLite 에도 남겨 다른 브라우저에서 이어 보기
+    conversations: bool = os.getenv("CONVERSATIONS", "1") not in ("0", "false", "False")
+    conversations_path: str = os.getenv("CONVERSATIONS_PATH", "./storage/conversations.db")
+
+    # 사람 판정 기준 세트(eval/human_set.py)와 판정 결과(챗봇 '사람 판정' 화면) — 근거 원문이 들어 있어 storage/ 에
+    human_set_path: str = os.getenv("HUMAN_SET_PATH", "./storage/human_set.jsonl")
+    human_labels_path: str = os.getenv("HUMAN_LABELS_PATH", "./storage/human_labels.json")
 
     # --- 품질 하드닝 ---
     enable_llm_cache: bool = True          # 동일 프롬프트 응답 캐싱(SQLite) → 비용·속도 절감

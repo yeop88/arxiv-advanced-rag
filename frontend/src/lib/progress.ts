@@ -24,7 +24,13 @@ export function describeEvent(event: string, info: any): ProgressUpdate | null {
     case "ready":
       return { stage: "준비 완료", lines: [{ text: `✓ 모델·DB·LLM 준비 완료 (${sec(info.waited)} 기다림)` }] };
     case "queued":
-      return { stage: "앞선 작업이 끝나길 기다리는 중", lines: [] };
+      return {
+        stage:
+          info.background === "enrich"
+            ? "📊 백그라운드 표·그림 처리 한 쪽을 마치는 중 — 끝나면 바로 답합니다"
+            : "앞선 작업이 끝나길 기다리는 중",
+        lines: [],
+      };
     case "contextualize_start":
       return { stage: "0/4 · 대화 맥락 반영 중", lines: [] };
     case "contextualize_done":
@@ -64,6 +70,10 @@ export function describeEvent(event: string, info: any): ProgressUpdate | null {
     }
     case "fetch_queries":
       return { lines: [{ text: `· arXiv 검색어: ${(info.queries ?? []).join(" / ")}`, sub: true }] };
+    case "fetch_title_guess":
+      return {
+        lines: [{ text: `· ${info.more ? "원 논문 제목 후보 더" : "원 논문 제목 추정"}: ${info.title ?? ""}`, sub: true }],
+      };
     case "fetch_warn":
       return { lines: [{ text: `⚠️ ${info.message ?? ""}`, sub: true }] };
     case "fetch_candidates": {

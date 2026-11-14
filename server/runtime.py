@@ -35,6 +35,10 @@ class Runtime:
         self._status_lock = threading.Lock()
         self.loader = None
         self.lock = threading.Lock()   # LLM 을 쓰는 작업(질문·비교표·문헌조사·알림)은 한 번에 하나
+        self.last_active = time.monotonic()   # 마지막 사용자 작업 시각 — 백그라운드 처리는 한동안 조용할 때만
+        self.waiting = 0                      # 잠금을 기다리는 사용자 작업 수 — 있으면 백그라운드가 양보
+        self.enricher = None                  # 표·그림·수식 백그라운드 처리(server/enricher.py, app 이 붙임)
+        self.background = None                # 지금 잠금을 잡은 백그라운드 작업 이름(질문이 기다리는 이유로 보여 줌)
 
     def start(self) -> None:
         if self.loader is None:
@@ -63,6 +67,7 @@ class Runtime:
                 "seconds": round(ld.since_start(), 1) if ld is not None else 0.0,
             },
             "llm": {"state": llm_state, "desc": llm_desc},
+            "enrich": self.enricher.status() if self.enricher is not None else None,
         }
 
     # --- 준비 대기 ---
@@ -99,10 +104,15 @@ class Runtime:
     @contextmanager
     def session(self, emit: Emit, overrides: dict | None = None, poll: float = 0.5):
         """LLM 작업 잠금을 잡고(다른 작업 중이면 'queued' 알림을 보내며 기다림) 설정을 잠시 바꾼다."""
+        self.last_active = time.monotonic()
         if not self.lock.acquire(blocking=False):
-            emit("queued")
-            while not self.lock.acquire(timeout=poll):
-                emit("queued")   # 화면이 닫히면 emit 이 Cancelled 를 던져 대기를 멈춘다
+            self.waiting += 1
+            try:
+                emit("queued", background=self.background)
+                while not self.lock.acquire(timeout=poll):
+                    emit("queued", background=self.background)   # 화면이 닫히면 emit 이 Cancelled 를 던져 대기를 멈춘다
+            finally:
+                self.waiting -= 1
         saved = {}
         try:
             for k, v in (overrides or {}).items():
@@ -116,4 +126,5 @@ class Runtime:
         finally:
             for k, v in saved.items():
                 setattr(settings, k, v)
+            self.last_active = time.monotonic()
             self.lock.release()

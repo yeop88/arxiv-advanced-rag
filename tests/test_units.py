@@ -666,6 +666,21 @@ def test_rerank_title_prefix() -> None:
     print("  test_rerank_title_prefix ✅")
 
 
+def test_followup_helpers() -> None:
+    """보충 검색: 여러 대상 중 근거에 없는 이름 찾기, 그 이름에 맞춘 검색어(다른 이름은 지움)."""
+    from rag.core.schemas import RetrievedChunk
+    from rag.stages.stage2_rerank import followup_query, missing_names
+
+    q = "ColBERT와 DPR은 정확도-지연 트레이드오프가 어떻게 다른가요?"
+    ev = [RetrievedChunk(content="late interaction ...", title="ColBERT: Efficient and Effective Passage Search")]
+    assert missing_names(q, ev) == ["DPR"]
+    assert missing_names(q, ev + [RetrievedChunk(content="DPR uses dual encoders. DPR is trained ...", title="x")]) == []
+    assert missing_names("ColBERT는 어떻게 동작하나요?", []) == [], "대상이 하나면 보충하지 않음"
+    fq = followup_query(q, "DPR")
+    assert "DPR" in fq and "ColBERT" not in fq
+    print("  test_followup_helpers ✅")
+
+
 def test_citation_check() -> None:
     """4b 문장 단위 인용 확인: 문장 분리·인용 번호 해석·문장 상태(가짜 점수기)."""
     from rag.core.schemas import RetrievedChunk
@@ -692,7 +707,7 @@ def test_citation_check() -> None:
         keys = {"DPR": "DPR", "ColBERT": "ColBERT", "BM25": "BM25"}
         return [0.9 if any(k in q and v in d for k, v in keys.items()) else 0.01 for q, d in pairs]
 
-    rep = cc.check(answer, chunks, scorer=scorer, threshold=0.05)
+    rep = cc.check(answer, chunks, scorer=scorer, threshold=0.05, nli=False)
     status = {s.text.split()[0]: s.status for s in rep.sentences}
     assert status == {"DPR": "supported", "ColBERT": "miscited", "BM25": "supported",
                       "두": "uncited", "없는": "bad_ref"}, status
@@ -702,7 +717,7 @@ def test_citation_check() -> None:
     assert summ["claims"] == 5 and summ["cited"] == 4 and summ["supported"] == 2 and summ["precision"] == 0.5, summ
     j = rep.to_json()
     assert len(j["flagged"]) == 3 and j["threshold"] == 0.05
-    assert cc.check("", chunks, scorer=scorer).summary()["claims"] == 0
+    assert cc.check("", chunks, scorer=scorer, nli=False).summary()["claims"] == 0
 
     # 숫자 대조: 근거에 없는 숫자, 다른 근거에 있는 숫자, 표기 차이(%·쉼표·million/만), 무시할 숫자
     assert cc.answer_numbers("Top-20 정확도 78.40%, GPT-4, 2020년, 3개, 1,024 토큰, 100만 시간, $x_{10}$") == \
@@ -715,7 +730,7 @@ def test_citation_check() -> None:
                RetrievedChunk(content="FlashAttention trains GPT-2 in 2.7 days, 3.5x faster")]
     ans = ("DPR 의 상위 20개 정확도는 78.4%입니다 [1]. BM25 는 68.1%입니다 [1]. "
            "학습은 2.7일 걸리고 3.5배 빠릅니다 [1]. 질문에 나온 상위 20개는 문제 삼지 않습니다 [2].")
-    rep = cc.check(ans, tchunks, scorer=lambda pairs: [0.9] * len(pairs), threshold=0.05, question="상위 20개 정확도는?")
+    rep = cc.check(ans, tchunks, scorer=lambda pairs: [0.9] * len(pairs), threshold=0.05, question="상위 20개 정확도는?", nli=False)
     miss = {s.text.split()[0]: (s.numbers_missing, s.numbers_found_in) for s in rep.sentences}
     assert miss["DPR"] == ([], []) and miss["질문에"] == ([], []), miss
     assert miss["BM25"] == (["68.1"], []), "근거에 없는 숫자"
@@ -723,6 +738,26 @@ def test_citation_check() -> None:
     s = rep.summary()
     assert s["numeric"] == 3 and s["number_mismatch"] == 2 and s["supported"] == 4, s
     assert len(rep.to_json()["flagged"]) == 2, "점수는 맞아도 숫자가 틀리면 확인 목록에"
+
+    # 표 행: 머리글·구분선 빼고 데이터 행의 숫자만 대조(주장 문장 수에는 안 셈), 인용이 없으면 모든 근거와
+    table_ans = "\n".join(["| 모델 | Top-20 |", "|---|---:|", "| DPR | 78.4 [1] |", "| BM25 | 61.0 [1] |",
+                           "| GPT-2 학습 | 2.7일 |", "", "DPR 이 더 높습니다 [1]."])
+    assert cc.table_rows(table_ans) == ["DPR | 78.4 [1]", "BM25 | 61.0 [1]", "GPT-2 학습 | 2.7일"]
+    trep = cc.check(table_ans, tchunks, scorer=lambda pairs: [0.9] * len(pairs), threshold=0.05, nli=False)
+    rows = {r.text.split()[0]: r.numbers_missing for r in trep.table_rows}
+    assert rows == {"DPR": [], "BM25": ["61"], "GPT-2": []}, rows
+    ts = trep.summary()
+    assert ts["claims"] == 1 and ts["table_rows"] == 3 and ts["number_mismatch"] == 1, ts
+    assert [f["status"] for f in trep.to_json()["flagged"]] == ["table_row"]
+
+    # 함의(NLI): 리랭커가 뒷받침으로 본 문장 중 인용한 근거 모두와 모순인 것만 contradicted
+    def fake_nli(pairs):   # 문장에 '낮' 이 있으면 모순
+        return [0.1 if "낮" in h else 0.9 for _, h in pairs], [0.95 if "낮" in h else 0.01 for _, h in pairs]
+
+    nrep = cc.check("DPR 정확도는 BM25 보다 높습니다 [1]. DPR 정확도는 BM25 보다 낮습니다 [1].", tchunks,
+                    scorer=lambda pairs: [0.9] * len(pairs), threshold=0.05, nli=fake_nli)
+    assert [s.status for s in nrep.sentences] == ["supported", "contradicted"]
+    assert nrep.sentences[1].contradiction == 0.95 and nrep.summary()["contradicted"] == 1
     print("  test_citation_check ✅")
 
 
@@ -748,6 +783,7 @@ def main() -> None:
     test_visual_retrieval()
     test_local_reasoning_stream()
     test_rerank_title_prefix()
+    test_followup_helpers()
     test_citation_check()
     print("모든 단위 테스트 통과 ✅")
 

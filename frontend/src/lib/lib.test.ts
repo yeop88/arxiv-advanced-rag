@@ -89,6 +89,14 @@ describe("sse", () => {
 });
 
 describe("progress", () => {
+  it("기다리는 이유: 백그라운드 표·그림 처리면 그렇게 알린다", () => {
+    expect(describeEvent("queued", { background: "enrich" })?.stage).toContain("백그라운드 표·그림");
+    expect(describeEvent("queued", {})?.stage).toBe("앞선 작업이 끝나길 기다리는 중");
+  });
+  it("인용 확인 결과 한 줄", () => {
+    const u = describeEvent("cite_check_done", { summary: { claims: 5, supported: 4 }, sec: 0.1 });
+    expect(u?.lines[0].text).toContain("주장 5문장 중 4문장");
+  });
   it("단계 알림을 로그 문장과 단계 이름으로", () => {
     const u = describeEvent("retrieve_done", { n_candidates: 22, papers: ["A", "B"], sec: 0.4 });
     expect(u?.lines[0].text).toContain("후보 22개 중 근거 2개");

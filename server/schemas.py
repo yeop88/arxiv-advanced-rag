@@ -41,6 +41,19 @@ class FeedbackRequest(BaseModel):
     note: str | None = Field(default=None, max_length=1000)
 
 
+class LabelRequest(BaseModel):
+    """사람 판정: 문장 번호(문자열) → supported/unsupported/miscited, 답변 전체 correct/partial/wrong."""
+    sentences: dict[str, Literal["supported", "unsupported", "miscited"]] = Field(default_factory=dict)
+    overall: Literal["correct", "partial", "wrong"] | None = None
+    note: str | None = Field(default=None, max_length=2000)
+
+
+class ConversationPut(BaseModel):
+    """대화 전체(화면의 메시지 목록 그대로). id 는 주소에서."""
+    title: str | None = Field(default=None, max_length=200)
+    messages: list[dict] = Field(default_factory=list, max_length=2000)
+
+
 class CompareRequest(BaseModel):
     sources: list[str] = Field(min_length=2)
 
@@ -86,8 +99,11 @@ def result_json(r: PipelineResult) -> dict:
 
 
 def table_json(t) -> dict:
+    from rag.stages.citation_check import check_table_numbers
+
     return {
         "markdown": t.to_markdown(marks=True),
+        "number_check": check_table_numbers(t.to_markdown(), t.chunks),
         "verification": verification_json(t.verification),
         "cells_filled": t.cells_filled, "cells_total": t.cells_total,
         "chunks": [{"title": c.title, "section": c.section, "source": c.source} for c in t.chunks],

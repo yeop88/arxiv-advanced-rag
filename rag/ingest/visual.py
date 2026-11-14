@@ -157,8 +157,12 @@ def _ask(png: bytes, labels: list[str]) -> str:
     return r.choices[0].message.content or ""
 
 
-def extract(pdf_bytes: bytes, progress=None, kinds: tuple[str, ...] | None = None) -> list[VisualItem]:
-    """PDF → 표·그림·수식 항목(검사를 통과한 것)."""
+def extract(pdf_bytes: bytes, progress=None, kinds: tuple[str, ...] | None = None, guard=None) -> list[VisualItem]:
+    """PDF → 표·그림·수식 항목(검사를 통과한 것). guard: 페이지마다 모델 호출을 감싸는 context manager 팩토리
+    (서버의 백그라운드 처리는 LLM 작업 잠금 — 질문이 오면 한 페이지만 기다리게)."""
+    from contextlib import nullcontext
+
+    guard = guard or nullcontext
     import pdfplumber
 
     if settings.llm_provider != "local":
@@ -173,7 +177,9 @@ def extract(pdf_bytes: bytes, progress=None, kinds: tuple[str, ...] | None = Non
             buf = io.BytesIO()
             dpi = EQ_RESOLUTION if any(_kind_of(lb) == "equation" for lb in labels) else RESOLUTION
             pdf.pages[no - 1].to_image(resolution=dpi).original.save(buf, format="PNG")
-            for it in parse(_ask(buf.getvalue(), labels), no):
+            with guard():
+                raw = _ask(buf.getvalue(), labels)
+            for it in parse(raw, no):
                 if it.label not in labels:   # 이 페이지에 없는 항목(지어낸 것)과 요청하지 않은 종류는 버린다
                     continue
                 if it.kind == "table":

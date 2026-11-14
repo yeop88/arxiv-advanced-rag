@@ -162,11 +162,48 @@ def rule_markers(row) -> bool:
         af._NO_EVIDENCE_MARKERS = orig
 
 
-RULES = {"현재": rule_current, "문장 단위": rule_sentence, "거절 표현 확장": rule_markers}
+def _with_threshold(t: float):
+    def rule(row) -> bool:
+        from config import settings
+
+        keep = settings.auto_fetch_threshold
+        settings.auto_fetch_threshold = t
+        try:
+            return rule_current(row)
+        finally:
+            settings.auto_fetch_threshold = keep
+    return rule
 
 
-def judge() -> None:
+RULES = {"현재": rule_current, "문장 단위": rule_sentence, "거절 표현 확장": rule_markers,
+         "기준 0.15": _with_threshold(0.15), "기준 0.3": _with_threshold(0.3)}
+
+
+def rescore(rows: list[dict]) -> None:
+    """기록된 근거를 지금의 리랭커 입력(본문 앞 논문 제목, §5.42)으로 다시 채점한다(LLM 없음).
+    자동 수집 논문 가중치(0.7)는 기록에 출처 구분이 없어 적용하지 않는다."""
+    from rag.core.llm import get_reranker
+    from rag.core.schemas import RetrievedChunk
+    from rag.stages.stage2_rerank import rerank_input
+
+    rr = get_reranker()
+    for r in rows:
+        ev = r["evidence"]
+        if not ev:
+            continue
+        q = r.get("standalone") or r["question"]
+        scores = rr.predict([(q, rerank_input(RetrievedChunk(content=e["content"] or "", title=e["title"] or "")))
+                             for e in ev])
+        for e, s in zip(ev, scores):
+            e["score"] = float(s)
+        r["top_score"] = max(e["score"] for e in ev)
+
+
+def judge(do_rescore: bool = False) -> None:
     rows = [json.loads(l) for l in OUT.read_text(encoding="utf-8").splitlines() if l.strip()]
+    if do_rescore:
+        rescore(rows)
+        print("(지금의 리랭커 입력으로 다시 채점한 점수)")
     need = [r for r in rows if r["should_fetch"]]
     no = [r for r in rows if not r["should_fetch"]]
     in_corpus = [r for r in no if r["kind"] != "unrelated"]
@@ -192,11 +229,12 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--record", action="store_true")
     ap.add_argument("--judge", action="store_true")
+    ap.add_argument("--rescore", action="store_true", help="판정 전 근거를 지금의 리랭커 입력(제목 포함)으로 다시 채점")
     args = ap.parse_args()
     if args.record:
         record()
     if args.judge or not args.record:
-        judge()
+        judge(args.rescore)
 
 
 if __name__ == "__main__":

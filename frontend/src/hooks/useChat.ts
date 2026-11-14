@@ -1,8 +1,9 @@
-// 대화 상태: 질문 보내기(SSE) → 진행 로그·답변 토큰·결과를 메시지에 반영. 중지·초기화·브라우저에 기억.
+// 대화 상태: 질문 보내기(SSE) → 진행 로그·답변 토큰·결과를 메시지에 반영. 중지·새 대화·대화 목록.
+// 대화는 서버(storage/conversations.db)에 저장하고, 브라우저에도 지금 대화를 기억한다(서버가 꺼져 있어도 새로고침 유지).
 import { useCallback, useEffect, useRef, useState } from "react";
 import { postSSE } from "../api/sse";
 import { api } from "../api/client";
-import type { ChatOptions, ChatResult, Rating } from "../api/types";
+import type { ChatOptions, ChatResult, ConversationInfo, Rating } from "../api/types";
 import { describeEvent, type LogLine } from "../lib/progress";
 import { load, save } from "../lib/storage";
 
@@ -29,7 +30,9 @@ export interface ChatMessage {
 export type RateHandler = (id: string, rating: Rating, note?: string) => Promise<void>;
 
 const STORE_KEY = "arxiv-rag.messages.v1";
+const CONV_KEY = "arxiv-rag.conversation.v1"; // 지금 대화 id
 const MAX_STORED = 60;
+const SAVE_DELAY = 800; // 답이 끝나고 이만큼 뒤 서버에 저장(연속 변경은 한 번에)
 const newId = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
 
 export const isActive = (m: ChatMessage) => m.phase === "working" || m.phase === "writing" || m.phase === "checking";
@@ -39,14 +42,52 @@ export function useChat() {
     // 새로고침 전에 진행 중이던 답변은 중단된 것으로 표시
     load<ChatMessage[]>(STORE_KEY, []).map((m) => (isActive(m) ? { ...m, phase: "stopped" } : m)),
   );
+  const [convId, setConvId] = useState<string>(() => load<string>(CONV_KEY, "") || newId());
+  const [conversations, setConversations] = useState<ConversationInfo[]>([]);
+  const [serverStore, setServerStore] = useState(false);
   const abort = useRef<AbortController | null>(null);
   const latest = useRef(messages); // rate 가 토큰마다 바뀌지 않게(지난 메시지 memo 유지)
   latest.current = messages;
   const running = messages.some(isActive);
 
+  const refreshList = useCallback(() => {
+    api
+      .conversations()
+      .then((r) => {
+        setServerStore(r.enabled);
+        setConversations(r.items);
+      })
+      .catch(() => setServerStore(false));
+  }, []);
+
+  // 처음: 서버에 지금 대화가 있으면 그것을(다른 브라우저에서 이어 쓴 내용), 없으면 브라우저 것을 서버에 올린다
   useEffect(() => {
-    if (!running) save(STORE_KEY, messages.slice(-MAX_STORED).map(({ reasoning: _r, ...m }) => m));
-  }, [messages, running]);
+    save(CONV_KEY, convId);
+    api
+      .conversations()
+      .then(async (r) => {
+        setServerStore(r.enabled);
+        setConversations(r.items);
+        if (!r.items.some((c) => c.id === convId)) return; // 서버에 없는 새 대화 — 브라우저 것을 곧 저장
+        const c = await api.conversation<ChatMessage>(convId);
+        setMessages(c.messages.map((m) => (isActive(m) ? { ...m, phase: "stopped" } : m)));
+      })
+      .catch(() => setServerStore(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (running) return;
+    const stored = messages.slice(-MAX_STORED).map(({ reasoning: _r, ...m }) => m);
+    save(STORE_KEY, stored);
+    const t = window.setTimeout(() => {
+      api
+        .saveConversation(convId, stored)
+        .then(refreshList)
+        .catch(() => undefined); // 서버 저장이 꺼졌거나 연결 끊김 — 브라우저 저장만
+    }, SAVE_DELAY);
+    return () => window.clearTimeout(t);
+  }, [messages, running, convId, refreshList]);
 
   const update = useCallback((id: string, fn: (m: ChatMessage) => ChatMessage) => {
     setMessages((ms) => ms.map((m) => (m.id === id ? fn(m) : m)));
@@ -145,11 +186,39 @@ export function useChat() {
   );
 
   const stop = useCallback(() => abort.current?.abort(), []);
-  const clear = useCallback(() => {
+
+  const switchTo = useCallback((id: string, ms: ChatMessage[]) => {
     abort.current?.abort();
-    setMessages([]);
-    save(STORE_KEY, []);
+    setConvId(id);
+    save(CONV_KEY, id);
+    setMessages(ms);
   }, []);
 
-  return { messages, running, send, stop, clear, rate };
+  /** 새 대화(지금 대화는 서버에 남는다) */
+  const newChat = useCallback(() => switchTo(newId(), []), [switchTo]);
+
+  const open = useCallback(
+    async (id: string) => {
+      if (id === convId) return;
+      const c = await api.conversation<ChatMessage>(id);
+      switchTo(id, c.messages.map((m) => (isActive(m) ? { ...m, phase: "stopped" } : m)));
+    },
+    [convId, switchTo],
+  );
+
+  const remove = useCallback(
+    async (id: string) => {
+      await api.deleteConversation(id).catch(() => undefined);
+      if (id === convId) switchTo(newId(), []);
+      refreshList();
+    },
+    [convId, switchTo, refreshList],
+  );
+
+  /** 지금 대화 지우기 */
+  const clear = useCallback(() => {
+    void remove(convId);
+  }, [remove, convId]);
+
+  return { messages, running, send, stop, clear, rate, convId, conversations, serverStore, newChat, open, remove };
 }

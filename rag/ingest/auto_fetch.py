@@ -274,6 +274,29 @@ def guess_original_title(question: str) -> str | None:
     return title
 
 
+def guess_original_titles(question: str, n: int = 3) -> list[str]:
+    """경량 LLM 이 원 논문 제목 후보를 최대 n개 추정(가장 그럴듯한 것부터, 모르면 빈 목록). §5.43"""
+    from langchain_core.output_parsers import StrOutputParser
+    from langchain_core.prompts import ChatPromptTemplate
+
+    from rag.core import prompts
+    from rag.core.llm import get_llm
+
+    try:
+        chain = ChatPromptTemplate.from_template(prompts.ORIGINAL_TITLES_PROMPT) | get_llm(light=True) | StrOutputParser()
+        lines = chain.invoke({"question": question}).strip().splitlines()
+    except Exception:  # noqa: BLE001
+        return []
+    out: list[str] = []
+    for line in lines:
+        t = re.sub(r"^\s*(?:[-*•]|\d+[.)])\s*", "", line).strip().strip("\"'*").strip()
+        if len(t) < 8 or t.upper().startswith("NONE"):
+            continue
+        if not any(title_overlap(t, o) >= 0.9 for o in out):
+            out.append(t)
+    return out[:n]
+
+
 def _title_words(t: str) -> set[str]:
     return {w for w in re.findall(r"[a-z0-9]+", (t or "").lower()) if len(w) > 2}
 
@@ -397,8 +420,18 @@ def find_candidates(question: str, existing: set[str], emit: Emit | None = None,
     guessed = guess_original_title(question) if title_guess else None
     if guessed:
         emit("fetch_title_guess", title=guessed)
-        for p in title_candidates(guessed, warn=warn):
+        found = title_candidates(guessed, warn=warn)
+        for p in found:
             add(p)
+        # 첫 추정으로 거의 같은 제목을 못 찾았으면 제목 후보 여러 개로 보충(통칭과 실제 제목이 다른 논문, §5.43)
+        if settings.auto_fetch_title_candidates and not any(p.title_match >= _TITLE_EXACT for p in found):
+            more = [t for t in guess_original_titles(question, settings.auto_fetch_title_candidates)
+                    if title_overlap(t, guessed) < _TITLE_EXACT]
+            if more:
+                emit("fetch_title_guess", title=" / ".join(more), more=True)
+            for t in more:
+                for p in title_candidates(t, warn=warn):
+                    add(p)
     if common_refs and evidence_sources:
         try:
             for p in common_ref_candidates(evidence_sources):

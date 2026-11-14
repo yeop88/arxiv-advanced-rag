@@ -16,6 +16,7 @@ from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
 from config import settings
+from server.conversations import ConversationStore
 from server.querylog import QueryLog
 from server.routes import ROUTERS
 from server.runtime import Runtime
@@ -30,20 +31,31 @@ API 문서는 <a href="/docs">/docs</a> 에 있습니다.</p></body>"""
 
 
 def create_app(runtime: Runtime | None = None, warmup: bool = True, frontend_dist: Path | None = FRONTEND_DIST,
-               query_log: QueryLog | None = None) -> FastAPI:
+               query_log: QueryLog | None = None, conversations: ConversationStore | None = None) -> FastAPI:
     rt = runtime or Runtime()
+    if runtime is None and settings.visual_auto_enrich and settings.llm_provider == "local":
+        from server.enricher import Enricher
+
+        rt.enricher = Enricher(rt)
     if query_log is None and settings.query_log:
         query_log = QueryLog(settings.query_log_path)
+    if conversations is None and settings.conversations:
+        conversations = ConversationStore(settings.conversations_path)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         if warmup:
             rt.start()
+            if rt.enricher is not None:
+                rt.enricher.start()   # 준비되면 밀린 자동 수집 논문부터, 사용자가 조용할 때만
         yield
+        if rt.enricher is not None:
+            rt.enricher.stop()
 
     app = FastAPI(title="arXiv Advanced RAG", lifespan=lifespan)
     app.state.runtime = rt
     app.state.query_log = query_log   # None 이면 기록하지 않음
+    app.state.conversations = conversations
     for r in ROUTERS:
         app.include_router(r)
 

@@ -12,6 +12,8 @@ rag/stages/citation_check.py — 4b단계: 문장 단위 인용 확인 (LLM 없�
   weak       인용했지만 어느 근거도 기준 미만 → 근거가 약함
   uncited    인용 번호가 없는 주장 문장
   bad_ref    없는 근거 번호를 인용
+  contradicted 리랭커는 뒷받침으로 봤지만 함의(NLI) 판정이 인용한 근거 모두와 모순으로 봄(같은 주제, 다른 말) §5.44
+  table_row  표의 데이터 행(문장이 아니라 점수는 매기지 않고 숫자만 대조, 주장 문장 수에는 넣지 않음)
 숫자 대조(상태와 별도): 문장의 숫자(소수·두 자리 이상, 연도 제외)가 인용한 근거 원문에 없으면 numbers_missing 에 담는다.
 리랭커는 '78.4' 와 '68.4' 를 거의 같은 점수로 보므로, 표 숫자를 잘못 옮기는 환각은 이 규칙이 잡는다.
 """
@@ -115,17 +117,20 @@ class SentenceCheck:
     best_score: float | None = None
     numbers_missing: list[str] = field(default_factory=list)   # 인용한 근거에 없는 숫자
     numbers_found_in: list[int] = field(default_factory=list)  # 그 숫자가 모두 있는 다른 근거 번호
+    entail: float | None = None        # 인용한 근거 중 최고 함의 확률(NLI)
+    contradiction: float | None = None  # 인용한 근거 중 최저 모순 확률(NLI) — 모두와 모순이어야 높다
 
     @property
     def flagged(self) -> bool:
-        return self.status != "supported" or bool(self.numbers_missing)
+        return self.status not in ("supported", "table_row") or bool(self.numbers_missing)
 
 
 @dataclass
 class CitationReport:
     sentences: list[SentenceCheck] = field(default_factory=list)
     threshold: float = 0.0
-    numeric: int = 0                # 숫자를 대조한 문장 수
+    numeric: int = 0                # 숫자를 대조한 문장·표 행 수
+    table_rows: list[SentenceCheck] = field(default_factory=list)   # 답변 속 표의 데이터 행(숫자만 대조)
 
     def summary(self) -> dict:
         n = len(self.sentences)
@@ -140,17 +145,19 @@ class CitationReport:
             "weak": count("weak"),
             "uncited": count("uncited"),
             "bad_ref": count("bad_ref"),
+            "contradicted": count("contradicted"),
             # 인용 정확도: 인용 단 문장 중 인용한 근거가 뒷받침하는 비율
             "precision": round(ok / len(cited), 3) if cited else None,
             # 인용 재현율: 주장 문장 중 뒷받침되는 인용이 달린 비율
             "recall": round(ok / n, 3) if n else None,
-            "numeric": self.numeric,        # 숫자를 대조한 문장 수
-            "number_mismatch": sum(bool(s.numbers_missing) for s in self.sentences),
+            "numeric": self.numeric,        # 숫자를 대조한 문장·표 행 수
+            "number_mismatch": sum(bool(s.numbers_missing) for s in self.sentences + self.table_rows),
+            "table_rows": len(self.table_rows),
         }
 
     def to_json(self) -> dict:
         return {"threshold": self.threshold, "summary": self.summary(),
-                "flagged": [asdict(s) for s in self.sentences if s.flagged]}
+                "flagged": [asdict(s) for s in self.sentences + self.table_rows if s.flagged]}
 
 
 def parse_cites(text: str) -> list[int]:
@@ -195,6 +202,31 @@ def split_sentences(answer: str) -> list[str]:
     return merged
 
 
+_TABLE_SEP = re.compile(r"^\|?[\s:|\-]+\|?$")
+
+
+def table_rows(answer: str) -> list[str]:
+    """답변 속 마크다운 표의 데이터 행('셀 | 셀' 글). 머리글 행·구분선·코드 블록 안은 뺀다."""
+    out: list[str] = []
+    fence, in_table = False, False
+    for line in (answer or "").splitlines():
+        s = line.strip()
+        if s.startswith("```"):
+            fence = not fence
+            continue
+        if fence or not s.startswith("|"):
+            in_table = False
+            continue
+        if _TABLE_SEP.match(s):
+            continue
+        if not in_table:          # 표의 첫 행 = 머리글
+            in_table = True
+            continue
+        cells = [c.strip() for c in s.strip("|").split("|")]
+        out.append(" | ".join(c for c in cells if c))
+    return out
+
+
 def claim_text(sentence: str) -> str:
     """인용 번호를 뺀 주장 본문."""
     t = _CITE.sub("", sentence)
@@ -206,6 +238,33 @@ def claim_text(sentence: str) -> str:
 def _is_claim(sentence: str) -> bool:
     c = claim_text(sentence)
     return len(c) >= MIN_CLAIM_CHARS and not c.endswith(":") and not _NOT_CLAIM.search(c)
+
+
+_NLI_MODEL = "MoritzLaurer/mDeBERTa-v3-base-xnli-multilingual-nli-2mil7"
+_nli = None
+
+
+def get_nli():
+    """다국어 함의(NLI) 판정 모델(한국어 문장 ↔ 영어 근거). 처음 쓸 때 한 번만 올린다(약 280M, GPU fp16)."""
+    global _nli
+    if _nli is None:
+        import torch
+        from sentence_transformers import CrossEncoder
+
+        device = settings.resolve_device(settings.rerank_device)
+        kw = {"model_kwargs": {"torch_dtype": torch.float16}} if device.startswith("cuda") else {}
+        _nli = CrossEncoder(settings.citation_nli_model or _NLI_MODEL, max_length=512, device=device, **kw)
+    return _nli
+
+
+def nli_scores(pairs: list[tuple[str, str]]) -> tuple[list[float], list[float]]:
+    """(근거, 문장) 쌍마다 (함의 확률, 모순 확률). 라벨 순서는 모델 설정에서 읽는다."""
+    if not pairs:
+        return [], []
+    m = get_nli()
+    labels = {v.lower(): k for k, v in m.model.config.id2label.items()}
+    probs = m.predict(pairs, apply_softmax=True, batch_size=16)
+    return ([float(p[labels["entailment"]]) for p in probs], [float(p[labels["contradiction"]]) for p in probs])
 
 
 def _rerank_scorer(pairs: list[tuple[str, str]]) -> Sequence[float]:
@@ -227,20 +286,43 @@ def check_numbers(sentence: str, cites: list[int], chunk_nums: list[set[str]],
     return missing, elsewhere, True
 
 
+def _check_rows(rows: list[str], chunk_nums: list[set[str]], q_nums: set[str]) -> list[SentenceCheck]:
+    out = []
+    for r in rows:   # 표 행: 숫자만(인용 번호가 없으면 모든 근거와)
+        cites = parse_cites(r)
+        missing, elsewhere, numeric = check_numbers(r, cites, chunk_nums, q_nums)
+        if numeric:
+            out.append(SentenceCheck(text=claim_text(r), cites=cites, status="table_row",
+                                     numbers_missing=missing, numbers_found_in=elsewhere))
+    return out
+
+
+def check_table_numbers(markdown: str, chunks: list[RetrievedChunk]) -> dict:
+    """마크다운 표(논문 비교표 등)의 숫자가 칸에 단 근거 번호의 원문에 있는지(LLM·리랭커 없음)."""
+    rows = _check_rows(table_rows(markdown), [chunk_numbers(c.content) for c in chunks], set())
+    return {"rows": len(rows), "mismatch": [asdict(r) for r in rows if r.numbers_missing]}
+
+
+NLIScorer = Callable[[list[tuple[str, str]]], tuple[list[float], list[float]]]
+
+
 def check(answer: str, chunks: list[RetrievedChunk], scorer: Scorer | None = None,
-          threshold: float | None = None, question: str = "") -> CitationReport:
+          threshold: float | None = None, question: str = "", nli: NLIScorer | bool | None = None) -> CitationReport:
     """답변의 주장 문장마다 인용한 근거가 뒷받침하는지 점수로, 숫자가 근거에 있는지 규칙으로 확인.
     question 의 숫자(예: '상위 20개')는 근거에 없어도 문제 삼지 않는다."""
     thr = settings.citation_support_threshold if threshold is None else threshold
     report = CitationReport(threshold=thr)
     sents = [s for s in split_sentences(answer) if _is_claim(s)]
-    if not sents or not chunks:
+    rows = table_rows(answer)
+    if not (sents or rows) or not chunks:
         return report
     pairs = [(claim_text(s), c.content) for s in sents for c in chunks]
-    flat = [float(x) for x in (scorer or _rerank_scorer)(pairs)]
+    flat = [float(x) for x in (scorer or _rerank_scorer)(pairs)] if pairs else []
     k = len(chunks)
     chunk_nums = [chunk_numbers(c.content) for c in chunks]
     q_nums = set(answer_numbers(question)) | {_norm(*m.groups()) for m in _CHUNK_NUM.finditer(question or "")}
+    report.table_rows = _check_rows(rows, chunk_nums, q_nums)
+    report.numeric += len(report.table_rows)
     for i, s in enumerate(sents):
         row = flat[i * k:(i + 1) * k]
         best = max(range(k), key=row.__getitem__)
@@ -264,4 +346,27 @@ def check(answer: str, chunks: list[RetrievedChunk], scorer: Scorer | None = Non
             support=None if support is None else round(support, 3),
             best=best + 1, best_score=round(row[best], 3),
             numbers_missing=missing, numbers_found_in=elsewhere))
+    _apply_nli(report, sents, chunks, nli)
     return report
+
+
+def _apply_nli(report: CitationReport, sents: list[str], chunks: list[RetrievedChunk], nli) -> None:
+    """리랭커가 '뒷받침'으로 본 문장만 함의 판정: 인용한 근거 모두와 모순 확률이 기준 이상이면 contradicted."""
+    if nli is False or (nli is None and not settings.citation_nli):
+        return
+    fn = nli if callable(nli) else nli_scores
+    k = len(chunks)
+    jobs = [(i, n) for i, sc in enumerate(report.sentences) if sc.status == "supported"
+            for n in sc.cites if 1 <= n <= k]
+    if not jobs:
+        return
+    ent, con = fn([(chunks[n - 1].content, claim_text(sents[i])) for i, n in jobs])
+    by: dict[int, list[tuple[float, float]]] = {}
+    for (i, _), e, c in zip(jobs, ent, con):
+        by.setdefault(i, []).append((e, c))
+    for i, vals in by.items():
+        sc = report.sentences[i]
+        sc.entail = round(max(e for e, _ in vals), 3)
+        sc.contradiction = round(min(c for _, c in vals), 3)
+        if sc.contradiction >= settings.citation_nli_contradiction:
+            sc.status = "contradicted"

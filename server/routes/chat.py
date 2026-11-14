@@ -55,6 +55,10 @@ async def chat(req: ChatRequest, rt: Runtime = Depends(get_runtime), qlog: Query
             raise
         data = result_json(result)
         emit("result", **data, log_id=record(result=data))
+        if rt.enricher is not None:   # 새로 넣은 전문 논문의 표·그림·수식은 한가할 때 처리
+            for a in result.auto_fetched:
+                if a.get("fulltext"):
+                    rt.enricher.enqueue(a["source"])
 
     return sse_job(job)
 
@@ -67,6 +71,16 @@ def feedback(req: FeedbackRequest, qlog: QueryLog | None = Depends(get_query_log
     if not qlog.rate(req.log_id, req.rating, req.note):
         raise HTTPException(404, "해당 기록이 없습니다.")
     return {"ok": True}
+
+
+@router.get("/metrics")
+def metrics(days: int = 14, qlog: QueryLog | None = Depends(get_query_log)) -> dict:
+    """사용 지표(질문 수·피드백·단계별 시간·인용 확인 추세). 질문 기록에서 계산, LLM 없음."""
+    from server.querylog import metrics as compute
+
+    if qlog is None:
+        return {"enabled": False}
+    return {"enabled": True, **compute(qlog.list(limit=2000), days=max(1, min(days, 90)))}
 
 
 @router.get("/logs")

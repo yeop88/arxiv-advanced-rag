@@ -5,6 +5,15 @@
 ## [Unreleased]
 
 ### Added
+- 사람 판정 기준 세트: `eval/human_set.py`(50문항을 실제 파이프라인으로 답해 근거 원문·LLM 검증·문장별 인용 확인과 함께 저장), 챗봇 '🧑‍⚖️ 사람 판정' 탭(문장별 근거 있음/없음/번호 틀림, 답변 전체 판정, 자동 판정은 저장 뒤에만 보임), `eval/human_agreement.py`(일치율·Cohen's κ, 다른 판정기도 `--extra`로)
+- 원 논문 제목 후보 여러 개(`guess_original_titles`, `AUTO_FETCH_TITLE_CANDIDATES=3`): 첫 추정으로 못 찾으면 후보를 더 받아 검색 — 원 논문이 후보에 드는 질문 15 → 20/34, 확인용 9 → 10/12. 측정 `eval/title_candidates_eval.py`, 진행 줄에 추정 제목 표시
+- 함의(NLI) 판정(`CITATION_NLI`, 기본 끔): 리랭커가 뒷받침으로 본 문장 중 인용한 근거 모두와 모순인 것을 '근거와 반대일 수 있음'으로 표시. 측정 `eval/nli_eval.py`(방향 뒤집은 문장 45% 탐지, 맞게 바꿔 쓴 문장 오경보가 많아 사람 판정 뒤 결정)
+- 표 행 숫자 대조: 답변 속 마크다운 표와 논문 비교표의 숫자를 단 근거 원문과 대조
+- 다중 홉 보충 검색(`FOLLOWUP_RETRIEVAL`, 기본 끔 — 294문항에서 효과 없음), 측정 `eval/followup_eval.py`
+- 대화 서버 저장(`server/conversations.py`, `/api/conversations`): 사이드바 대화 목록·새 대화·지난 대화 열기·지우기(`CONVERSATIONS=0`이면 끔)
+- 사용 지표 '📈 지표' 탭(`/api/metrics`): 질문 수·👍/👎·평균 응답 시간·인용 정확도·숫자 불일치·검증 통과·자동 수집·오류, 단계별 평균 시간, 14일 질문 수, 최근 질문
+- 자동 수집 논문의 표·그림·수식 백그라운드 처리(`server/enricher.py`, `VISUAL_AUTO_ENRICH`·`VISUAL_AUTO_IDLE=60`): 마지막 질문 뒤 60초 조용할 때만 한 페이지씩, 사이드바에 진행 표시, 그사이 온 질문은 기다리는 이유를 보여 줌
+- 수집 신호 재판정 `fetch_signal_set.py --rescore`(지금의 리랭커 입력으로 기록된 근거를 다시 채점, LLM 없음)
 - 본문 청크 맥락 2차 실험(`contextual_header_eval.py --round 2`): 리랭커 입력에만 제목을 붙이는 방식·점수 평균·다양성 조정 비교, 다중 홉 recall·자동 수집 신호 비율 측정
 - 본문 청크 맥락 실험 `eval/contextual_header_eval.py`(LLM 없음, 시험용 DB 사본): 검색 입력에만 `제목 · 섹션` 머리말을 붙여 임베딩·BM25·리랭커 단계별로 294문항 비교. MRR +0.025 / recall −0.006(다중 홉 손해)으로 기본 적용은 보류
 - 회귀 검사 자동화: GitHub Actions `.github/workflows/tests.yml`(푸시·PR 마다 단위·서버·청킹 테스트와 화면 테스트·타입 검사·빌드, CPU torch), README 배지
@@ -93,6 +102,8 @@
 - 진행 보고서 (`docs/PROGRESS_REPORT.md`), 작업 지침 (`CLAUDE.md`)
 
 ### Changed
+- 표·그림·수식 처리 코드를 `rag/ingest/enrich.py`로 옮겨 배치 스크립트와 서버가 같이 씀(`visual.extract`에 페이지별 guard)
+- 화면 상단에 탭(대화·지표·사람 판정, 주소 #metrics·#label 로 기억), 사이드바 "대화 초기화" → 대화 목록 + "지금 대화 지우기"
 - 발표 자료 갱신(`docs/presentation/`): 개선 과정을 업데이트 5묶음(검색 품질·자기 확장·연구 도구·실시간 화면·근거 확인)으로 정리하고 묶음마다 대표 코드 전/후와 결과 표, 17장. 달성률 차트 63%, 새 차트 2개(인용 확인 기준 보정·제목 넣는 위치별 효과, 측정 결과 JSON 에서 읽음), 실제 답변 화면 2장
 - 리랭커 입력에 논문 제목을 붙임(`RERANK_TITLE_PREFIX`, 기본 켬 — 저장 글·LLM 근거는 그대로): 294문항 MRR 0.9545 → 0.9700, 다중 홉 recall 0.8955 → 0.9055, recall 0.9711 → 0.9700, 코퍼스 안 질문의 수집 신호 4.1% → 3.4%. 무관한 표·그림이 근거에 드는 문항이 4 → 7 로 늘어 `VISUAL_MIN_SCORE` 0.1 → 0.2(다시 4, 표·그림·수식 질문 적중 그대로)
 - 자동 수집 예산 정리에서 표·그림·수식 청크가 있는 논문은 지우지 않음(청크는 예산에 계속 셈) (`rag/ingest/auto_fetch.py`)

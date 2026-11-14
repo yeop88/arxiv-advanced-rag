@@ -101,3 +101,47 @@ class QueryLog:
             n, up, down, err = db.execute(
                 "SELECT COUNT(*), SUM(rating = 1), SUM(rating = -1), SUM(error IS NOT NULL) FROM queries").fetchone()
         return {"total": n, "up": up or 0, "down": down or 0, "errors": err or 0}
+
+
+STAGES = [("0_contextualize", "문맥화"), ("1_query_transform", "질의 변환"), ("2_retrieve_rerank", "검색·리랭크"),
+          ("2b_auto_fetch", "자동 수집"), ("3_generate", "생성"), ("4_verify", "검증"), ("4b_citation_check", "인용 확인")]
+
+
+def metrics(rows: list[dict], days: int = 14) -> dict:
+    """질문 기록 → 화면 지표(LLM 없음). rows 는 QueryLog.list() 결과(최근 순)."""
+    import datetime as dt
+
+    ok = [r for r in rows if not r.get("error")]
+    n = len(rows)
+
+    def mean(xs):
+        xs = [x for x in xs if x is not None]
+        return round(sum(xs) / len(xs), 3) if xs else None
+
+    total_sec = [sum((r.get("timings") or {}).values()) for r in ok if r.get("timings")]
+    cc = [r["citation_check"]["summary"] for r in ok if r.get("citation_check")]
+    stages = [{"key": k, "label": lab, "mean_sec": mean([(r.get("timings") or {}).get(k) for r in ok]),
+               "runs": sum(k in (r.get("timings") or {}) for r in ok)} for k, lab in STAGES]
+    today = dt.date.today()
+    by_day = {(today - dt.timedelta(days=i)).isoformat(): 0 for i in range(days)}
+    for r in rows:
+        d = dt.date.fromtimestamp(r["ts"]).isoformat()
+        if d in by_day:
+            by_day[d] += 1
+    v = [r["verification"] for r in ok if r.get("verification")]
+    return {
+        "total": n, "errors": n - len(ok),
+        "error_rate": round((n - len(ok)) / n, 3) if n else None,
+        "up": sum(r.get("rating") == 1 for r in rows), "down": sum(r.get("rating") == -1 for r in rows),
+        "mean_total_sec": mean(total_sec),
+        "verify_grounded_rate": round(sum(bool(x.get("grounded")) for x in v) / len(v), 3) if v else None,
+        "citation_precision": mean([s.get("precision") for s in cc]),
+        "number_mismatch_rate": round(sum(s.get("number_mismatch", 0) > 0 for s in cc) / len(cc), 3) if cc else None,
+        "auto_fetch_rate": round(sum(bool(r.get("auto_fetched")) for r in ok) / len(ok), 3) if ok else None,
+        "stages": stages,
+        "by_day": [{"date": d, "n": c} for d, c in sorted(by_day.items())],
+        "recent": [{"id": r["id"], "ts": r["ts"], "question": r["question"][:120], "rating": r.get("rating"),
+                    "error": r.get("error"), "sec": round(sum((r.get("timings") or {}).values()), 1),
+                    "citation": (r.get("citation_check") or {}).get("summary"),
+                    "grounded": (r.get("verification") or {}).get("grounded")} for r in rows[:20]],
+    }

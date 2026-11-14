@@ -100,7 +100,7 @@ def main() -> None:
             if neg:
                 hard.append(max(neg))   # 다른 논문 중 가장 그럴듯한 근거
         rep = cc.check(r["answer"], chunks, scorer=lambda p: _rescore(p, table, sents),
-                       threshold=args.threshold, question=r.get("standalone") or r["question"])
+                       threshold=args.threshold, question=r.get("standalone") or r["question"], nli=False)
         statuses.update(s.status for s in rep.sentences)
         per_answer.append(rep.summary())
         # --- 숫자 대조: 원래 답변의 경보(오경보 후보)와, 숫자 하나를 바꾼 문장을 잡는지 ---

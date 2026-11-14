@@ -49,7 +49,21 @@ export function CompareTablePanel({ sources }: { sources: string[] }) {
       <Markdown text={t.markdown} />
       <p className="muted small">
         {badge} · 채운 칸 {t.cells_filled}/{t.cells_total} · ⚠ 칸은 근거 원문을 확인하세요 · [n]은 아래 근거 번호
+        {t.number_check && t.number_check.rows > 0 && (
+          <>
+            {" · "}
+            {t.number_check.mismatch.length
+              ? `🔢 숫자 불일치 ${t.number_check.mismatch.length}행`
+              : `🔢 숫자 일치 ${t.number_check.rows}행`}
+          </>
+        )}
       </p>
+      {t.number_check?.mismatch.map((r, i) => (
+        <p key={i} className="warn-text small">
+          🔢 "{r.text.slice(0, 80)}" — 숫자 {r.numbers_missing.join(", ")} 이(가) 단 근거에 없음
+          {r.numbers_found_in.length > 0 && ` → [${r.numbers_found_in.join("], [")}]에 있음`}
+        </p>
+      ))}
       <ol className="plain small muted">
         {t.chunks.map((c, i) => (
           <li key={i}>

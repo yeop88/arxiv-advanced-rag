@@ -24,6 +24,7 @@ from fastapi.testclient import TestClient  # noqa: E402
 from config import settings  # noqa: E402
 from rag.core.schemas import PipelineResult, RetrievedChunk, VerificationResult  # noqa: E402
 from server.app import create_app  # noqa: E402
+from server.conversations import ConversationStore  # noqa: E402
 from server.querylog import QueryLog  # noqa: E402
 from server.runtime import Runtime  # noqa: E402
 
@@ -91,7 +92,8 @@ _TMP = tempfile.mkdtemp(prefix="rag-test-")
 def make_client(pipe, qlog: QueryLog | None = None, **loader_kw) -> tuple[TestClient, Runtime]:
     rt = Runtime(loader_factory=lambda: FakeLoader(pipe, **loader_kw), llm_status_fn=lambda: ("ok", "fake"))
     qlog = qlog or QueryLog(Path(_TMP) / f"log-{time.monotonic_ns()}.db")   # 실제 기록 DB 를 건드리지 않게
-    return TestClient(create_app(rt, frontend_dist=None, query_log=qlog)), rt
+    conv = ConversationStore(Path(_TMP) / f"conv-{time.monotonic_ns()}.db")
+    return TestClient(create_app(rt, frontend_dist=None, query_log=qlog, conversations=conv)), rt
 
 
 def read_events(resp) -> list[tuple[str, dict]]:
@@ -200,7 +202,113 @@ def test_query_log_and_feedback() -> None:
     with client, client.stream("POST", "/api/chat", json={"question": "q"}) as r:
         read_events(r)
     assert qlog.stats()["errors"] == 1
+    client, _ = make_client(FakePipeline(), qlog=qlog)
+    with client:
+        m = client.get("/api/metrics").json()
+    assert m["enabled"] and m["total"] == 2 and m["errors"] == 1 and m["down"] == 1
+    assert m["by_day"][-1]["n"] == 2 and len(m["by_day"]) == 14 and m["recent"][0]["error"]
     print("  test_query_log_and_feedback ✅")
+
+
+def test_label_api() -> None:
+    """사람 판정: 문항 목록, 판정 저장(없는 문항·문장 번호는 거절), 다시 읽으면 남아 있음."""
+    keep = (settings.human_set_path, settings.human_labels_path)
+    settings.human_set_path = str(Path(_TMP) / "human_set.jsonl")
+    settings.human_labels_path = str(Path(_TMP) / "human_labels.json")
+    item = {"id": "q1", "kind": "single", "question": "DPR?", "expected_sources": ["2004.04906"], "answer": "A [1]. B [1].",
+            "sources": [{"source": "2004.04906", "title": "DPR", "section": "", "kind": "", "content": "x"}],
+            "llm_verification": {"grounded": True, "faithfulness": 1.0, "unsupported": []},
+            "citation_check": {"threshold": 0.05, "sentences": [{"text": "A", "cites": [1], "status": "supported"},
+                                                                 {"text": "B", "cites": [1], "status": "weak"}]}}
+    Path(settings.human_set_path).write_text(json.dumps(item, ensure_ascii=False) + "\n", encoding="utf-8")
+    try:
+        client, _ = make_client(FakePipeline())
+        with client:
+            st = client.get("/api/label/items").json()
+            assert len(st["items"]) == 1 and st["done"] == 0
+            body = {"sentences": {"0": "supported", "1": "unsupported"}, "overall": "partial", "note": "B 근거 없음"}
+            assert client.post("/api/label/q1", json=body).json() == {"ok": True, "done": 1}
+            assert client.post("/api/label/없음", json=body).status_code == 404
+            assert client.post("/api/label/q1", json={"sentences": {"5": "supported"}}).status_code == 422
+            assert client.post("/api/label/q1", json={"overall": "maybe"}).status_code == 422
+            st = client.get("/api/label/items").json()
+        assert st["labels"]["q1"]["sentences"]["1"] == "unsupported" and st["done"] == 1
+    finally:
+        settings.human_set_path, settings.human_labels_path = keep
+    print("  test_label_api ✅")
+
+
+def test_enricher_waits_for_idle() -> None:
+    """표·그림·수식 백그라운드 처리: 사용자가 조용할 때만 시작, 페이지마다 작업 잠금, 끝나면 청크 추가·BM25 재구성·기록."""
+    from rag.ingest import enrich, visual
+    from rag.stages import stage2_rerank as s2
+    from server.enricher import Enricher
+
+    class VS:
+        def __init__(self):
+            self.added = []
+
+        def add_documents(self, docs):
+            self.added += docs
+
+    pipe = FakePipeline()
+    pipe.vectorstore = VS()
+    rt = Runtime(loader_factory=lambda: FakeLoader(pipe), llm_status_fn=lambda: ("ok", "fake"))
+    rt.start()
+    rt.loader.pipe = pipe
+    seen = {"locked": [], "marked": None, "reset": 0}
+
+    def fake_enrich(src, meta, vs, kinds, progress=None, guard=None, add=None):
+        for i in range(3):
+            with guard():
+                seen["locked"].append(rt.lock.locked())
+                progress("visual_page", i=i + 1, n=3, page=i + 1, labels=["Table 1"])
+        add(["doc"])
+        return [{"label": "Table 1", "kind": "table", "page": 1, "number_match": 1.0}]
+
+    keep = (enrich.enrich, enrich.mark_done, enrich.load_done, visual.default_kinds, s2.reset_bm25)
+    enrich.enrich, visual.default_kinds = fake_enrich, lambda: ("table",)
+    enrich.mark_done = lambda src, kinds, items: seen.__setitem__("marked", (src, kinds, len(items)))
+    enrich.load_done = lambda: {}
+    s2.reset_bm25 = lambda: seen.__setitem__("reset", seen["reset"] + 1)
+    try:
+        en = Enricher(rt, idle=0.4, poll=0.05, scan_on_start=False)
+        rt.last_active = time.monotonic()      # 방금 질문이 끝남
+        en.enqueue("2604.20606", {"source": "2604.20606", "title": "Beyond ZOH"})
+        time.sleep(0.2)
+        assert not seen["locked"], "조용해지기 전에는 시작하지 않음"
+        deadline = time.monotonic() + 5
+        while seen["marked"] is None and time.monotonic() < deadline:
+            time.sleep(0.05)
+        en.stop()
+    finally:
+        enrich.enrich, enrich.mark_done, enrich.load_done, visual.default_kinds, s2.reset_bm25 = keep
+    assert seen["locked"] == [True, True, True], "페이지마다 작업 잠금을 잡음"
+    assert not rt.lock.locked(), "끝나면 잠금을 놓음"
+    assert pipe.vectorstore.added == ["doc"] and seen["reset"] == 1
+    assert seen["marked"] == ("2604.20606", ("table",), 1)
+    assert en.status()["recent"][-1]["source"] == "2604.20606" and en.status()["current"] is None
+    print("  test_enricher_waits_for_idle ✅")
+
+
+def test_conversations_api() -> None:
+    """대화 저장: 저장(제목은 첫 질문), 목록, 다시 읽기, 빈 목록이면 삭제."""
+    client, _ = make_client(FakePipeline())
+    msgs = [{"id": "u1", "role": "user", "content": "리랭킹은 RAG에서 왜 필요한가요? " * 3},
+            {"id": "a1", "role": "assistant", "content": "정밀도를 높입니다 [1].", "phase": "done"}]
+    with client:
+        r = client.put("/api/conversations/c1", json={"messages": msgs}).json()
+        assert r["n"] == 2 and r["title"].startswith("리랭킹은 RAG에서") and r["title"].endswith("…")
+        client.put("/api/conversations/c2", json={"messages": msgs[:1], "title": "두 번째"})
+        items = client.get("/api/conversations").json()["items"]
+        assert [i["id"] for i in items] == ["c2", "c1"], "최근 저장 순"
+        got = client.get("/api/conversations/c1").json()
+        assert got["messages"][1]["content"] == "정밀도를 높입니다 [1]."
+        assert client.put("/api/conversations/c2", json={"messages": []}).json()["deleted"] is True
+        assert client.get("/api/conversations/c2").status_code == 404
+        assert client.delete("/api/conversations/c1").json() == {"ok": True}
+        assert client.get("/api/conversations").json()["items"] == []
+    print("  test_conversations_api ✅")
 
 
 def main() -> None:
@@ -212,6 +320,9 @@ def main() -> None:
     test_disconnect_stops_job()
     test_config_and_citations()
     test_query_log_and_feedback()
+    test_label_api()
+    test_enricher_waits_for_idle()
+    test_conversations_api()
     print("모든 서버 테스트 통과 ✅")
 
 

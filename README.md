@@ -214,7 +214,15 @@ python -m server                # --port 8000, --host 127.0.0.1 (기본값)
 > **🔎 문장 단위 인용 확인** — 답변의 주장 문장마다 인용한 `[n]` 근거가 그 문장을 뒷받침하는지 리랭커로 대조합니다(LLM 없음, 0.1초 안팎).
 > 검증 배지 옆에 "인용 확인 맞는 문장/전체"가 나오고, 근거가 약한 문장(대개 근거를 넘어선 종합·추론)과 다른 근거가 더 맞는 문장을
 > 이유와 함께 보여 줍니다. 번호를 누르면 그 근거가 펼쳐집니다. 답변의 숫자는 인용한 근거 원문에 그대로 있는지 따로 대조해
-> (🔢 배지, `78.4%`↔`0.784`·`100만`↔`1 million` 같은 표기 차이는 같은 값으로 봄) 표 숫자를 잘못 옮긴 문장을 잡습니다. 기준은 `CITATION_SUPPORT_THRESHOLD`(기본 0.05), 끄려면 `CITATION_CHECK=0`.
+> (🔢 배지, `78.4%`↔`0.784`·`100만`↔`1 million` 같은 표기 차이는 같은 값으로 봄) 표 숫자를 잘못 옮긴 문장을 잡습니다. 답변 속 표와 논문 비교표의 숫자도 같은 방식으로 대조합니다.
+> 함의(NLI) 판정으로 '근거와 반대되는 말'까지 보는 기능은 `CITATION_NLI=1` 로 켤 수 있습니다(기본 끔 — 맞게 바꿔 쓴 한국어 문장도 모순으로 보는 경우가 있어 사람 판정 뒤 결정). 기준은 `CITATION_SUPPORT_THRESHOLD`(기본 0.05), 끄려면 `CITATION_CHECK=0`.
+> **🗂️ 탭 · 대화 목록** — 화면 위 탭으로 💬 대화 / 📈 지표 / 🧑‍⚖️ 사람 판정을 오갑니다. 대화는 서버(`storage/conversations.db`)에도 저장돼
+> 사이드바 '💬 대화'에서 새 대화를 시작하거나 지난 대화를 다시 열 수 있습니다(`CONVERSATIONS=0` 이면 브라우저에만 기억).
+> **📈 지표** — 질문 기록에서 질문 수·👍/👎·평균 응답 시간·인용 정확도·숫자 불일치·검증 통과·자동 수집·오류 비율과 단계별 평균 시간, 최근 질문을 보여 줍니다(LLM 없음).
+> **🧑‍⚖️ 사람 판정** — `python eval/human_set.py --build`로 만든 50문항 기준 세트를 문장마다 근거 있음/없음/번호 틀림, 답변 전체 맞음/일부/틀림으로 판정합니다.
+> 판정이 끝나면 `python eval/human_agreement.py`가 자동 판정(문장 단위 인용 확인·LLM 검증)과 사람 판정의 일치율을 냅니다.
+> **📊 표·그림·수식 자동 처리** — 질문으로 새로 수집된 전문 논문은 챗봇이 한가할 때(마지막 질문 뒤 60초) 한 페이지씩 표·그림·수식을 근거로 추가합니다.
+> 처리 중 질문하면 길어야 한 페이지만 기다리고, 진행 줄에 그 이유가 나옵니다(`VISUAL_AUTO_ENRICH=0`이면 끔).
 > **👍/👎 피드백** — 답변 아래에서 평가할 수 있고, 👎 는 이유(선택)를 함께 남깁니다. 질문·답변·근거·검증 결과와 피드백은
 > 내 컴퓨터의 `storage/query_log.db` 에만 기록됩니다(`QUERY_LOG=0` 이면 기록 안 함). `python scripts/export_feedback.py` 로
 > 👎 받은 질문을 평가셋 후보(`storage/eval_candidates.jsonl`, 평가셋과 같은 모양)로 뽑아 검토한 뒤 `eval/eval_set.jsonl` 에 옮깁니다.
@@ -272,7 +280,8 @@ exam03_Advanced_RAG/
 │   │   ├── arxiv_source.py    # arXiv·OpenAlex 검색, PDF 전문 파싱
 │   │   ├── chunking.py        # 섹션 인식 청킹 (영문/국문 섹션 감지)
 │   │   ├── auto_fetch.py      # 근거 부족 시 논문 자동 수집·예산 관리
-│   │   └── visual.py          # 표·그림·수식 이해(페이지 이미지 → 근거 청크)
+│   │   ├── visual.py          # 표·그림·수식 이해(페이지 이미지 → 근거 청크)
+│   │   └── enrich.py          # 논문 하나의 표·그림·수식 처리·기록(스크립트·서버 공용)
 │   └── features/
 │       ├── citations.py       # 인용 그래프(선행·후속 연구, 공통 참고문헌)
 │       ├── compare_table.py   # 논문 비교표(방법·데이터·결과·한계)
@@ -283,14 +292,16 @@ exam03_Advanced_RAG/
 │   ├── runtime.py             # 공유 상태: 로더·LLM 상태·LLM 작업 잠금 + 요청별 설정
 │   ├── streaming.py           # 스레드 작업의 진행 알림·토큰 → SSE (연결 끊기면 작업 중지)
 │   ├── schemas.py             # 요청 형식, 결과 → JSON
-│   ├── querylog.py            # 실제 사용 질문·👍/👎 기록(storage/query_log.db)
-│   └── routes/                # /api/status·config·chat·feedback·logs·compare-table·survey·citations·watch
+│   ├── querylog.py            # 실제 사용 질문·👍/👎 기록(storage/query_log.db) + 지표 계산
+│   ├── conversations.py       # 대화 서버 저장(storage/conversations.db)
+│   ├── enricher.py            # 자동 수집 논문의 표·그림·수식 백그라운드 처리(한가할 때만)
+│   └── routes/                # /api/status·config·chat·feedback·logs·metrics·conversations·label·compare-table·survey·citations·watch
 ├── frontend/                  # React + TypeScript (Vite)
 │   └── src/
 │       ├── api/               # REST·SSE 클라이언트, 응답 타입
 │       ├── hooks/             # useChat(대화·스트림), useTypewriter(타자 효과), useJob, useStatus
 │       ├── lib/               # 순수 로직(타자 속도, 마크다운 블록 분할, 진행 문구) + 테스트
-│       ├── components/        # chat/ · answer/ · sidebar/ · common/
+│       ├── components/        # chat/ · answer/ · sidebar/ · metrics/(지표 탭) · label/(사람 판정 탭) · common/
 │       └── styles/            # 전역 스타일(라이트/다크)
 ├── scripts/
 │   ├── ingest_arxiv.py        # arXiv 수집 (--fulltext/--ca-bundle/--insecure)
@@ -316,6 +327,8 @@ exam03_Advanced_RAG/
 │   ├── visual_*_eval.py       # 표·그림·수식 검색·답변 평가
 │   ├── corpus_health.py       # 코퍼스 증가에 따른 검색 품질 점검
 │   ├── citation_check_eval.py # 문장 단위 인용 확인 기준 보정(실제 답변 81개, LLM 없음)
+│   ├── human_set.py · human_agreement.py # 사람 판정 기준 세트 만들기 · 자동 판정과의 일치율
+│   ├── nli_eval.py · followup_eval.py · title_candidates_eval.py # 함의 판정 · 보충 검색 · 원 논문 제목 후보 측정
 │   ├── contextual_header_eval.py # 본문 청크에 제목·섹션 머리말 붙이기 실험(1차 임베딩·BM25, 2차 리랭커 입력)
 │   └── vector_parity.py       # Chroma vs Pinecone 검색 결과 동일성 검증
 ├── tests/                     # 단위·오프라인·서버(SSE) 테스트 (fake_pinecone.py: Pinecone 대역)

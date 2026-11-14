@@ -170,6 +170,17 @@ ORIGINAL_TITLE_PROMPT = """질문에 나온 핵심 기법·모델·알고리즘 
 질문: {question}"""
 
 
+# 원 논문 제목 후보 여러 개(§5.43): 통칭과 실제 제목이 크게 다른 논문은 한 번의 추정이 자주 틀린다.
+# 예시는 평가 질문(B1·확인용)에 없는 논문만 쓴다 — 평가 답을 프롬프트에 넣으면 측정이 부풀려진다
+ORIGINAL_TITLES_PROMPT = """질문에 나온 핵심 기법·모델·알고리즘 이름을 **처음 제안한 논문**의 영어 제목 후보를 가장 그럴듯한 것부터 최대 3개, 한 줄에 하나씩 쓰세요.
+(예: "Transformer" → Attention Is All You Need, "AlexNet" → ImageNet Classification with Deep Convolutional Neural Networks,
+ "word2vec" → Efficient Estimation of Word Representations in Vector Space, "GPT-3" → Language Models are Few-Shot Learners)
+통칭(모델 이름)과 논문 제목이 다른 경우가 많으니, 통칭만 쓰지 말고 실제 논문 제목을 쓰세요. 확신이 없으면 서로 다른 후보를 쓰세요.
+여러 기법이 나오면 질문이 주로 묻는 것 하나에 대해서만. 기법·모델 이름이 없는 일반 질문이면 NONE 한 단어만 쓰세요. 번호·설명은 쓰지 마세요.
+
+질문: {question}"""
+
+
 # C1 논문 비교표: 한 논문의 근거 조각으로 항목별 요약(칸마다 근거 번호)
 COMPARE_TABLE_PROMPT = """아래는 논문 "{title}"의 근거 조각입니다. 번호가 붙어 있습니다.
 
