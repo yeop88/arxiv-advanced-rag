@@ -70,7 +70,7 @@ function Item({ s, onCite }: { s: SentenceCheck; onCite?: CiteHandler }) {
   );
 }
 
-export function CitationCheckPanel({ result, onCite }: { result: ChatResult; onCite?: CiteHandler }) {
+export function CitationCheckPanel({ result, onCite, defaultOpen = false }: { result: ChatResult; onCite?: CiteHandler; defaultOpen?: boolean }) {
   const cc = result.citation_check;
   if (!cc || cc.summary.claims === 0) return null;
   const { claims, supported, numeric, number_mismatch } = cc.summary;
@@ -92,8 +92,9 @@ export function CitationCheckPanel({ result, onCite }: { result: ChatResult; onC
           </span>
         )}
       </div>
+      {cc.flagged.length === 0 && <p className="muted small">모든 주장 문장이 인용한 근거와 맞고, 숫자도 근거 원문에 있습니다.</p>}
       {cc.flagged.length > 0 && (
-        <Collapsible title={`확인이 필요한 문장 ${cc.flagged.length}개`} className="cc-list">
+        <Collapsible title={`확인이 필요한 문장 ${cc.flagged.length}개`} className="cc-list" defaultOpen={defaultOpen}>
           <ul>
             {cc.flagged.map((s, i) => (
               <Item key={i} s={s} onCite={onCite} />

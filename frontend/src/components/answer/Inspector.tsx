@@ -37,9 +37,9 @@ export function AutoFetchedNotice({ result }: { result: ChatResult }) {
   );
 }
 
-export function Inspector({ result }: { result: ChatResult }) {
+export function Inspector({ result, defaultOpen = false }: { result: ChatResult; defaultOpen?: boolean }) {
   return (
-    <Collapsible title="🔍 단계별 내부 동작 보기">
+    <Collapsible title="🔍 단계별 내부 동작 보기" defaultOpen={defaultOpen}>
       {result.standalone_question && result.standalone_question !== result.question && (
         <>
           <h4>0단계 · 멀티턴 문맥화</h4>

@@ -43,8 +43,8 @@ function External({ items }: { items: ExternalRef[] }) {
   );
 }
 
-export function CitationsPanel({ sources }: { sources: string[] }) {
-  const [open, setOpen] = useState(false);
+export function CitationsPanel({ sources, defaultOpen = false }: { sources: string[]; defaultOpen?: boolean }) {
+  const [open, setOpen] = useState(defaultOpen);
   const [external, setExternal] = useState(false);
   const [data, setData] = useState<CitationsResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
