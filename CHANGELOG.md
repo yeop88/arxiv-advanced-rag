@@ -5,6 +5,7 @@
 ## [Unreleased]
 
 ### Added
+- 본문 청크 맥락 실험 `eval/contextual_header_eval.py`(LLM 없음, 시험용 DB 사본): 검색 입력에만 `제목 · 섹션` 머리말을 붙여 임베딩·BM25·리랭커 단계별로 294문항 비교. MRR +0.025 / recall −0.006(다중 홉 손해)으로 기본 적용은 보류
 - 회귀 검사 자동화: GitHub Actions `.github/workflows/tests.yml`(푸시·PR 마다 단위·서버·청킹 테스트와 화면 테스트·타입 검사·빌드, CPU torch), README 배지
 - 코퍼스 점검 자동 실행: `enrich_visuals.py`·`manage_auto_papers.py`(삭제)가 끝날 때 `corpus_health` 실행(`--no-health` 로 생략), `corpus_health.py --if-needed`(마지막 점검 뒤 200청크 이상 바뀐 경우만 — 작업 스케줄러용), 기록에 전체 청크 수 추가
 - 숫자 대조(4b 인용 확인에 추가, LLM 없음): 답변 문장의 숫자(소수·두 자리 이상, 연도·이름 속 숫자·질문의 숫자 제외)가 인용한 근거 원문에 있는지 확인, 없으면 그 숫자가 있는 다른 근거 번호 제안. 표기 차이(78.4%↔0.784, 1,024, 100만↔1 million) 허용. 화면 "🔢 숫자 일치/불일치" 배지. 숫자를 하나 바꾼 문장 20/20 탐지(리랭커는 100% 그대로 통과)

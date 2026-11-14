@@ -314,6 +314,7 @@ exam03_Advanced_RAG/
 │   ├── visual_*_eval.py       # 표·그림·수식 검색·답변 평가
 │   ├── corpus_health.py       # 코퍼스 증가에 따른 검색 품질 점검
 │   ├── citation_check_eval.py # 문장 단위 인용 확인 기준 보정(실제 답변 81개, LLM 없음)
+│   ├── contextual_header_eval.py # 본문 청크에 제목·섹션 머리말 붙이기 실험(시험용 DB 사본)
 │   └── vector_parity.py       # Chroma vs Pinecone 검색 결과 동일성 검증
 ├── tests/                     # 단위·오프라인·서버(SSE) 테스트 (fake_pinecone.py: Pinecone 대역)
 ├── .github/workflows/tests.yml # 푸시마다 회귀 검사(모델·DB 없이 도는 테스트 + 화면 빌드)
