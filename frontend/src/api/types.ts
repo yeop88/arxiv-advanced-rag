@@ -50,6 +50,34 @@ export interface Verification {
   unsupported: string[];
 }
 
+export type SentenceStatus = "supported" | "miscited" | "weak" | "uncited" | "bad_ref";
+
+export interface SentenceCheck {
+  text: string;
+  cites: number[];
+  status: SentenceStatus;
+  support: number | null;
+  best: number | null;
+  best_score: number | null;
+}
+
+// 4b 문장 단위 인용 확인(rag/stages/citation_check.py) — 리랭커로 문장과 인용한 근거를 대조, LLM 없음
+export interface CitationCheck {
+  threshold: number;
+  summary: {
+    claims: number;
+    cited: number;
+    supported: number;
+    miscited: number;
+    weak: number;
+    uncited: number;
+    bad_ref: number;
+    precision: number | null;
+    recall: number | null;
+  };
+  flagged: SentenceCheck[]; // supported 가 아닌 문장만
+}
+
 export interface AutoFetched {
   source: string;
   title: string;
@@ -67,6 +95,7 @@ export interface ChatResult {
   verification: Verification | null;
   regenerated: boolean;
   auto_fetched: AutoFetched[];
+  citation_check?: CitationCheck | null;
   timings: Record<string, number>;
   log_id?: string | null; // 서버 질문 기록 id — 👍/👎 피드백에 쓴다(기록이 꺼져 있으면 없음)
 }

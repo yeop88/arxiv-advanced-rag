@@ -5,6 +5,7 @@
 ## [Unreleased]
 
 ### Added
+- 4b 문장 단위 인용 확인 `rag/stages/citation_check.py`(LLM 없음): 답변을 문장으로 나눠 인용한 근거와 리랭커 점수로 대조, 근거가 약한 문장·다른 근거가 더 맞는 문장·인용 없는 주장을 표시하고 인용 정확도·재현율을 계산. 화면에 "🔎 인용 확인 n/m문장" 배지와 확인할 문장 목록. 기준 보정 `eval/citation_check_eval.py`(실제 답변 81개: 기준 0.05에서 맞는 인용 94% 통과, 다른 논문 근거 40%·무관 근거 1.8%)
 - 실제 사용 질문 기록 `server/querylog.py`: 질문·답변·근거·검증·설정을 로컬 SQLite(`storage/query_log.db`, `QUERY_LOG=0` 이면 끔)에 남기고, 답변 아래 👍/👎(👎 는 이유 선택) 피드백을 붙임. `POST /api/feedback`·`GET /api/logs`, 👎 질문을 평가셋 후보로 내보내기 `scripts/export_feedback.py`
 - 챗봇을 FastAPI + React 로 새로 작성: 답변이 한 글자씩 끊김 없이 써짐(토큰을 새 글자만 SSE 로 즉시 전송, 화면은 버퍼에서 프레임마다 꺼내는 타자 효과 — 실제 화면 측정 프레임당 1~6글자·끊긴 프레임 0). 실행 `python -m server` (`server/`, `frontend/`)
 - 답변 중지 버튼(연결을 끊으면 서버 작업도 멈추고 잠금 해제), `[n]` 인용 칩(누르면 해당 근거 강조), 수식 KaTeX 렌더링, 대화·설정 브라우저 기억

@@ -142,6 +142,18 @@ export function describeEvent(event: string, info: any): ProgressUpdate | null {
         ],
       };
     }
+    case "cite_check_done": {
+      const s = info.summary ?? {};
+      return {
+        stage: "4/4 · 인용 확인",
+        lines: [
+          {
+            text: `🔎 문장별 인용 확인 — 주장 ${s.claims ?? 0}문장 중 ${s.supported ?? 0}문장이 인용한 근거와 맞음 (${sec(info.sec)})`,
+            sub: true,
+          },
+        ],
+      };
+    }
     case "regenerate_start":
       return {
         stage: "3/4 · 답변 고치는 중",

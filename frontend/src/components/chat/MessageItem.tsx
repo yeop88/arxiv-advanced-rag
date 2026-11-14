@@ -3,6 +3,7 @@
 import { memo, useCallback, useMemo, useState } from "react";
 import type { ChatMessage, RateHandler } from "../../hooks/useChat";
 import { isActive } from "../../hooks/useChat";
+import { CitationCheckPanel } from "../answer/CitationCheckPanel";
 import { CitationsPanel } from "../answer/CitationsPanel";
 import { CompareTablePanel } from "../answer/CompareTablePanel";
 import { FeedbackBar } from "../answer/FeedbackBar";
@@ -48,6 +49,7 @@ function AssistantMessage({ m, onRate }: { m: ChatMessage; onRate?: RateHandler 
         <div className="extras">
           <AutoFetchedNotice result={r} />
           <VerificationBar result={r} />
+          <CitationCheckPanel result={r} onCite={onCite} />
           <SourcesPanel
             sources={r.sources}
             open={sourcesOpen}

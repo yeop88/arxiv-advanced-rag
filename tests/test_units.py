@@ -643,6 +643,46 @@ def test_local_reasoning_stream() -> None:
     print("  test_local_reasoning_stream ✅")
 
 
+def test_citation_check() -> None:
+    """4b 문장 단위 인용 확인: 문장 분리·인용 번호 해석·문장 상태(가짜 점수기)."""
+    from rag.core.schemas import RetrievedChunk
+    from rag.stages import citation_check as cc
+
+    assert cc.parse_cites("A [1]. B [2, 3] C [4-6] D [근거 7]") == [1, 2, 3, 4, 5, 6, 7]
+    answer = "\n".join([
+        "## 요약",
+        "DPR 은 질문과 문단을 따로 인코딩합니다 [1]. ColBERT 는 토큰 단위로 늦게 상호작용합니다 [1].",
+        "- BM25 는 정확한 단어 일치에 강한 희소 검색입니다 [3].",
+        "두 방식을 섞으면 서로의 약점을 보완할 수 있습니다.",
+        "| 표 | 행 |",
+        "```", "code [1]", "```",
+        "제공된 논문에서는 지연 시간 수치를 찾을 수 없습니다.",
+        "검색 결과는 다음과 같습니다:",
+        "없는 번호를 인용한 문장도 있습니다 [9].",
+    ])
+    sents = cc.split_sentences(answer)
+    assert not any(s.startswith("|") or "code" in s for s in sents), "표·코드는 문장 아님"
+    chunks = [RetrievedChunk(content="DPR dual encoder"), RetrievedChunk(content="ColBERT late interaction"),
+              RetrievedChunk(content="BM25 lexical")]
+
+    def scorer(pairs):   # 문장 핵심어가 근거에 있으면 높은 점수
+        keys = {"DPR": "DPR", "ColBERT": "ColBERT", "BM25": "BM25"}
+        return [0.9 if any(k in q and v in d for k, v in keys.items()) else 0.01 for q, d in pairs]
+
+    rep = cc.check(answer, chunks, scorer=scorer, threshold=0.05)
+    status = {s.text.split()[0]: s.status for s in rep.sentences}
+    assert status == {"DPR": "supported", "ColBERT": "miscited", "BM25": "supported",
+                      "두": "uncited", "없는": "bad_ref"}, status
+    colbert = next(s for s in rep.sentences if s.text.startswith("ColBERT"))
+    assert colbert.best == 2, "더 맞는 근거 번호를 제안"
+    summ = rep.summary()
+    assert summ["claims"] == 5 and summ["cited"] == 4 and summ["supported"] == 2 and summ["precision"] == 0.5, summ
+    j = rep.to_json()
+    assert len(j["flagged"]) == 3 and j["threshold"] == 0.05
+    assert cc.check("", chunks, scorer=scorer).summary()["claims"] == 0
+    print("  test_citation_check ✅")
+
+
 def main() -> None:
     print("단위 테스트 실행:")
     test_rrf()
@@ -664,6 +704,7 @@ def main() -> None:
     test_visual_parse()
     test_visual_retrieval()
     test_local_reasoning_stream()
+    test_citation_check()
     print("모든 단위 테스트 통과 ✅")
 
 

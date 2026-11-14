@@ -125,6 +125,12 @@ class Settings:
     enable_verification: bool = True
     max_regenerations: int = 1  # 검증 실패 시 재생성 최대 횟수
 
+    # --- 4b 문장 단위 인용 확인(rag/stages/citation_check.py, LLM 없음 — 리랭커 점수) ---
+    citation_check: bool = os.getenv("CITATION_CHECK", "1") not in ("0", "false", "False")
+    # (문장, 인용한 근거) 리랭커 점수가 이 값 이상이면 '뒷받침됨'. eval/citation_check_eval.py 로 보정
+    # 측정(81개 실제 답변): 0.05 에서 맞는 인용 91% 통과, 다른 논문 근거 40%·무관 근거 0% 통과. 걸리는 문장은 대부분 근거를 넘는 종합·추론
+    citation_support_threshold: float = float(os.getenv("CITATION_SUPPORT_THRESHOLD", "0.05"))
+
     # --- 논문 자동 수집 (근거가 부족하면 arXiv 에서 찾아 전문을 DB 에 추가하고 다시 검색) ---
     auto_fetch: bool = os.getenv("AUTO_FETCH", "1") not in ("0", "false", "False")
     # 트리거: 리랭크 최고 점수가 이 값보다 낮으면 "코퍼스에 근거 부족"으로 판단 (평가셋 분포로 보정)

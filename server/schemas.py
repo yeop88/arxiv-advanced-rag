@@ -80,6 +80,7 @@ def result_json(r: PipelineResult) -> dict:
         "verification": verification_json(r.verification),
         "regenerated": r.regenerated,
         "auto_fetched": r.auto_fetched,
+        "citation_check": r.citation_check,
         "timings": {k: round(v, 2) for k, v in r.timings.items()},
     }
 

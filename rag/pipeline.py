@@ -32,6 +32,7 @@ from rag.stages import stage1_query_transform as s1
 from rag.stages import stage2_rerank as s2
 from rag.stages import stage3_generate as s3
 from rag.stages import stage4_verify as s4
+from rag.stages import citation_check
 from rag.stages.contextualize import ChatHistory, contextualize
 from rag.core.schemas import PipelineResult
 from rag.store.vectorstore import VectorStoreLike, load_vectorstore
@@ -43,6 +44,7 @@ from rag.store.vectorstore import VectorStoreLike, load_vectorstore
 #   answer_reset: 화면에 보이던 답변을 지우고 처음부터(추론 태그 정리 등 드문 경우)
 #   reasoning(delta): thinking 모드에서 답을 쓰기 전 추론 조각(답변 본문에는 넣지 않음)
 #   verify_start / verify_done(grounded, faithfulness, unsupported, sec)
+#   cite_check_done(summary, sec): 4b 문장 단위 인용 확인(LLM 없음)
 #   regenerate_start(attempt, unsupported) / error(stage, message)
 Progress = Callable[..., Any]
 
@@ -248,6 +250,18 @@ class RAGPipeline:
                 print(f"[경고] 검증 단계 실패, 답변은 유지: {e}")
                 emit("error", stage="verify", message=str(e))
             result.timings["4_verify"] = time.perf_counter() - t
+
+        # --- 4b: 문장 단위 인용 확인 (LLM 없음 — 리랭커로 문장과 인용한 근거를 대조) ---
+        # 보조 단계 → 실패해도 답변은 그대로
+        if settings.citation_check:
+            t = time.perf_counter()
+            try:
+                report = citation_check.check(answer, reranked).to_json()
+                result.citation_check = report
+                result.timings["4b_citation_check"] = time.perf_counter() - t
+                emit("cite_check_done", summary=report["summary"], sec=result.timings["4b_citation_check"])
+            except Exception as e:  # noqa: BLE001
+                emit("error", stage="citation_check", message=str(e))
 
         result.answer = answer
         return result

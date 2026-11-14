@@ -78,8 +78,10 @@ def main() -> None:
     result2 = pipe.run("리랭킹은 RAG에서 왜 필요한가요?", progress=lambda ev, **kw: events.append((ev, kw)))
     names = [e for e, _ in events if e != "token"]
     expected = ["transform_start", "transform_done", "retrieve_start", "retrieve_done",
-                "generate_start", "generate_done", "verify_start", "verify_done"]
+                "generate_start", "generate_done", "verify_start", "verify_done", "cite_check_done"]
     assert names == expected, f"진행 알림 순서가 다름: {names}"
+    cc = result2.citation_check
+    assert cc and cc["summary"]["claims"] == 2 and cc["summary"]["cited"] == 2, f"4b 인용 확인: {cc}"
     tokens = [kw["delta"] for e, kw in events if e == "token"]
     assert len(tokens) > 1, "답변이 토큰 단위로 스트리밍되지 않음"
     assert "".join(tokens).strip() == result2.answer, "스트리밍한 글자를 이어 붙인 것과 최종 답변이 다름"

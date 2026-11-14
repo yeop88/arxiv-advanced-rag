@@ -53,6 +53,8 @@
  ▼ [4단계] 검증            rag/stages/stage4_verify.py
  │   LLM-as-judge 로 groundedness 채점
  │   실패 시 → 3단계로 돌아가 자기수정 재생성
+ ▼ [4b] 문장 단위 인용 확인  rag/stages/citation_check.py   (LLM 없음)
+ │   문장마다 인용한 [n] 근거가 뒷받침하는지 리랭커 점수로 대조 → 약한 문장·잘못 단 번호 표시
  ▼
 최종 답변 + 검증 리포트
 ```
@@ -202,6 +204,9 @@ python -m server                # --port 8000, --host 127.0.0.1 (기본값)
 > **🧠 Thinking 토글**(로컬 모델 전용) — 사이드바에서 생성·검증 / 질의변환의 thinking 을 켜고 끌 수 있습니다.
 > 켜면 다중 홉 비교에 유리하지만 느립니다(측정: 질문당 off 약 1분, on 약 3~4분. 같은 채점 기준으로 hard 30문항 answer_relevance 0.640 → 0.697).
 > 사이드바 설정은 그 질문에만 적용되고(서버 기본값은 `.env`), 브라우저에 기억됩니다.
+> **🔎 문장 단위 인용 확인** — 답변의 주장 문장마다 인용한 `[n]` 근거가 그 문장을 뒷받침하는지 리랭커로 대조합니다(LLM 없음, 0.1초 안팎).
+> 검증 배지 옆에 "인용 확인 맞는 문장/전체"가 나오고, 근거가 약한 문장(대개 근거를 넘어선 종합·추론)과 다른 근거가 더 맞는 문장을
+> 이유와 함께 보여 줍니다. 번호를 누르면 그 근거가 펼쳐집니다. 기준은 `CITATION_SUPPORT_THRESHOLD`(기본 0.05), 끄려면 `CITATION_CHECK=0`.
 > **👍/👎 피드백** — 답변 아래에서 평가할 수 있고, 👎 는 이유(선택)를 함께 남깁니다. 질문·답변·근거·검증 결과와 피드백은
 > 내 컴퓨터의 `storage/query_log.db` 에만 기록됩니다(`QUERY_LOG=0` 이면 기록 안 함). `python scripts/export_feedback.py` 로
 > 👎 받은 질문을 평가셋 후보(`storage/eval_candidates.jsonl`, 평가셋과 같은 모양)로 뽑아 검토한 뒤 `eval/eval_set.jsonl` 에 옮깁니다.
@@ -250,7 +255,8 @@ exam03_Advanced_RAG/
 │   │   ├── stage1_query_transform.py
 │   │   ├── stage2_rerank.py
 │   │   ├── stage3_generate.py
-│   │   └── stage4_verify.py
+│   │   ├── stage4_verify.py
+│   │   └── citation_check.py  # 4b 문장 단위 인용 확인(리랭커, LLM 없음)
 │   ├── store/
 │   │   ├── vectorstore.py     # 벡터 DB 로드/구축 (Chroma | Pinecone 어댑터)
 │   │   └── docstore.py        # 원문 보관소(JSONL) — Pinecone 사용 시 BM25·본문 기준
@@ -301,6 +307,7 @@ exam03_Advanced_RAG/
 │   ├── auto_fetch_*.py        # 자동 수집 효과·설정·실전·시나리오 시험
 │   ├── visual_*_eval.py       # 표·그림·수식 검색·답변 평가
 │   ├── corpus_health.py       # 코퍼스 증가에 따른 검색 품질 점검
+│   ├── citation_check_eval.py # 문장 단위 인용 확인 기준 보정(실제 답변 81개, LLM 없음)
 │   └── vector_parity.py       # Chroma vs Pinecone 검색 결과 동일성 검증
 ├── tests/                     # 단위·오프라인·서버(SSE) 테스트 (fake_pinecone.py: Pinecone 대역)
 ├── notebooks/

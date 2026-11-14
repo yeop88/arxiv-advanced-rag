@@ -55,6 +55,7 @@ class PipelineResult(BaseModel):
     verification: VerificationResult | None = None                # 4단계 산출
     regenerated: bool = False                                      # 검증 후 재생성 여부
     auto_fetched: list[dict] = Field(default_factory=list)         # 근거 부족으로 자동 추가한 논문
+    citation_check: dict | None = None                             # 4b: 문장 단위 인용 확인(citation_check.CitationReport.to_json)
 
     # 단계별 소요시간(초) — 성능 관찰용
     timings: dict[str, float] = Field(default_factory=dict)

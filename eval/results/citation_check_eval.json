@@ -1,0 +1,91 @@
+{
+ "answers": 59,
+ "cited_sentences": 212,
+ "auc_pos_vs_hard": 0.9174,
+ "auc_pos_vs_easy": 0.9964,
+ "percentiles": {
+  "pos": {
+   "p5": 0.0439,
+   "p10": 0.1778,
+   "p25": 0.546,
+   "p50": 0.9469,
+   "p75": 0.985,
+   "p90": 0.9971
+  },
+  "hard_neg": {
+   "p5": 0.0003,
+   "p10": 0.0008,
+   "p25": 0.0042,
+   "p50": 0.0248,
+   "p75": 0.155,
+   "p90": 0.5102
+  },
+  "easy_neg": {
+   "p5": 0.0,
+   "p10": 0.0,
+   "p25": 0.0001,
+   "p50": 0.0002,
+   "p75": 0.0011,
+   "p90": 0.0044
+  }
+ },
+ "grid": [
+  {
+   "threshold": 0.01,
+   "pos_pass": 0.981,
+   "hard_neg_pass": 0.638,
+   "easy_neg_pass": 0.05
+  },
+  {
+   "threshold": 0.02,
+   "pos_pass": 0.976,
+   "hard_neg_pass": 0.514,
+   "easy_neg_pass": 0.027
+  },
+  {
+   "threshold": 0.05,
+   "pos_pass": 0.943,
+   "hard_neg_pass": 0.4,
+   "easy_neg_pass": 0.018
+  },
+  {
+   "threshold": 0.1,
+   "pos_pass": 0.925,
+   "hard_neg_pass": 0.319,
+   "easy_neg_pass": 0.005
+  },
+  {
+   "threshold": 0.15,
+   "pos_pass": 0.91,
+   "hard_neg_pass": 0.262,
+   "easy_neg_pass": 0.005
+  },
+  {
+   "threshold": 0.2,
+   "pos_pass": 0.887,
+   "hard_neg_pass": 0.219,
+   "easy_neg_pass": 0.0
+  },
+  {
+   "threshold": 0.3,
+   "pos_pass": 0.83,
+   "hard_neg_pass": 0.181,
+   "easy_neg_pass": 0.0
+  },
+  {
+   "threshold": 0.5,
+   "pos_pass": 0.755,
+   "hard_neg_pass": 0.105,
+   "easy_neg_pass": 0.0
+  }
+ ],
+ "threshold_used": 0.05,
+ "status_counts": {
+  "supported": 200,
+  "weak": 10,
+  "uncited": 9,
+  "miscited": 2
+ },
+ "mean_precision": 0.968,
+ "answers_all_supported": 46
+}
