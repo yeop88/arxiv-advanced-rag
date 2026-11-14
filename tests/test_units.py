@@ -522,8 +522,11 @@ def test_visual_parse() -> None:
     assert V.number_match(items[0].body, page) == 1.0 and V.number_match("| x | 99.9 | 78.4 |", page) == 0.5
     assert [m.group(2) for m in V.CAPTION.finditer("Table 2: a" + chr(10) + "see Table 3. here" + chr(10) + "Figure1: b")] == ["2", "1"]
 
-    orig = V._ask
+    from config import settings
+
+    orig, orig_provider = V._ask, settings.llm_provider
     V._ask = lambda png, caps: raw
+    settings.llm_provider = "local"   # 실제 모델은 부르지 않음(_ask 를 가짜로) — .env 와 무관하게
     try:
         import io
 
@@ -539,7 +542,7 @@ def test_visual_parse() -> None:
         got = V.extract(buf.getvalue(), kinds=("table", "figure"))
         V.page_labels = orig_cp
     finally:
-        V._ask = orig
+        V._ask, settings.llm_provider = orig, orig_provider
     assert [i.label for i in got] == ["Table 2", "Figure 1"], "페이지 캡션에 없는 Table 9 는 버림"
 
     # 수식: 번호 붙은 수식 줄 찾기(본문 문장 끝 "(3)" 은 제외), LaTeX 검사
