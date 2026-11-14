@@ -687,6 +687,9 @@ def test_citation_check() -> None:
     from rag.stages import citation_check as cc
 
     assert cc.parse_cites("A [1]. B [2, 3] C [4-6] D [근거 7]") == [1, 2, 3, 4, 5, 6, 7]
+    assert not cc._is_claim("입력 데이터와 특징 표현 방식의 차이"), "소제목 줄은 주장 아님"
+    assert not cc._is_claim("제공된 근거만을 바탕으로 답변드립니다")
+    assert cc._is_claim("두 접근 모두 CNN의 효율성을 개선한다는 공통점이 있지만 목표가 다릅니다")
     answer = "\n".join([
         "## 요약",
         "DPR 은 질문과 문단을 따로 인코딩합니다 [1]. ColBERT 는 토큰 단위로 늦게 상호작용합니다 [1].",

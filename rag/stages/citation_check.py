@@ -35,7 +35,10 @@ MIN_CLAIM_CHARS = 12   # 이보다 짧은 문장(제목·연결 문구)은 확�
 _NOT_CLAIM = re.compile(
     r"찾을 수 없|포함되어 있지 않|포함돼 있지 않|언급(?:이|은|되어 있지|하지|되지) ?(?:않|없)|언급이 없|설명(?:할 수 없|하지 않|이 없)"
     r"|제공하지 않|(?:답변|답|비교 분석을 수행|설명)할 수 없|나와 있지 않|다루(?:고 있지|지) 않|확인할 수 없|알 수 없|정보가 없|무관합니다"
-    r"|다음과 같(?:습니다|이 [가-힣]+(?:니다|있습니다))\s*$|정리하면 다음|요약하면 다음")
+    r"|다음과 같(?:습니다|이 [가-힣]+(?:니다|있습니다))\s*$|정리하면 다음|요약하면 다음|다음과 같이|답변드립니다")
+# 소제목 줄("입력 데이터와 특징 표현 방식의 차이"): 인용이 없고 문장처럼 끝나지 않는 짧은 줄 — 시험 질문 50개에서 '인용 없음'의 대부분(§5.46)
+_SENTENCE_END = re.compile(r"(?:[.!?。]|[다요음임함됨])\s*$")
+HEADING_MAX_CHARS = 40
 
 # 답변 쪽 숫자: 영문·숫자·하이픈에 붙은 것(GPT-4, Top-20, bge-m3, v1.5)과 수식 안은 제외. 한국어 단위(2.7일, 3.5배)는 허용
 _ANSWER_NUM = re.compile(r"(?<![A-Za-z0-9_.\-/^])(\d{1,3}(?:,\d{3})+|\d+)(\.\d+)?(?![A-Za-z0-9_^]|\.\d)")
@@ -235,9 +238,15 @@ def claim_text(sentence: str) -> str:
     return re.sub(r"\s+", " ", t).strip(" .,")
 
 
+def _is_heading(sentence: str) -> bool:
+    c = claim_text(sentence)
+    return not _CITE.search(sentence) and len(c) <= HEADING_MAX_CHARS and not _SENTENCE_END.search(c)
+
+
 def _is_claim(sentence: str) -> bool:
     c = claim_text(sentence)
-    return len(c) >= MIN_CLAIM_CHARS and not c.endswith(":") and not _NOT_CLAIM.search(c)
+    return (len(c) >= MIN_CLAIM_CHARS and not c.endswith(":") and not _NOT_CLAIM.search(c)
+            and not _is_heading(sentence))
 
 
 _NLI_MODEL = "MoritzLaurer/mDeBERTa-v3-base-xnli-multilingual-nli-2mil7"

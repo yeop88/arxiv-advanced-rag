@@ -240,6 +240,30 @@ def reranker_title() -> None:
     save(fig, "08_reranker_title.png")
 
 
+def title_candidates() -> None:
+    """원 논문 제목 후보(§5.43): 원 논문이 제목 검색 후보에 드는 질문 비율 — 조정용·확인용(개선에 안 씀)."""
+    d = json.loads((RESULTS / "title_candidates_eval.json").read_text(encoding="utf-8"))
+    sets = list(d.items())   # (조정용, 확인용)
+    names = ["제목 1개(기존)", "후보 3개", "둘 다(적용)"]
+    keys = ["single", "multi", "union"]
+    fig, ax = plt.subplots(figsize=(10, 5.2))
+    w = 0.36
+    for off, (label, v), color in zip((-w / 2, w / 2), sets, (BLUE, ORANGE)):
+        vals = [v[k] / v["n"] * 100 for k in keys]
+        bars = ax.bar([i + off for i in range(len(keys))], vals, width=w, color=color, edgecolor=SURFACE, linewidth=2,
+                      label=f"{label} {v['n']}문항")
+        for b, k, val in zip(bars, keys, vals):
+            ax.text(b.get_x() + b.get_width() / 2, val + 1.5, f"{v[k]}/{v['n']}", ha="center", fontsize=10, color=INK2)
+    ax.set_xticks(range(len(keys)), names, color=INK2)
+    ax.set_ylim(0, 100)
+    ax.set_yticks([0, 25, 50, 75, 100], ["0", "25", "50", "75", "100%"])
+    ax.set_ylabel("원 논문이 후보에 든 질문")
+    ax.grid(axis="x", visible=False)
+    ax.legend(frameon=False, loc="upper left")
+    ax.set_title("원 논문 찾기 — 제목 추정이 틀릴 때 후보를 더 받는다")
+    save(fig, "09_title_candidates.png")
+
+
 if __name__ == "__main__":
     achievement()
     query_transform()
@@ -249,3 +273,4 @@ if __name__ == "__main__":
     kpi_table()
     citation_check()
     reranker_title()
+    title_candidates()

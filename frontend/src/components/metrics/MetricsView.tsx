@@ -71,11 +71,11 @@ export function MetricsView() {
                 <tr key={s.key}>
                   <th scope="row">{s.label}</th>
                   <td className="bar-cell">
-                    <div
+                    {(s.mean_sec ?? 0) > 0 && <div
                       className="hbar"
                       style={{ width: `${((s.mean_sec ?? 0) / maxStage) * 100}%` }}
                       title={`${s.label}: 평균 ${sec(s.mean_sec)} (${s.runs}회)`}
-                    />
+                    />}
                   </td>
                   <td className="num">{sec(s.mean_sec)}</td>
                   <td className="num muted">{s.runs}회</td>
@@ -93,7 +93,7 @@ export function MetricsView() {
               <tr key={d.date}>
                 <th scope="row">{d.date.slice(5)}</th>
                 <td className="bar-cell">
-                  <div className="hbar" style={{ width: `${(d.n / maxDay) * 100}%` }} title={`${d.date}: ${d.n}개`} />
+                  {d.n > 0 && <div className="hbar" style={{ width: `${(d.n / maxDay) * 100}%` }} title={`${d.date}: ${d.n}개`} />}
                 </td>
                 <td className="num">{d.n}</td>
               </tr>
