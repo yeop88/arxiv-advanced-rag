@@ -226,13 +226,19 @@ def test_label_api() -> None:
         with client:
             st = client.get("/api/label/items").json()
             assert len(st["items"]) == 1 and st["done"] == 0
+            # 다른 모델의 초안 → 사람 확인 0
+            draft = {"sentences": {"0": "supported", "1": "supported"}, "overall": "correct", "note": "초안", "annotator": "claude"}
+            assert client.post("/api/label/q1", json=draft).json() == {"ok": True, "done": 1, "human_done": 0}
+            # 사람이 검토해 고쳐 저장 → 사람 판정, 초안은 model_draft 로 남는다
             body = {"sentences": {"0": "supported", "1": "unsupported"}, "overall": "partial", "note": "B 근거 없음"}
-            assert client.post("/api/label/q1", json=body).json() == {"ok": True, "done": 1}
+            assert client.post("/api/label/q1", json=body).json() == {"ok": True, "done": 1, "human_done": 1}
             assert client.post("/api/label/없음", json=body).status_code == 404
             assert client.post("/api/label/q1", json={"sentences": {"5": "supported"}}).status_code == 422
             assert client.post("/api/label/q1", json={"overall": "maybe"}).status_code == 422
             st = client.get("/api/label/items").json()
-        assert st["labels"]["q1"]["sentences"]["1"] == "unsupported" and st["done"] == 1
+        lab = st["labels"]["q1"]
+        assert lab["sentences"]["1"] == "unsupported" and lab["annotator"] == "human" and st["human_done"] == 1
+        assert lab["model_draft"]["annotator"] == "claude" and lab["model_draft"]["overall"] == "correct"
     finally:
         settings.human_set_path, settings.human_labels_path = keep
     print("  test_label_api ✅")

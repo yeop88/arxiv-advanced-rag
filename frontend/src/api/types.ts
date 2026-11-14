@@ -223,10 +223,13 @@ export interface HumanLabel {
   sentences: Record<string, HumanSentenceLabel>;
   overall: HumanOverall | null;
   note: string | null;
+  annotator?: string; // 판정한 주체 — 사람이면 human(주소에 ?annotator=이름 으로 바꿀 수 있음)
+  model_draft?: { sentences: Record<string, HumanSentenceLabel>; overall: HumanOverall | null; note: string | null; annotator?: string };
 }
 
 export interface LabelState {
   items: HumanItem[];
   labels: Record<string, HumanLabel>;
   done: number;
+  human_done: number; // 사람이 확인한 판정 수(초안 제외)
 }

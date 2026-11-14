@@ -19,6 +19,9 @@ const OVERALL: { v: HumanOverall; label: string }[] = [
 ];
 const KIND: Record<string, string> = { single: "단일 논문", multi_hop: "다중 홉", table: "표", figure: "그림", equation: "수식" };
 const EMPTY: HumanLabel = { sentences: {}, overall: null, note: null };
+// 판정한 주체: 기본 human. 다른 모델이 판정하면 주소에 ?annotator=모델이름 — 결과를 사람 판정과 구분해 읽는다
+const ANNOTATOR = new URLSearchParams(window.location.search).get("annotator") || "human";
+const isHuman = (l?: HumanLabel) => !!l?.overall && (l.annotator ?? "human") === "human";
 
 export function LabelView() {
   const [state, setState] = useState<LabelState | null>(null);
@@ -33,7 +36,8 @@ export function LabelView() {
       .labelItems()
       .then((s) => {
         setState(s);
-        const first = s.items.findIndex((it) => !s.labels[it.id]?.overall);
+        // 사람이 아직 확인하지 않은 첫 문항부터(모델 초안만 있는 문항 포함)
+        const first = s.items.findIndex((it) => (ANNOTATOR === "human" ? !isHuman(s.labels[it.id]) : !s.labels[it.id]?.overall));
         setIdx(first < 0 ? 0 : first);
       })
       .catch((e) => setError((e as Error).message));
@@ -41,13 +45,19 @@ export function LabelView() {
 
   const item: HumanItem | undefined = state?.items[idx];
   useEffect(() => {
-    if (item && state) setDraft(state.labels[item.id] ?? EMPTY);
+    if (item && state) {
+      const l = state.labels[item.id];
+      // 모델 초안은 판정만 미리 채우고 메모는 비운다(저장하면 사람의 판정·메모가 된다)
+      setDraft(l ? (isHuman(l) || ANNOTATOR !== "human" ? l : { ...l, note: null }) : EMPTY);
+    }
     setOpenSrc(null);
   }, [item, state]);
 
   const sentences = item?.citation_check.sentences ?? [];
   const complete = !!draft.overall && sentences.every((_, i) => draft.sentences[String(i)]);
-  const saved = !!(item && state?.labels[item.id]?.overall);
+  const current = item ? state?.labels[item.id] : undefined;
+  const saved = ANNOTATOR === "human" ? isHuman(current) : !!current?.overall;
+  const draftFrom = current?.overall && !isHuman(current) && ANNOTATOR === "human" ? current : undefined;
 
   const save = useCallback(
     async (next: boolean) => {
@@ -55,8 +65,8 @@ export function LabelView() {
       setSaving(true);
       setError(null);
       try {
-        const r = await api.saveLabel(item.id, draft);
-        setState({ ...state, labels: { ...state.labels, [item.id]: draft }, done: r.done });
+        const r = await api.saveLabel(item.id, { ...draft, annotator: ANNOTATOR });
+        setState({ ...state, labels: { ...state.labels, [item.id]: { ...draft, annotator: ANNOTATOR } }, done: r.done, human_done: r.human_done });
         if (next && idx < state.items.length - 1) setIdx(idx + 1);
       } catch (e) {
         setError((e as Error).message);
@@ -86,13 +96,18 @@ export function LabelView() {
     <div className="label-view">
       <div className="label-head">
         <h2>사람 판정</h2>
-        <span className="pill">
-          판정 {state.done}/{state.items.length}
+        <span className="pill" title="사람이 검토해 저장한 판정 수">
+          사람 확인 {state.human_done}/{state.items.length}
         </span>
+        {state.done > state.human_done && (
+          <span className="pill" title="다른 모델이 먼저 채운 초안 — 검토해 저장하면 사람 판정이 됩니다">
+            초안 {state.done - state.human_done}
+          </span>
+        )}
         <select value={idx} onChange={(e) => setIdx(Number(e.target.value))} aria-label="문항 고르기">
           {state.items.map((it, i) => (
             <option key={it.id} value={i}>
-              {state.labels[it.id]?.overall ? "✓ " : "· "}
+              {isHuman(state.labels[it.id]) ? "✓ " : state.labels[it.id]?.overall ? "◇ " : "· "}
               {i + 1}. [{KIND[it.kind] ?? it.kind}] {it.question.slice(0, 40)}
             </option>
           ))}
@@ -103,6 +118,13 @@ export function LabelView() {
       </p>
 
       <section className="label-card">
+        {draftFrom && (
+          <div className="draft-banner">
+            <b>🤖 {draftFrom.annotator} 초안이 채워져 있습니다.</b> 근거 원문과 대조해 동의하면 그대로, 다르면 고쳐서 저장하세요 —
+            저장하면 <b>사람 판정</b>으로 기록되고 초안은 비교용으로 따로 남습니다.
+            {draftFrom.note && <div className="muted small">초안 메모: {draftFrom.note}</div>}
+          </div>
+        )}
         <div className="muted small">
           {idx + 1}/{state.items.length} · {KIND[item.kind] ?? item.kind} · 정답 논문 {item.expected_sources.join(", ")}
         </div>

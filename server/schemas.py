@@ -46,6 +46,7 @@ class LabelRequest(BaseModel):
     sentences: dict[str, Literal["supported", "unsupported", "miscited"]] = Field(default_factory=dict)
     overall: Literal["correct", "partial", "wrong"] | None = None
     note: str | None = Field(default=None, max_length=2000)
+    annotator: str = Field(default="human", max_length=40)   # 판정한 주체(사람이면 human, 다른 모델이면 그 이름)
 
 
 class ConversationPut(BaseModel):

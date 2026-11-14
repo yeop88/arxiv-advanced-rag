@@ -39,7 +39,7 @@ export const api = {
   metrics: () => json<Metrics>("/api/metrics"),
   labelItems: () => json<LabelState>("/api/label/items"),
   saveLabel: (id: string, label: HumanLabel) =>
-    json<{ ok: boolean; done: number }>(`/api/label/${encodeURIComponent(id)}`, post(label)),
+    json<{ ok: boolean; done: number; human_done: number }>(`/api/label/${encodeURIComponent(id)}`, post(label)),
   watch: () => json<WatchState>("/api/watch"),
   addWatchTopic: (topic: string) => json<WatchState>("/api/watch/topics", post({ topic })),
   removeWatchTopic: (topic: string) =>

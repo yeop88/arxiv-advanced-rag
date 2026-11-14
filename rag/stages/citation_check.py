@@ -50,13 +50,20 @@ _INLINE_MATH = re.compile(r"\$[^$]+\$")
 # 큰 수 단위: 답변은 한국어(100만), 근거는 영어(1 million, 1M)로 쓰는 일이 많다 → 실제 값으로도 비교
 _KO_UNIT = re.compile(r"\s?(천만|천억|만|억|조|천)")
 _KO_SCALE = {"천": 1e3, "만": 1e4, "천만": 1e7, "억": 1e8, "천억": 1e11, "조": 1e12}
-_EN_UNIT = re.compile(r"\s?(thousand|million|billion|trillion|[KMB])\b")
+_EN_UNIT = re.compile(r"\s?(thousand|million|billion|trillion|[KMBkmb])\b")   # 200k steps, 7B, 1M
 _EN_SCALE = {"thousand": 1e3, "k": 1e3, "million": 1e6, "m": 1e6, "billion": 1e9, "b": 1e9, "trillion": 1e12}
 # 근거가 숫자를 영어 낱말로 쓴 경우("an order-of-magnitude larger" → 답변 "10배"). 실제 답변에서 오경보로 발견(§5.42)
 _EN_WORD_NUMS = [(re.compile(r"\btwo orders?[\s-]of[\s-]magnitude", re.I), "100"),
                  (re.compile(r"\b(?:an|one) orders?[\s-]of[\s-]magnitude|\border[\s-]of[\s-]magnitude", re.I), "10"),
                  (re.compile(r"\bten\b|\btenfold\b", re.I), "10"), (re.compile(r"\btwenty\b", re.I), "20"),
-                 (re.compile(r"\bhundred\b|\bhundredfold\b", re.I), "100"), (re.compile(r"\bthousand\b", re.I), "1000")]
+                 (re.compile(r"\bhundred\b|\bhundredfold\b", re.I), "100"), (re.compile(r"\bthousand\b", re.I), "1000"),
+                 (re.compile(r"\b(?:a |one )?billion\b", re.I), "1000000000"),
+                 (re.compile(r"\b(?:a |one )?million\b", re.I), "1000000")]
+# 11~19·30~90 낱말("thirteen new attention mechanisms" ↔ 답변 "13가지") — 독립 모델 판정에서 오경보로 발견(§5.47)
+_TEENS = ["eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen", "seventeen", "eighteen", "nineteen"]
+_TENS = {"thirty": 30, "forty": 40, "fifty": 50, "sixty": 60, "seventy": 70, "eighty": 80, "ninety": 90}
+_EN_WORD_NUMS += [(re.compile(rf"\b{w}\b", re.I), str(11 + i)) for i, w in enumerate(_TEENS)]
+_EN_WORD_NUMS += [(re.compile(rf"\b{w}\b", re.I), str(v)) for w, v in _TENS.items()]
 
 
 def _norm(int_part: str, frac: str | None) -> str:
