@@ -52,6 +52,7 @@ def retrieve(vectorstore: VectorStoreLike, queries: list[str]) -> list[Retrieved
                 title=doc.metadata.get("title", ""),
                 section=doc.metadata.get("section", ""),
                 url=doc.metadata.get("url", ""), origin=doc.metadata.get("origin", ""),
+                kind=doc.metadata.get("kind", ""),
                 score=float(score),
             )
     return list(seen.values())
@@ -112,9 +113,17 @@ def _get_bm25(vectorstore_id: int):
     from langchain_community.retrievers import BM25Retriever
 
     docs = get_all_documents(_BM25_STORE["vs"])
-    retriever = BM25Retriever.from_documents(docs, preprocess_func=bm25_tokenize)
-    retriever.k = settings.top_k_retrieve
-    return retriever
+    # 본문과 표·그림은 색인을 따로 만든다 — 표 청크가 본문 색인의 단어 통계(IDF·평균 길이)를 바꿔
+    # 본문 순위가 흔들리지 않게(§5.37). 반환: (본문 리트리버, 표·그림 리트리버 또는 None)
+    body = [d for d in docs if not _is_visual(d)]
+    visual = [d for d in docs if _is_visual(d)]
+    retrievers = []
+    for part in (body, visual):
+        r = BM25Retriever.from_documents(part, preprocess_func=bm25_tokenize) if part else None
+        if r is not None:
+            r.k = settings.top_k_retrieve
+        retrievers.append(r)
+    return tuple(retrievers)
 
 
 _BM25_STORE: dict = {}  # vectorstore 참조 보관 (lru_cache 는 해시 가능 인자만 받으므로)
@@ -151,22 +160,47 @@ def _reciprocal_rank_fusion(
     return [(docs_by_key[key], score) for key, score in fused]
 
 
-def retrieve_hybrid(vectorstore: VectorStoreLike, queries: list[str]) -> list[RetrievedChunk]:
-    """BM25 + 벡터 결과를 RRF 로 융합한 후보 리스트 반환."""
-    _BM25_STORE["vs"] = vectorstore
-    bm25 = _get_bm25(id(vectorstore))
+def _is_visual(doc: Document) -> bool:
+    return (doc.metadata or {}).get("kind") in ("table", "figure")
 
-    rankings: list[list[Document]] = []
+
+def _split_visual(docs: list[Document], n_body: int) -> tuple[list[Document], list[Document]]:
+    """랭킹 앞에서부터 본문 청크 n_body 개와, 그 사이에 나온 표·그림 청크를 나눠 돌려준다."""
+    body: list[Document] = []
+    visual: list[Document] = []
+    for d in docs:
+        if len(body) >= n_body:
+            break
+        (visual if _is_visual(d) else body).append(d)
+    return body, visual
+
+
+def retrieve_hybrid(vectorstore: VectorStoreLike, queries: list[str]) -> list[RetrievedChunk]:
+    """BM25 + 벡터 결과를 RRF 로 융합한 후보 리스트 반환.
+
+    본문 청크와 표·그림 청크(rag/visual.py)는 따로 융합한다. 본문 후보는 표·그림이 없던 때와 똑같이
+    top_k_retrieve 개를 유지하고, 표·그림은 visual_candidates 개까지 따로 더한다 — 표 청크가 후보 자리를
+    차지해 리랭커가 높게 볼 본문 근거가 아예 후보에서 빠지는 일을 막는다(이슈 20, §5.37).
+    """
+    _BM25_STORE["vs"] = vectorstore
+    bm25_body, bm25_visual = _get_bm25(id(vectorstore))
+
+    body_rankings: list[list[Document]] = []
+    visual_rankings: list[list[Document]] = []
     per_query = max(3, settings.top_k_retrieve // max(1, len(queries)))
     for q in queries:
-        # 벡터 랭킹
-        vec_docs = vectorstore.similarity_search(q, k=per_query)
-        rankings.append(vec_docs)
-        # BM25 랭킹
-        bm25_docs = bm25.invoke(q)[:per_query]
-        rankings.append(bm25_docs)
+        # 벡터 랭킹 — 표·그림을 걸러내도 본문이 per_query 개 남게 2배로 받아 나눈다
+        body, visual = _split_visual(vectorstore.similarity_search(q, k=per_query * 2), per_query)
+        body_rankings.append(body)
+        visual_rankings.append(visual)
+        # BM25 랭킹 — 본문·표 색인이 따로 있다
+        body_rankings.append(bm25_body.invoke(q)[:per_query])
+        if bm25_visual is not None:
+            visual_rankings.append(bm25_visual.invoke(q)[:per_query])
 
-    fused = _reciprocal_rank_fusion(rankings, settings.rrf_k)[: settings.top_k_retrieve]
+    fused = _reciprocal_rank_fusion(body_rankings, settings.rrf_k)[: settings.top_k_retrieve]
+    if settings.visual_candidates > 0:
+        fused += _reciprocal_rank_fusion(visual_rankings, settings.rrf_k)[: settings.visual_candidates]
     return [
         RetrievedChunk(
             content=doc.page_content,
@@ -175,6 +209,7 @@ def retrieve_hybrid(vectorstore: VectorStoreLike, queries: list[str]) -> list[Re
             title=doc.metadata.get("title", ""),
             section=doc.metadata.get("section", ""),
             url=doc.metadata.get("url", ""), origin=doc.metadata.get("origin", ""),
+            kind=doc.metadata.get("kind", ""),
             score=float(rrf_score),  # 여기선 RRF 점수를 score 로 보관
         )
         for doc, rrf_score in fused
@@ -228,7 +263,8 @@ def _mmr_select(
     sim = embs @ embs.T  # (N, N) 코사인 유사도
 
     # 같은 논문 청크는 유사도 하한을 올려 '중복'으로 취급
-    sources = [c.source for c in candidates]
+    # 표·그림 청크는 같은 논문의 본문과 따로 센다 — 본문 2개가 이미 뽑힌 논문의 표도 들어올 수 있게(§5.37)
+    sources = [c.source + ("#visual" if c.kind in ("table", "figure") else "") for c in candidates]
     for i in range(len(candidates)):
         for j in range(len(candidates)):
             if i != j and sources[i] and sources[i] == sources[j]:
@@ -279,6 +315,9 @@ def rerank(question: str, candidates: list[RetrievedChunk],
     for c, s in zip(candidates, scores):
         # 자동 수집 논문은 가중치만큼 낮춰, 주변 논문이 무관한 질문의 상위를 차지하지 않게 한다(1.0 = 그대로)
         c.rerank_score = float(s) * (settings.auto_rerank_weight if c.origin == "auto" else 1.0)
+    # 표·그림은 리랭커가 질문과 확실히 관련 있다고 본 것만 근거로 쓴다 — 빈 자리를 채우러 무관한 표가 들어오지 않게(§5.37)
+    candidates = [c for c in candidates
+                  if c.kind not in ("table", "figure") or (c.rerank_score or 0.0) >= settings.visual_min_score]
 
     if settings.rerank_diversity:
         # 관련도순 정렬된 후보에 MMR 적용 (내부에서 다양성 재배치)

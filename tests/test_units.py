@@ -540,6 +540,51 @@ def test_visual_parse() -> None:
     print("  test_visual_parse ✅")
 
 
+def test_visual_retrieval() -> None:
+    """표·그림 청크: 본문 후보와 따로 나누기, 최소 점수 미만은 근거에서 빼기, 논문당 상한은 본문과 따로 세기."""
+    import rag.llm as llm
+    from langchain_core.documents import Document
+
+    from config import settings
+    from rag.schemas import RetrievedChunk
+    from rag.stage2_rerank import _mmr_select, _split_visual
+
+    docs = [Document(page_content=f"d{i}", metadata={"kind": "table"} if i in (1, 3) else {}) for i in range(6)]
+    body, visual = _split_visual(docs, 3)
+    assert [d.page_content for d in body] == ["d0", "d2", "d4"] and [d.page_content for d in visual] == ["d1", "d3"]
+
+    orig = llm.get_embeddings
+    llm.get_embeddings = lambda: _FakeEmbeddings()
+    try:
+        cands = [RetrievedChunk(content="b1", source="P1", rerank_score=0.99),
+                 RetrievedChunk(content="b2", source="P1", rerank_score=0.98),
+                 RetrievedChunk(content="t1", source="P1", kind="table", rerank_score=0.97),
+                 RetrievedChunk(content="o1", source="P2", rerank_score=0.5)]
+        picked = _mmr_select(cands, k=4, lambda_=0.6, same_source_penalty=0.9, max_per_source=2)
+        assert "t1" in [c.content for c in picked], "본문 2개가 뽑힌 논문의 표도 들어와야 함"
+    finally:
+        llm.get_embeddings = orig
+
+    import rag.stage2_rerank as s2
+
+    class _R:
+        def predict(self, pairs):
+            return [0.9 if "body" in c else 0.05 for _, c in pairs]
+
+    orig_r = s2.get_reranker
+    s2.get_reranker = lambda: _R()
+    saved = settings.rerank_diversity
+    settings.rerank_diversity = False
+    try:
+        out = s2.rerank("q", [RetrievedChunk(content="body", source="A"),
+                              RetrievedChunk(content="tab", source="B", kind="table")])
+        assert [c.content for c in out] == ["body"], f"점수 {settings.visual_min_score} 미만 표는 빠져야 함"
+    finally:
+        s2.get_reranker = orig_r
+        settings.rerank_diversity = saved
+    print("  test_visual_retrieval ✅")
+
+
 def main() -> None:
     print("단위 테스트 실행:")
     test_rrf()
@@ -559,6 +604,7 @@ def main() -> None:
     test_bm25_tokenize()
     test_watch()
     test_visual_parse()
+    test_visual_retrieval()
     print("모든 단위 테스트 통과 ✅")
 
 

@@ -166,6 +166,10 @@ class Settings:
     auto_fetch_drop_back_matter: bool = os.getenv("AUTO_FETCH_DROP_BACK_MATTER", "1") not in ("0", "false", "False")
     # 자동 수집 논문 청크의 리랭크 점수에 곱하는 값(1.0 = 그대로). 낮추면 기존 논문이 우선한다
     auto_rerank_weight: float = float(os.getenv("AUTO_RERANK_WEIGHT", "0.7"))
+    # 하이브리드 검색에서 본문 후보(top_k_retrieve)와 별도로 더하는 표·그림 후보 수(0 = 표·그림 제외). §5.37
+    visual_candidates: int = int(os.getenv("VISUAL_CANDIDATES", "1"))
+    # 표·그림 청크가 근거에 들어가는 최소 리랭크 점수(0 = 제한 없음). §5.37
+    visual_min_score: float = float(os.getenv("VISUAL_MIN_SCORE", "0.1"))
     # 자동 수집 논문(origin=auto)을 검색에서 숨김. 지우지 않고 '기준 코퍼스'만으로 평가할 때 쓴다
     # (평가 스크립트의 --corpus base 가 켠다. 챗봇은 꺼 둔 채로 자동 수집분까지 검색)
     exclude_auto_papers: bool = os.getenv("EXCLUDE_AUTO_PAPERS", "0") in ("1", "true", "True")

@@ -5,6 +5,7 @@
 ## [Unreleased]
 
 ### Added
+- 표 검색 측정 도구 `eval/visual_retrieval_eval.py`(LLM 없음): 294문항 지표, 무관한 표가 근거에 든 문항, 표 질문 적중. 표 숫자 질문 7 → 11개
 - 본 DB 에 표 청크 적용: 전문 논문 37편 표 167개(백업 후 처리). 표 숫자 질문 4/7 → 7/7, 294문항 recall 0.9677 → 0.9660(1문항), MRR 그대로
 - 표 이해 `rag/visual.py`·`scripts/enrich_visuals.py`: 캡션이 있는 PDF 페이지를 이미지로 로컬 멀티모달 모델(Qwen3.6)에 보내 표를 마크다운으로 옮기고, 숫자 대조(페이지 텍스트에 있는 비율 80% 이상)를 통과한 표를 근거 청크로 추가. 표 숫자 질문 4/7 → 7/7. 그림 설명은 `VISUAL_FIGURES`(기본 끔), 측정 도구 `eval/visual_qa_eval.py`
 - 관심 분야 알림 `rag/watch.py`·`scripts/watch_papers.py`: 등록한 주제의 arXiv 새 논문을 최신순으로 찾아(검색어 단어 AND) 관련도로 거르고 초록을 한국어로 요약한 소식지 생성, 이미 본 논문·DB 논문 제외. 챗봇 사이드바 등록·확인, arXiv 검색 최신순 정렬 옵션
@@ -110,6 +111,7 @@
 - `ingest_arxiv.py`: 전문 모드가 섹션 인식 청킹을 사용하도록 변경(청크 단위로 수집, 중복 청킹 제거)
 
 ### Fixed
+- 표 청크가 리랭크 후보 자리를 차지해 본문 근거가 빠지던 문제(이슈 20): 본문·표 후보와 BM25 색인 분리, 표 최소 리랭크 점수 `VISUAL_MIN_SCORE`(0.1), 표 후보 수 `VISUAL_CANDIDATES`(1), 논문당 상한은 표를 따로 셈. 294문항 지표 기준과 같음, 표 질문 11/11
 - 검색어 앞 숫자가 지워지던 버그: "3D Gaussian"이 "D Gaussian", "4-bit"가 "bit"로 바뀌어 엉뚱한 논문을 검색 (`rag/stage1_query_transform.py`)
 - PDF 깨진 문자로 임베딩이 실패하면 자동 수집 전체가 조용히 중단되던 문제: 문자 정리, 논문별 예외 처리 (`rag/arxiv_source.py`, `rag/auto_fetch.py`)
 - arXiv 대량 수집 중 한 검색어의 HTTP 429가 예외로 전체 실행을 중단시켜 수집분이 전부 유실되던 문제 → 검색어별 격리(실패 검색어만 건너뛰고 나머지는 저장) (`scripts/ingest_arxiv.py`)

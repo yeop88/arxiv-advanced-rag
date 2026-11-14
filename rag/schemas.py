@@ -20,6 +20,7 @@ class RetrievedChunk(BaseModel):
     section: str = ""         # 전문 기반일 때 섹션명(Method/Results 등)
     url: str = ""             # 원문 링크 (arXiv abs URL 등)
     origin: str = ""          # "auto" 면 챗봇이 자동 수집한 논문의 청크
+    kind: str = ""            # "table"/"figure" 면 표·그림 이해로 추가한 청크(rag/visual.py)
     score: float = 0.0        # 벡터 유사도 또는 리랭크 점수
     rerank_score: float | None = None
 
