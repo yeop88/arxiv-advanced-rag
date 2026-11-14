@@ -21,6 +21,9 @@ rank-bm25>=0.2.2                 # 하이브리드 검색의 BM25
 # === 데이터 수집 (arXiv) ===
 arxiv>=2.1.0                     # arXiv API 클라이언트
 pypdf>=4.0.0                     # 논문 PDF 파싱
+pdfplumber>=0.11.0               # 표·그림·수식 이해: 캡션 위치 찾기·페이지 이미지(rag/ingest/visual.py)
+requests>=2.31.0                 # arXiv PDF·OpenAlex 요청
+# kiwipiepy>=0.18                # (선택) BM25_TOKENIZER=kiwi 한글 형태소 분석
 
 # === 서버·화면 ===
 # 화면(frontend/)은 React — Node.js 20 이상에서 `npm install && npm run build`

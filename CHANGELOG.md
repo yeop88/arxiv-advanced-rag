@@ -126,6 +126,7 @@
 - `ingest_arxiv.py`: 전문 모드가 섹션 인식 청킹을 사용하도록 변경(청크 단위로 수집, 중복 청킹 제거)
 
 ### Fixed
+- `requirements.txt` 에 빠져 있던 `pdfplumber`(표·그림·수식 이해)와 `requests` 추가 — 새 환경에서 설치하면 표 처리·단위 테스트가 실패하던 문제(CI 첫 실행에서 발견)
 - 표 청크가 리랭크 후보 자리를 차지해 본문 근거가 빠지던 문제(이슈 20): 본문·표 후보와 BM25 색인 분리, 표 최소 리랭크 점수 `VISUAL_MIN_SCORE`(0.1), 표 후보 수 `VISUAL_CANDIDATES`(1), 논문당 상한은 표를 따로 셈. 294문항 지표 기준과 같음, 표 질문 11/11
 - 검색어 앞 숫자가 지워지던 버그: "3D Gaussian"이 "D Gaussian", "4-bit"가 "bit"로 바뀌어 엉뚱한 논문을 검색 (`rag/stages/stage1_query_transform.py`)
 - PDF 깨진 문자로 임베딩이 실패하면 자동 수집 전체가 조용히 중단되던 문제: 문자 정리, 논문별 예외 처리 (`rag/ingest/arxiv_source.py`, `rag/ingest/auto_fetch.py`)
