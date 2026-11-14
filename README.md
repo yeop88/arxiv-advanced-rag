@@ -202,6 +202,9 @@ python -m server                # --port 8000, --host 127.0.0.1 (기본값)
 > **🧠 Thinking 토글**(로컬 모델 전용) — 사이드바에서 생성·검증 / 질의변환의 thinking 을 켜고 끌 수 있습니다.
 > 켜면 다중 홉 비교에 유리하지만 느립니다(측정: 질문당 off 약 1분, on 약 3~4분. 같은 채점 기준으로 hard 30문항 answer_relevance 0.640 → 0.697).
 > 사이드바 설정은 그 질문에만 적용되고(서버 기본값은 `.env`), 브라우저에 기억됩니다.
+> **👍/👎 피드백** — 답변 아래에서 평가할 수 있고, 👎 는 이유(선택)를 함께 남깁니다. 질문·답변·근거·검증 결과와 피드백은
+> 내 컴퓨터의 `storage/query_log.db` 에만 기록됩니다(`QUERY_LOG=0` 이면 기록 안 함). `python scripts/export_feedback.py` 로
+> 👎 받은 질문을 평가셋 후보(`storage/eval_candidates.jsonl`, 평가셋과 같은 모양)로 뽑아 검토한 뒤 `eval/eval_set.jsonl` 에 옮깁니다.
 
 > 💡 첫 실행 시 HuggingFace 임베딩(bge-m3)·리랭커 모델을 다운로드하므로 몇 분 걸립니다.
 > GPU 가 있으면 자동으로 사용합니다(`EMBED_DEVICE`·`RERANK_DEVICE`, 기본 `auto`).
@@ -266,7 +269,8 @@ exam03_Advanced_RAG/
 │   ├── runtime.py             # 공유 상태: 로더·LLM 상태·LLM 작업 잠금 + 요청별 설정
 │   ├── streaming.py           # 스레드 작업의 진행 알림·토큰 → SSE (연결 끊기면 작업 중지)
 │   ├── schemas.py             # 요청 형식, 결과 → JSON
-│   └── routes/                # /api/status·config·chat·compare-table·survey·citations·watch
+│   ├── querylog.py            # 실제 사용 질문·👍/👎 기록(storage/query_log.db)
+│   └── routes/                # /api/status·config·chat·feedback·logs·compare-table·survey·citations·watch
 ├── frontend/                  # React + TypeScript (Vite)
 │   └── src/
 │       ├── api/               # REST·SSE 클라이언트, 응답 타입
@@ -280,6 +284,7 @@ exam03_Advanced_RAG/
 │   ├── ingest_local.py        # 로컬 PDF/텍스트 폴더 수집 (한국어 논문)
 │   ├── migrate_to_pinecone.py # Chroma → Pinecone 이전(벡터 그대로 복사, --dry-run)
 │   ├── manage_auto_papers.py  # 자동 수집 논문(origin=auto) 목록·삭제
+│   ├── export_feedback.py     # 👎 받은 실제 질문 → 평가셋 후보
 │   ├── build_citation_graph.py # 인용 그래프(OpenAlex 참고문헌·피인용) 생성
 │   ├── watch_papers.py        # 관심 분야 알림(주제 등록·새 논문 소식지)
 │   └── enrich_visuals.py      # 표·그림·수식을 근거 청크로 추가(로컬 멀티모달 모델)

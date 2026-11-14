@@ -1,10 +1,11 @@
 // 대화 메시지 하나. 답변은 진행 줄 → 본문(타자 효과) → 검증 배지 → 근거·인용·비교표·내부 동작 순.
 // memo: 쓰는 중인 답변 하나만 다시 그리고 지난 메시지는 그대로 둔다.
 import { memo, useCallback, useMemo, useState } from "react";
-import type { ChatMessage } from "../../hooks/useChat";
+import type { ChatMessage, RateHandler } from "../../hooks/useChat";
 import { isActive } from "../../hooks/useChat";
 import { CitationsPanel } from "../answer/CitationsPanel";
 import { CompareTablePanel } from "../answer/CompareTablePanel";
+import { FeedbackBar } from "../answer/FeedbackBar";
 import { AutoFetchedNotice, Inspector, VerificationBar } from "../answer/Inspector";
 import { SourcesPanel } from "../answer/SourcesPanel";
 import { StreamingAnswer } from "../answer/StreamingAnswer";
@@ -13,7 +14,7 @@ import { Collapsible } from "../common/Collapsible";
 import { Markdown } from "../common/Markdown";
 import { ProgressPanel } from "./ProgressPanel";
 
-function AssistantMessage({ m }: { m: ChatMessage }) {
+function AssistantMessage({ m, onRate }: { m: ChatMessage; onRate?: RateHandler }) {
   const [sourcesOpen, setSourcesOpen] = useState(false);
   const [highlight, setHighlight] = useState<number | null>(null);
   const r = m.result;
@@ -59,13 +60,14 @@ function AssistantMessage({ m }: { m: ChatMessage }) {
           <CitationsPanel sources={papers} />
           <CompareTablePanel sources={papers} />
           <Inspector result={r} />
+          {r.log_id && onRate && <FeedbackBar value={m.feedback} onRate={(rating, note) => onRate(m.id, rating, note)} />}
         </div>
       )}
     </div>
   );
 }
 
-export const MessageItem = memo(function MessageItem({ m }: { m: ChatMessage }) {
+export const MessageItem = memo(function MessageItem({ m, onRate }: { m: ChatMessage; onRate?: RateHandler }) {
   if (m.role === "user") {
     return (
       <div className="msg user">
@@ -73,5 +75,5 @@ export const MessageItem = memo(function MessageItem({ m }: { m: ChatMessage }) 
       </div>
     );
   }
-  return <AssistantMessage m={m} />;
+  return <AssistantMessage m={m} onRate={onRate} />;
 });

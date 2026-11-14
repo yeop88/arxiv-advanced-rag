@@ -68,7 +68,10 @@ export interface ChatResult {
   regenerated: boolean;
   auto_fetched: AutoFetched[];
   timings: Record<string, number>;
+  log_id?: string | null; // 서버 질문 기록 id — 👍/👎 피드백에 쓴다(기록이 꺼져 있으면 없음)
 }
+
+export type Rating = 1 | -1 | 0;
 
 export interface CompareTableResult {
   markdown: string;

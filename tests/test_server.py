@@ -5,12 +5,14 @@ tests/test_server.py — FastAPI 서버(SSE 스트리밍) 테스트. 모델·LLM
   - 요청별 설정이 실행 중에만 적용되고 끝나면 원래대로 돌아오는가
   - 준비 전이면 waiting 알림 → 준비되면 이어서 답하는가 / 준비 실패는 fail 로 끝나는가
   - 화면이 연결을 끊으면 작업이 멈추고 잠금이 풀리는가
+  - 질문이 기록되고 👍/👎 피드백이 붙는가(임시 DB)
 실행: python tests/test_server.py
 """
 from __future__ import annotations
 
 import json
 import sys
+import tempfile
 import threading
 import time
 from pathlib import Path
@@ -22,6 +24,7 @@ from fastapi.testclient import TestClient  # noqa: E402
 from config import settings  # noqa: E402
 from rag.core.schemas import PipelineResult, RetrievedChunk, VerificationResult  # noqa: E402
 from server.app import create_app  # noqa: E402
+from server.querylog import QueryLog  # noqa: E402
 from server.runtime import Runtime  # noqa: E402
 
 ANSWER = "리랭킹은 정밀도를 높입니다 [1]. 크로스인코더가 질문과 문단을 함께 봅니다 [2]."
@@ -82,9 +85,13 @@ class FakeLoader:
         return time.monotonic() - self.t0
 
 
-def make_client(pipe, **loader_kw) -> tuple[TestClient, Runtime]:
+_TMP = tempfile.mkdtemp(prefix="rag-test-")
+
+
+def make_client(pipe, qlog: QueryLog | None = None, **loader_kw) -> tuple[TestClient, Runtime]:
     rt = Runtime(loader_factory=lambda: FakeLoader(pipe, **loader_kw), llm_status_fn=lambda: ("ok", "fake"))
-    return TestClient(create_app(rt, frontend_dist=None)), rt
+    qlog = qlog or QueryLog(Path(_TMP) / f"log-{time.monotonic_ns()}.db")   # 실제 기록 DB 를 건드리지 않게
+    return TestClient(create_app(rt, frontend_dist=None, query_log=qlog)), rt
 
 
 def read_events(resp) -> list[tuple[str, dict]]:
@@ -172,6 +179,30 @@ def test_config_and_citations() -> None:
     print("  test_config_and_citations ✅")
 
 
+def test_query_log_and_feedback() -> None:
+    qlog = QueryLog(Path(_TMP) / "feedback.db")
+    client, _ = make_client(FakePipeline(), qlog=qlog)
+    with client:
+        with client.stream("POST", "/api/chat", json={"question": "리랭킹?", "options": {"top_k_rerank": 3}}) as r:
+            result = dict(read_events(r))["result"]
+        lid = result["log_id"]
+        assert lid, "결과에 기록 id 가 있어야 함"
+        assert client.post("/api/feedback", json={"log_id": lid, "rating": -1, "note": "근거 부족"}).json() == {"ok": True}
+        assert client.post("/api/feedback", json={"log_id": "없음", "rating": 1}).status_code == 404
+        assert client.post("/api/feedback", json={"log_id": lid, "rating": 5}).status_code == 422
+        logs = client.get("/api/logs", params={"rating": -1}).json()
+    item = logs["items"][0]
+    assert logs["stats"] == {"total": 1, "up": 0, "down": 1, "errors": 0}, logs["stats"]
+    assert item["question"] == "리랭킹?" and item["answer"] == ANSWER and item["note"] == "근거 부족"
+    assert item["sources"][0]["source"] == "2004.04906" and item["options"] == {"top_k_rerank": 3}
+    # 실패한 질문도 기록된다
+    client, _ = make_client(FakePipeline(), qlog=qlog, error="CUDA OOM")
+    with client, client.stream("POST", "/api/chat", json={"question": "q"}) as r:
+        read_events(r)
+    assert qlog.stats()["errors"] == 1
+    print("  test_query_log_and_feedback ✅")
+
+
 def main() -> None:
     print("서버 테스트 실행:")
     test_chat_stream()
@@ -180,6 +211,7 @@ def main() -> None:
     test_not_ready_fails()
     test_disconnect_stops_job()
     test_config_and_citations()
+    test_query_log_and_feedback()
     print("모든 서버 테스트 통과 ✅")
 
 

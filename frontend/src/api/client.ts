@@ -1,6 +1,6 @@
 // REST API 호출(짧은 요청). 오래 걸리는 작업은 sse.ts 의 postSSE 를 쓴다.
 import { describeError } from "./sse";
-import type { AppConfig, CitationsResponse, ServerStatus, WatchState } from "./types";
+import type { AppConfig, CitationsResponse, Rating, ServerStatus, WatchState } from "./types";
 
 async function json<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, init);
@@ -23,6 +23,8 @@ export const api = {
     if (external) q.set("external", "true");
     return json<CitationsResponse>(`/api/citations?${q}`);
   },
+  feedback: (log_id: string, rating: Rating, note?: string) =>
+    json<{ ok: boolean }>("/api/feedback", post({ log_id, rating, note: note || null })),
   watch: () => json<WatchState>("/api/watch"),
   addWatchTopic: (topic: string) => json<WatchState>("/api/watch/topics", post({ topic })),
   removeWatchTopic: (topic: string) =>

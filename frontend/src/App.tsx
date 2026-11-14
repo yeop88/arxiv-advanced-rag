@@ -85,6 +85,7 @@ export default function App() {
         </header>
         <ChatView
           messages={chat.messages}
+          onRate={chat.rate}
           onExample={send}
           header={
             <>

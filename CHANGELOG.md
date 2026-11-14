@@ -5,6 +5,7 @@
 ## [Unreleased]
 
 ### Added
+- 실제 사용 질문 기록 `server/querylog.py`: 질문·답변·근거·검증·설정을 로컬 SQLite(`storage/query_log.db`, `QUERY_LOG=0` 이면 끔)에 남기고, 답변 아래 👍/👎(👎 는 이유 선택) 피드백을 붙임. `POST /api/feedback`·`GET /api/logs`, 👎 질문을 평가셋 후보로 내보내기 `scripts/export_feedback.py`
 - 챗봇을 FastAPI + React 로 새로 작성: 답변이 한 글자씩 끊김 없이 써짐(토큰을 새 글자만 SSE 로 즉시 전송, 화면은 버퍼에서 프레임마다 꺼내는 타자 효과 — 실제 화면 측정 프레임당 1~6글자·끊긴 프레임 0). 실행 `python -m server` (`server/`, `frontend/`)
 - 답변 중지 버튼(연결을 끊으면 서버 작업도 멈추고 잠금 해제), `[n]` 인용 칩(누르면 해당 근거 강조), 수식 KaTeX 렌더링, 대화·설정 브라우저 기억
 - Thinking 모드의 생각 과정을 실시간 표시: 로컬 서버가 따로 보내는 `reasoning_content` 를 보존(`rag/core/llm.py`)해 `reasoning` 알림으로 전달

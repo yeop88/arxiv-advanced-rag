@@ -1,7 +1,7 @@
 // 대화 목록 + 자동 스크롤. 사용자가 맨 아래를 보고 있을 때만 따라 내려간다(위로 올려 읽는 중이면 그대로).
 // 글이 길어지는 것은 ResizeObserver 로 감지해 같은 프레임에 즉시 스크롤한다(부드러운 스크롤은 글자를 따라가다 출렁임).
 import { useEffect, useRef, type ReactNode } from "react";
-import type { ChatMessage } from "../../hooks/useChat";
+import type { ChatMessage, RateHandler } from "../../hooks/useChat";
 import { MessageItem } from "./MessageItem";
 
 const EXAMPLES = [
@@ -15,9 +15,10 @@ interface Props {
   messages: ChatMessage[];
   header?: ReactNode;
   onExample: (q: string) => void;
+  onRate?: RateHandler;
 }
 
-export function ChatView({ messages, header, onExample }: Props) {
+export function ChatView({ messages, header, onExample, onRate }: Props) {
   const scroller = useRef<HTMLDivElement>(null);
   const content = useRef<HTMLDivElement>(null);
   const pinned = useRef(true);
@@ -66,7 +67,7 @@ export function ChatView({ messages, header, onExample }: Props) {
           </div>
         )}
         {messages.map((m) => (
-          <MessageItem key={m.id} m={m} />
+          <MessageItem key={m.id} m={m} onRate={onRate} />
         ))}
       </div>
     </div>

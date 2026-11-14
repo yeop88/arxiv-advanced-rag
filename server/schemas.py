@@ -35,6 +35,12 @@ class ChatRequest(BaseModel):
     options: ChatOptions = Field(default_factory=ChatOptions)
 
 
+class FeedbackRequest(BaseModel):
+    log_id: str = Field(min_length=1, max_length=64)
+    rating: Literal[1, -1, 0]
+    note: str | None = Field(default=None, max_length=1000)
+
+
 class CompareRequest(BaseModel):
     sources: list[str] = Field(min_length=2)
 

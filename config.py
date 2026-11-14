@@ -178,6 +178,10 @@ class Settings:
     # (평가 스크립트의 --corpus base 가 켠다. 챗봇은 꺼 둔 채로 자동 수집분까지 검색)
     exclude_auto_papers: bool = os.getenv("EXCLUDE_AUTO_PAPERS", "0") in ("1", "true", "True")
 
+    # --- 실제 사용 질문 기록(server/querylog.py) — 질문·답변·근거·검증과 👍/👎 피드백을 로컬 SQLite 에 ---
+    query_log: bool = os.getenv("QUERY_LOG", "1") not in ("0", "false", "False")
+    query_log_path: str = os.getenv("QUERY_LOG_PATH", "./storage/query_log.db")
+
     # --- 품질 하드닝 ---
     enable_llm_cache: bool = True          # 동일 프롬프트 응답 캐싱(SQLite) → 비용·속도 절감
     llm_cache_path: str = "./storage/llm_cache.db"

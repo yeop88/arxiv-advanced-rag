@@ -756,3 +756,47 @@ input[type="range"] {
     padding: 10px 12px 12px;
   }
 }
+
+/* 답변 평가 👍/👎 */
+.feedback {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.feedback .fb {
+  border: 1px solid var(--line);
+  background: var(--bg);
+  border-radius: 999px;
+  padding: 2px 10px;
+  font-size: 14px;
+  cursor: pointer;
+  opacity: 0.75;
+}
+.feedback .fb:hover {
+  opacity: 1;
+}
+.feedback .fb.on {
+  opacity: 1;
+  background: var(--accent-soft);
+  border-color: transparent;
+}
+.fb-note {
+  display: flex;
+  gap: 6px;
+  flex: 1 1 100%;
+}
+.fb-note input {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg);
+  color: inherit;
+  font: inherit;
+  font-size: 14px;
+}
+.fb-note .btn {
+  width: auto;
+}

@@ -1,7 +1,8 @@
 // 대화 상태: 질문 보내기(SSE) → 진행 로그·답변 토큰·결과를 메시지에 반영. 중지·초기화·브라우저에 기억.
 import { useCallback, useEffect, useRef, useState } from "react";
 import { postSSE } from "../api/sse";
-import type { ChatOptions, ChatResult } from "../api/types";
+import { api } from "../api/client";
+import type { ChatOptions, ChatResult, Rating } from "../api/types";
 import { describeEvent, type LogLine } from "../lib/progress";
 import { load, save } from "../lib/storage";
 
@@ -22,7 +23,10 @@ export interface ChatMessage {
   citeTitles?: string[]; // 결과 전에도 [n] 인용에 제목을 보여 주려고(retrieve_done)
   mode?: string;
   error?: string;
+  feedback?: { rating: Rating; note?: string }; // 👍/👎(서버 기록에도 저장)
 }
+
+export type RateHandler = (id: string, rating: Rating, note?: string) => Promise<void>;
 
 const STORE_KEY = "arxiv-rag.messages.v1";
 const MAX_STORED = 60;
@@ -36,6 +40,8 @@ export function useChat() {
     load<ChatMessage[]>(STORE_KEY, []).map((m) => (isActive(m) ? { ...m, phase: "stopped" } : m)),
   );
   const abort = useRef<AbortController | null>(null);
+  const latest = useRef(messages); // rate 가 토큰마다 바뀌지 않게(지난 메시지 memo 유지)
+  latest.current = messages;
   const running = messages.some(isActive);
 
   useEffect(() => {
@@ -126,6 +132,18 @@ export function useChat() {
     [messages, running, update],
   );
 
+  // 👍/👎: 서버 기록에 붙이고, 성공하면 메시지에도 남긴다(새로고침 뒤에도 보이게)
+  const rate = useCallback<RateHandler>(
+    async (id, rating, note) => {
+      const m = latest.current.find((x) => x.id === id);
+      const logId = m?.result?.log_id;
+      if (!logId) throw new Error("이 답변은 서버 기록이 없어 피드백을 남길 수 없습니다.");
+      await api.feedback(logId, rating, note);
+      update(id, (x) => ({ ...x, feedback: rating ? { rating, note } : undefined }));
+    },
+    [update],
+  );
+
   const stop = useCallback(() => abort.current?.abort(), []);
   const clear = useCallback(() => {
     abort.current?.abort();
@@ -133,5 +151,5 @@ export function useChat() {
     save(STORE_KEY, []);
   }, []);
 
-  return { messages, running, send, stop, clear };
+  return { messages, running, send, stop, clear, rate };
 }
