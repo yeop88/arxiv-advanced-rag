@@ -592,6 +592,11 @@ def test_visual_retrieval() -> None:
     finally:
         s2.get_reranker = orig_r
         settings.rerank_diversity = saved
+    from scripts.enrich_visuals import titled
+
+    once = titled("Mamba", "Equation 4: discretization")
+    assert once == "[Mamba] Equation 4: discretization" and titled("Mamba", once) == once, "제목은 한 번만 붙는다"
+    assert titled("", "Table 1: x") == "Table 1: x"
     print("  test_visual_retrieval ✅")
 
 

@@ -5,6 +5,7 @@ scripts/enrich_visuals.py — 전문이 있는 논문의 표·그림·수식을 
     python scripts/enrich_visuals.py --sources 2004.04906   # 지정 논문만
     python scripts/enrich_visuals.py --auto [--limit 5]     # 자동 수집 논문 중 아직 처리 안 한 것
     python scripts/enrich_visuals.py --all --kinds figure equation   # 전문 논문 전체에 그림·수식만 추가
+    python scripts/enrich_visuals.py --retitle               # 기존 청크 앞에 논문 제목 붙이기(LLM 없음)
 
 --kinds 를 빼면 표 + 설정(VISUAL_FIGURES·VISUAL_EQUATIONS)으로 켠 종류. 논문마다 처리한 종류를 기록해, 이미 한 종류는 다시 하지 않는다.
 
@@ -53,6 +54,30 @@ def _save_done(d: dict) -> None:
     p.write_text(json.dumps(d, ensure_ascii=False, indent=1), encoding="utf-8")
 
 
+def titled(title: str, text: str) -> str:
+    """청크 앞에 논문 제목을 붙인다 — 짧은 수식·표 청크만으로는 어느 논문 것인지 몰라 "Mamba 논문에서 …" 같은 질문과
+    맞지 않았다(Mamba 이산화 수식 리랭크 0.02, §5.38)."""
+    prefix = f"[{title}] "
+    return text if not title or text.startswith(prefix) else prefix + text
+
+
+def retitle(vs) -> int:
+    """이미 넣은 표·그림·수식 청크에 제목을 붙여 다시 넣는다(LLM 없음, 임베딩만 다시)."""
+    from langchain_core.documents import Document
+
+    d = vs.get(include=["documents", "metadatas"])
+    ids, docs = [], []
+    for i, text, m in zip(d["ids"], d["documents"], d["metadatas"]):
+        m = m or {}
+        if m.get("kind") in VISUAL_KINDS and titled(m.get("title", ""), text) != text:
+            ids.append(i)
+            docs.append(Document(page_content=titled(m["title"], text), metadata=m))
+    for k in range(0, len(ids), 100):
+        vs.delete(ids[k:k + 100])
+        vs.add_documents(docs[k:k + 100])
+    return len(ids)
+
+
 def papers(vs) -> dict[str, dict]:
     """전문이 있는 논문(청크가 여럿이고 섹션 정보가 있는 것): ID → 대표 메타데이터·청크 수."""
     out: dict[str, dict] = {}
@@ -80,8 +105,8 @@ def enrich(src: str, meta: dict, vs, kinds: tuple[str, ...]) -> list[dict]:
     items = visual.extract(resp.content, kinds=kinds, progress=lambda ev, **kw: print(
         f"    page {kw['page']} ({kw['i']}/{kw['n']}) {', '.join(kw['labels'])}", flush=True))
     keep = {k: meta[k] for k in ("source", "title", "url", "published", "origin", "fetched_at", "fetch_query") if k in meta}
-    docs = [Document(page_content=it.text, metadata={**keep, "section": it.label, "kind": it.kind, "page": it.page})
-            for it in items]
+    docs = [Document(page_content=titled(meta.get("title", ""), it.text),
+                     metadata={**keep, "section": it.label, "kind": it.kind, "page": it.page}) for it in items]
     if docs:
         vs.add_documents(docs)
     print(f"    → 표 {sum(i.kind == 'table' for i in items)}개·그림 {sum(i.kind == 'figure' for i in items)}개·"
@@ -101,10 +126,14 @@ def main() -> None:
     ap.add_argument("--all", action="store_true", help="전문이 있는 논문 전체(이미 처리한 종류는 건너뜀)")
     ap.add_argument("--kinds", nargs="+", choices=visual.KINDS, help="처리할 종류(기본: 표 + 설정으로 켠 종류)")
     ap.add_argument("--limit", type=int, default=0)
+    ap.add_argument("--retitle", action="store_true", help="기존 표·그림·수식 청크 앞에 논문 제목 붙이기(LLM 없음)")
     args = ap.parse_args()
     kinds = tuple(args.kinds or visual.default_kinds())
     settings.exclude_auto_papers = False
     vs = load_vectorstore()
+    if args.retitle:
+        print(f"제목을 붙인 청크 {retitle(vs)}개")
+        return
     full = papers(vs)
     done = _done()
     if args.list or not (args.sources or args.auto or args.all):

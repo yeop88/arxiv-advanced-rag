@@ -29,6 +29,7 @@ _MATHY = re.compile(r"[=≤≥≈∝∼∑∏∫√σαβγδθλμπφψωΔΣ�
 MIN_NUMBER_MATCH = 0.8   # 표 숫자 중 페이지 텍스트에 있어야 하는 비율
 MIN_GREEK_MATCH = 0.5    # 수식의 그리스 문자 중 페이지 텍스트에 있어야 하는 비율
 RESOLUTION = 110         # 페이지 이미지 해상도(dpi). 110 에서 DPR Table 2 를 정확히 옮겼다
+EQ_RESOLUTION = 150      # 수식이 있는 페이지. 110 에서는 NeRF 식 (1)의 첨자를 잘못 읽었고(T(t)→T(r)) 150·200 은 정확
 MAX_PAGES = 12           # 논문당 표·그림 페이지 최대 수(시간 제한: 페이지당 약 30초)
 MAX_EQ_PAGES = 6         # 논문당 수식 페이지 최대 수(본문 앞쪽부터 — 부록의 유도 과정까지 다 옮기지 않게)
 
@@ -170,7 +171,8 @@ def extract(pdf_bytes: bytes, progress=None, kinds: tuple[str, ...] | None = Non
         for i, (no, labels, text) in enumerate(pages, 1):
             progress("visual_page", i=i, n=len(pages), page=no, labels=labels)
             buf = io.BytesIO()
-            pdf.pages[no - 1].to_image(resolution=RESOLUTION).original.save(buf, format="PNG")
+            dpi = EQ_RESOLUTION if any(_kind_of(lb) == "equation" for lb in labels) else RESOLUTION
+            pdf.pages[no - 1].to_image(resolution=dpi).original.save(buf, format="PNG")
             for it in parse(_ask(buf.getvalue(), labels), no):
                 if it.label not in labels:   # 이 페이지에 없는 항목(지어낸 것)과 요청하지 않은 종류는 버린다
                     continue

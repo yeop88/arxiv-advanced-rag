@@ -114,7 +114,7 @@ def _get_bm25(vectorstore_id: int):
 
     docs = get_all_documents(_BM25_STORE["vs"])
     # 본문과 표·그림은 색인을 따로 만든다 — 표 청크가 본문 색인의 단어 통계(IDF·평균 길이)를 바꿔
-    # 본문 순위가 흔들리지 않게(§5.37). 반환: (본문 리트리버, 표·그림 리트리버 또는 None)
+    # 본문 순위가 흔들리지 않게(§5.37). 반환: (본문 리트리버, 표·그림 리트리버 또는 None, 논문별 표·그림·수식 청크)
     body = [d for d in docs if not _is_visual(d)]
     visual = [d for d in docs if _is_visual(d)]
     retrievers = []
@@ -123,7 +123,10 @@ def _get_bm25(vectorstore_id: int):
         if r is not None:
             r.k = settings.top_k_retrieve
         retrievers.append(r)
-    return tuple(retrievers)
+    by_source: dict[str, list[Document]] = {}
+    for d in visual:
+        by_source.setdefault(d.metadata.get("source", ""), []).append(d)
+    return retrievers[0], retrievers[1], by_source
 
 
 _BM25_STORE: dict = {}  # vectorstore 참조 보관 (lru_cache 는 해시 가능 인자만 받으므로)
@@ -183,7 +186,7 @@ def retrieve_hybrid(vectorstore: VectorStoreLike, queries: list[str]) -> list[Re
     차지해 리랭커가 높게 볼 본문 근거가 아예 후보에서 빠지는 일을 막는다(이슈 20, §5.37).
     """
     _BM25_STORE["vs"] = vectorstore
-    bm25_body, bm25_visual = _get_bm25(id(vectorstore))
+    bm25_body, bm25_visual, visual_by_source = _get_bm25(id(vectorstore))
 
     body_rankings: list[list[Document]] = []
     visual_rankings: list[list[Document]] = []
@@ -200,7 +203,17 @@ def retrieve_hybrid(vectorstore: VectorStoreLike, queries: list[str]) -> list[Re
 
     fused = _reciprocal_rank_fusion(body_rankings, settings.rrf_k)[: settings.top_k_retrieve]
     if settings.visual_candidates > 0:
-        fused += _reciprocal_rank_fusion(visual_rankings, settings.rrf_k)[: settings.visual_candidates]
+        visual_fused = _reciprocal_rank_fusion(visual_rankings, settings.rrf_k)[: settings.visual_candidates]
+        # 본문 후보 상위 논문의 표·그림·수식도 모두 후보로 — 한국어 질문과 영어 LaTeX 청크는 검색 순위로는 잘 안 만나지만
+        # 논문은 본문으로 쉽게 찾는다. 고르는 건 리랭커와 최소 점수(VISUAL_MIN_SCORE)가 한다(§5.38)
+        top_sources = list(dict.fromkeys(d.metadata.get("source", "") for d, _ in fused))[: settings.visual_from_top_papers]
+        seen = {_chunk_key(d.page_content) for d, _ in visual_fused}
+        for src in top_sources:
+            for d in visual_by_source.get(src, []):
+                if _chunk_key(d.page_content) not in seen:
+                    seen.add(_chunk_key(d.page_content))
+                    visual_fused.append((d, 0.0))
+        fused += visual_fused
     return [
         RetrievedChunk(
             content=doc.page_content,

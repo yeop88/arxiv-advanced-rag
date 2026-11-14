@@ -5,7 +5,8 @@
 ## [Unreleased]
 
 ### Added
-- 수식 이해: 번호 붙은 수식이 있는 페이지를 로컬 멀티모달 모델로 LaTeX·기호 뜻으로 옮겨 근거 청크로 추가(`VISUAL_EQUATIONS`, 관계 기호·그리스 문자 대조 검사). 그림 설명은 영어로 변경. `enrich_visuals.py --all --kinds`로 종류별 추가, 논문마다 처리한 종류 기록
+- 수식 이해: 번호 붙은 수식이 있는 페이지를 로컬 멀티모달 모델로 LaTeX·기호 뜻으로 옮겨 근거 청크로 추가(150dpi, 관계 기호·그리스 문자 대조 검사). 그림 설명은 영어로 변경. `enrich_visuals.py --all --kinds`로 종류별 추가, 논문마다 처리한 종류 기록. 본 DB 37편에 그림 201·수식 168개, 표·그림·수식 질문 18/18
+- 표·그림·수식 청크 앞에 논문 제목(`--retitle`), 본문 후보 1위 논문의 표·그림·수식을 모두 리랭크 후보로(`VISUAL_FROM_TOP_PAPERS`)
 - 표 검색 측정 도구 `eval/visual_retrieval_eval.py`(LLM 없음): 294문항 지표, 무관한 표가 근거에 든 문항, 표 질문 적중. 표 숫자 질문 7 → 11개
 - 본 DB 에 표 청크 적용: 전문 논문 37편 표 167개(백업 후 처리). 표 숫자 질문 4/7 → 7/7, 294문항 recall 0.9677 → 0.9660(1문항), MRR 그대로
 - 표 이해 `rag/visual.py`·`scripts/enrich_visuals.py`: 캡션이 있는 PDF 페이지를 이미지로 로컬 멀티모달 모델(Qwen3.6)에 보내 표를 마크다운으로 옮기고, 숫자 대조(페이지 텍스트에 있는 비율 80% 이상)를 통과한 표를 근거 청크로 추가. 표 숫자 질문 4/7 → 7/7. 그림 설명은 `VISUAL_FIGURES`(기본 끔), 측정 도구 `eval/visual_qa_eval.py`
@@ -81,6 +82,7 @@
 - 진행 보고서 (`docs/PROGRESS_REPORT.md`), 작업 지침 (`CLAUDE.md`)
 
 ### Changed
+- 그림·수식 청크 기본 켬(`VISUAL_FIGURES=1`, `VISUAL_EQUATIONS=1`), 표·그림·수식 후보 2개(`VISUAL_CANDIDATES=2`)
 - BM25 단어 나누기 `BM25_TOKENIZER`(기본 regex): 공백 대신 영문·숫자와 한글을 따로 떼고 한글 조사를 제거. 실제 코퍼스 recall@5 0.9660 → 0.9677, MRR 0.9485 → 0.9543. kiwi(형태소 분석)도 선택 가능, 비교 도구 `eval/bm25_tokenizer_eval.py`
 - 수집 신호: 한 근거 청크에 이름이 단어로 2번 이상 나오면 그 논문을 원 논문으로 보고 근거 있음으로 판단(제목에 이름이 없는 HyDE 등). 코퍼스 안 질문의 신호 5/42 → 3/42, 필요한 수집은 그대로 (`rag/auto_fetch.py`)
 - 원 논문만 넣기 `AUTO_FETCH_TITLE_ONLY`(기본 켬): 추정 제목과 맞고 관련도 기준을 넘는 원 논문을 찾으면 그 1편만 추가(파생 논문이 다른 질문 근거에 끼어들어 answer_relevance −0.063 → −0.003). 관련도 미달로 제목만 맞은 경우는 다른 후보도 함께

@@ -3,7 +3,7 @@ eval/visual_retrieval_eval.py — 표·그림 청크 리랭크 가중치(VISUAL_
 
 가중치마다 두 가지를 잰다.
   - 평가셋 294문항 recall@5 / MRR: 표·그림 청크가 무관한 질문의 근거를 밀어내는지(이슈 20)
-  - 표 숫자 질문(visual_qa_eval.QUESTIONS): 그 논문의 표·그림 청크가 top-5 에 드는지(가중치를 낮춰도 표가 필요한 질문엔 남는지)
+  - 표·그림·수식 질문(visual_qa_eval.QUESTIONS): 그 논문의 해당 종류 청크가 top-5 에 드는지
 검색·리랭커 점수는 질문마다 한 번만 계산하고, 가중치만 바꿔 MMR 선택을 다시 한다(실제 rerank() 와 같은 계산).
     python eval/visual_retrieval_eval.py --weights 1.0 0.9 --floors 0 0.05 0.1 0.2 [--tag figures]
 """
@@ -69,12 +69,11 @@ def main() -> None:
         cands, raw = _prepare(vs, r["question"])
         prepared.append((r, cands, raw, get_vectors(vs, [c.id for c in cands if c.id])))
     table_prepared = []
-    for q, _nums, src in QUESTIONS:
+    for q, _exp, src, kind in QUESTIONS:
         cands, raw = _prepare(vs, q)
-        table_prepared.append((q, src, cands, raw, get_vectors(vs, [c.id for c in cands if c.id])))
+        table_prepared.append((q, src, kind, cands, raw, get_vectors(vs, [c.id for c in cands if c.id])))
 
     out = {"tables": kinds.count("table"), "figures": kinds.count("figure"), "equations": kinds.count("equation"), "rows": []}
-    base_hits = None
     for w, floor in [(w, f) for w in args.weights for f in args.floors]:
         recalls, mrrs, intrusions, hits = [], [], 0, []
         for r, cands, raw, vec in prepared:
@@ -83,16 +82,16 @@ def main() -> None:
             mrrs.append(reciprocal_rank(sel, r["expected_sources"]))
             # 정답이 아닌 논문의 표·그림 청크가 근거에 들어간 문항 수
             intrusions += any(c.kind in VISUAL_KINDS and c.source not in r["expected_sources"] for c in sel)
-        for q, src, cands, raw, vec in table_prepared:
+        for q, src, kind, cands, raw, vec in table_prepared:
             sel = _select(cands, raw, w, vec, floor)
-            hits.append(any(c.kind in VISUAL_KINDS and c.source == src for c in sel))
+            hits.append((kind, any(c.kind == kind and c.source == src for c in sel)))
         row = {"weight": w, "floor": floor, "recall": round(sum(recalls) / len(recalls), 4), "mrr": round(sum(mrrs) / len(mrrs), 4),
-               "intrusion_questions": intrusions, "table_hits": sum(hits), "table_n": len(hits),
+               "intrusion_questions": intrusions,
+               "hits": {k: [sum(h for kk, h in hits if kk == k), sum(kk == k for kk, _ in hits)] for k in VISUAL_KINDS},
                "recalls": recalls}
         out["rows"].append(row)
-        base_hits = base_hits or hits
         print(f"weight {w:.2f} floor {floor:.2f}: recall {row['recall']:.4f} MRR {row['mrr']:.4f} | 무관한 표·그림 끼어든 문항 {intrusions}"
-              f" | 표 질문에서 그 논문 표가 top-5 {sum(hits)}/{len(hits)}", flush=True)
+              f" | 질문의 그 논문 표·그림·수식이 top-5 {row['hits']}", flush=True)
     name = f"visual_retrieval{'_' + args.tag if args.tag else ''}.json"
     (RESULTS / name).write_text(json.dumps(out, ensure_ascii=False), encoding="utf-8")
     print(f"표 {out['tables']}개·그림 {out['figures']}개·수식 {out['equations']}개, 결과 {name}")

@@ -153,9 +153,10 @@ class Settings:
     openalex_enabled: bool = os.getenv("OPENALEX_ENABLED", "0") not in ("0", "false", "False")
     # OpenAlex API 키(선택). 없으면 같은 네트워크 IP 가 나눠 쓰는 하루 무료 예산(검색 약 100회)을 쓴다
     openalex_api_key: str = os.getenv("OPENALEX_API_KEY", "")
-    # 그림 설명·수식(LaTeX) 청크도 만들지. 그림은 한국어 설명일 때 무관한 질문에 끼어들어 껐었다(§5.35) — 영어 설명 + 후보 분리로 재측정(§5.38)
-    visual_figures: bool = os.getenv("VISUAL_FIGURES", "0") not in ("0", "false", "False")
-    visual_equations: bool = os.getenv("VISUAL_EQUATIONS", "0") not in ("0", "false", "False")
+    # 그림 설명·수식(LaTeX) 청크도 만들지. 그림은 한국어 설명일 때 무관한 질문에 끼어들어 껐었다(§5.35).
+    # 영어 설명 + 후보 분리 + 제목 붙이기로 294문항 지표 손해 없이 켬(§5.38)
+    visual_figures: bool = os.getenv("VISUAL_FIGURES", "1") not in ("0", "false", "False")
+    visual_equations: bool = os.getenv("VISUAL_EQUATIONS", "1") not in ("0", "false", "False")
     # 표·그림 근거 청크(scripts/enrich_visuals.py)를 처리한 논문 기록
     visual_done_path: str = os.getenv("VISUAL_DONE_PATH", "./storage/visual_done.json")
     # 관심 분야 알림: 주제 목록·본 논문 기록 / 소식지 폴더 (scripts/watch_papers.py)
@@ -167,8 +168,10 @@ class Settings:
     auto_fetch_drop_back_matter: bool = os.getenv("AUTO_FETCH_DROP_BACK_MATTER", "1") not in ("0", "false", "False")
     # 자동 수집 논문 청크의 리랭크 점수에 곱하는 값(1.0 = 그대로). 낮추면 기존 논문이 우선한다
     auto_rerank_weight: float = float(os.getenv("AUTO_RERANK_WEIGHT", "0.7"))
-    # 하이브리드 검색에서 본문 후보(top_k_retrieve)와 별도로 더하는 표·그림 후보 수(0 = 표·그림 제외). §5.37
-    visual_candidates: int = int(os.getenv("VISUAL_CANDIDATES", "1"))
+    # 하이브리드 검색에서 본문 후보(top_k_retrieve)와 별도로 더하는 표·그림·수식 후보 수(0 = 표·그림·수식 제외). §5.37·§5.38
+    visual_candidates: int = int(os.getenv("VISUAL_CANDIDATES", "2"))
+    # 본문 후보 상위 몇 논문의 표·그림·수식 청크를 모두 리랭크 후보에 넣을지(0 = 끔). §5.38
+    visual_from_top_papers: int = int(os.getenv("VISUAL_FROM_TOP_PAPERS", "1"))
     # 표·그림 청크가 근거에 들어가는 최소 리랭크 점수(0 = 제한 없음). §5.37
     visual_min_score: float = float(os.getenv("VISUAL_MIN_SCORE", "0.1"))
     # 자동 수집 논문(origin=auto)을 검색에서 숨김. 지우지 않고 '기준 코퍼스'만으로 평가할 때 쓴다
