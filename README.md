@@ -1,5 +1,7 @@
 # 📚 arXiv Advanced RAG — 학술논문 어시스턴트
 
+[![tests](https://github.com/yeop88/arxiv-advanced-rag/actions/workflows/tests.yml/badge.svg)](https://github.com/yeop88/arxiv-advanced-rag/actions/workflows/tests.yml)
+
 **질의 변환 → 리랭킹 → 생성 → 검증** 4단계 RAG 파이프라인을 각 단계가 코드에서
 **눈에 보이도록** 분리해 구현한 학습용 + 제품급 품질의 **비영리** 프로젝트입니다.
 
@@ -190,7 +192,9 @@ python -m server                # --port 8000, --host 127.0.0.1 (기본값)
 > (관련도 기준을 넘는 논문만, 로컬 모델이 추정한 원 논문 제목으로도 찾아 원 논문 우선, 질문당 최대 3편, 참고문헌·부록은 제외, 사이드바에서 끄기 가능). 추가된 논문은 `python scripts/manage_auto_papers.py`로 보고 지울 수 있습니다.
 > OpenAlex는 기본으로 꺼져 있어(`OPENALEX_ENABLED=0`) 후보는 arXiv에서만 찾습니다. 켜면 인용 순 검색이 더해지지만, 회사망처럼 여럿이 같은 IP를 쓰면 무료 예산이 금방 바닥납니다(429) — 이때는 openalex.org 무료 키를 `OPENALEX_API_KEY`에 넣으세요.
 > 평가는 지우지 않고도 자동 수집분을 빼고(기본) 또는 넣고 할 수 있습니다(`--corpus`, 아래 학습·평가 도구).
-> 코퍼스가 커지면 검색 품질이 조금씩 내려가므로, 자동 수집은 **2,000청크까지만** 유지하고 넘으면 오래 안 쓰인 논문부터 지웁니다(`AUTO_FETCH_MAX_CHUNKS`). 표·그림·수식을 처리한 논문은 지우지 않습니다. `python eval/corpus_health.py`로 상태를 점검할 수 있습니다.
+> 코퍼스가 커지면 검색 품질이 조금씩 내려가므로, 자동 수집은 **2,000청크까지만** 유지하고 넘으면 오래 안 쓰인 논문부터 지웁니다(`AUTO_FETCH_MAX_CHUNKS`). 표·그림·수식을 처리한 논문은 지우지 않습니다. `python eval/corpus_health.py`로 상태를 점검할 수 있습니다
+> (LLM 없음, 2~3분). 표·그림·수식 처리와 자동 수집 논문 삭제 스크립트는 끝날 때 이 점검을 자동으로 돌리고(`--no-health`로 생략),
+> 챗봇이 모은 논문은 `python eval/corpus_health.py --if-needed`(마지막 점검 뒤 200청크 이상 바뀐 경우만)를 작업 스케줄러에 매일 걸어 두면 됩니다.
 > **📊 표·그림·수식 이해** — `python scripts/enrich_visuals.py --auto`(또는 `--all`)로 전문이 있는 논문의 표·그림·수식을 로컬 모델(이미지 입력)이 읽어 근거로 추가합니다.
 > 표는 마크다운 표, 그림은 영어 설명, 수식은 LaTeX 와 기호 뜻으로 옮기고, 페이지 텍스트와 대조해 잘못 읽은 것은 버립니다.
 > 표 숫자·수식·그림을 묻는 질문에 그 표·그림·수식을 근거로 답합니다(측정 18/18). 논문당 1~3분 걸려 배치로 돌리며, `--list`로 대상과 처리한 종류를 볼 수 있습니다.
@@ -312,6 +316,7 @@ exam03_Advanced_RAG/
 │   ├── citation_check_eval.py # 문장 단위 인용 확인 기준 보정(실제 답변 81개, LLM 없음)
 │   └── vector_parity.py       # Chroma vs Pinecone 검색 결과 동일성 검증
 ├── tests/                     # 단위·오프라인·서버(SSE) 테스트 (fake_pinecone.py: Pinecone 대역)
+├── .github/workflows/tests.yml # 푸시마다 회귀 검사(모델·DB 없이 도는 테스트 + 화면 빌드)
 ├── notebooks/
 │   └── advanced_rag_walkthrough.ipynb  # 4단계 셀 단위 학습 노트북
 └── docs/
@@ -321,7 +326,8 @@ exam03_Advanced_RAG/
 ```
 
 테스트: `python tests/test_units.py` · `python tests/test_pipeline_offline.py` · `python tests/test_server.py` ·
-`cd frontend && npm test`
+`cd frontend && npm test`. 푸시마다 GitHub Actions(`.github/workflows/tests.yml`)가 모델·DB 없이 도는 단위·서버·청킹·화면 테스트와 빌드를 실행합니다
+(`test_pipeline_offline.py`는 실제 벡터 DB 와 모델이 필요해 로컬에서만).
 
 ---
 

@@ -21,6 +21,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from config import settings  # noqa: E402
+from eval.corpus import run_health_check  # noqa: E402
 
 settings.exclude_auto_papers = False  # 관리 대상이 자동 수집분이므로 숨기지 않는다
 from rag.ingest.auto_fetch import is_back_matter  # noqa: E402
@@ -45,6 +46,7 @@ def main() -> None:
     ap.add_argument("--remove", nargs="+", metavar="ARXIV_ID", help="지울 논문 ID")
     ap.add_argument("--remove-all", action="store_true", help="자동 수집 논문 전부 삭제")
     ap.add_argument("--strip-back-matter", action="store_true", help="자동 수집 논문의 참고문헌·부록 청크만 삭제")
+    ap.add_argument("--no-health", action="store_true", help="삭제 뒤 코퍼스 점검(eval/corpus_health.py) 생략")
     args = ap.parse_args()
 
     if args.strip_back_matter:
@@ -55,6 +57,8 @@ def main() -> None:
         if ids:
             vs.delete(ids=ids)
         print(f"참고문헌·부록 청크 {len(ids)}개 삭제. BM25 색인은 챗봇 재시작 시 다시 만들어집니다.")
+        if ids and not args.no_health:
+            run_health_check("참고문헌·부록 삭제 뒤")
         return
 
     papers = auto_papers()
@@ -72,6 +76,8 @@ def main() -> None:
     targets &= set(papers)
     removed = delete_sources(targets)
     print(f"삭제: 논문 {len(targets)}편, 청크 {removed}개. BM25 색인은 챗봇 재시작 시 다시 만들어집니다.")
+    if removed and not args.no_health:
+        run_health_check(f"자동 수집 논문 {len(targets)}편 삭제 뒤")
 
 
 if __name__ == "__main__":

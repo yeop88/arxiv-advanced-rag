@@ -12,6 +12,8 @@ eval/corpus_health.py — 코퍼스가 커져도 검색 품질이 유지되는�
 사용:
     python eval/corpus_health.py
     python eval/corpus_health.py --no-record   # 기록 없이 확인만
+    python eval/corpus_health.py --if-needed   # 마지막 점검 뒤 200청크 이상 바뀐 경우만(매일 작업 스케줄러에)
+표·그림·수식 처리(scripts/enrich_visuals.py)와 자동 수집 논문 삭제(scripts/manage_auto_papers.py)는 끝날 때 자동으로 부른다.
 """
 from __future__ import annotations
 
@@ -54,35 +56,75 @@ def measure(vs, records: list[dict]) -> tuple[float, float]:
     return sum(recalls) / len(recalls), sum(mrrs) / len(mrrs)
 
 
-def main() -> None:
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--no-record", action="store_true", help="결과를 기록하지 않음")
-    args = ap.parse_args()
-    if settings.vector_backend != "chroma":
-        raise SystemExit("로컬 백엔드(VECTOR_BACKEND=chroma)에서만 실행합니다. 원격 DB 는 전송량 한도를 소모합니다.")
+def _store_size(vs) -> tuple[int, int, int]:
+    """(자동 수집 논문 수, 자동 수집 청크 수, 전체 청크 수). 숨긴 보기여도 실제 스토어 기준."""
+    papers, chunks = auto_stats(vs)
+    total = len(getattr(vs, "inner", vs).get(include=[]).get("ids", []))
+    return papers, chunks, total
 
+
+def last_record() -> dict | None:
+    if not OUT.exists():
+        return None
+    lines = [x for x in OUT.read_text(encoding="utf-8").splitlines() if x.strip()]
+    return json.loads(lines[-1]) if lines else None
+
+
+def growth_since_last(vs) -> tuple[int, dict | None]:
+    """마지막 점검 뒤 늘거나 줄어든 청크 수(절댓값). 옛 기록엔 전체 청크 수가 없어 자동 수집 청크로 비교."""
+    last = last_record()
+    _, chunks, total = _store_size(vs)
+    if last is None:
+        return 10 ** 9, None
+    if "total_chunks" in last:
+        return abs(total - last["total_chunks"]), last
+    return abs(chunks - last.get("auto_chunks", 0)), last
+
+
+def run(record: bool = True) -> dict:
+    """기준(자동 수집 제외)·현재(포함) 코퍼스로 평가셋 검색 지표를 재고 판정한다."""
     records = load_eval_set()
     set_corpus("base")
     base_recall, base_mrr = measure(load_vectorstore(), records)
     set_corpus("all")
     vs = load_vectorstore()
     recall, mrr = measure(vs, records)
-    papers, chunks = auto_stats(vs)
+    papers, chunks, total = _store_size(vs)
 
     drop = max(base_recall - recall, base_mrr - mrr)
     verdict = "초과" if drop >= LIMIT else "주의" if drop >= WARN else "정상"
-    row = {"date": dt.date.today().isoformat(), "auto_papers": papers, "auto_chunks": chunks,
+    row = {"date": dt.date.today().isoformat(), "auto_papers": papers, "auto_chunks": chunks, "total_chunks": total,
            "budget": settings.auto_fetch_max_chunks, "base_recall": round(base_recall, 4), "base_mrr": round(base_mrr, 4),
            "recall": round(recall, 4), "mrr": round(mrr, 4), "verdict": verdict}
-    print(f"자동 수집 {papers}편 / {chunks}청크 (예산 {settings.auto_fetch_max_chunks})")
+    print(f"자동 수집 {papers}편 / {chunks}청크 (예산 {settings.auto_fetch_max_chunks}), 전체 {total}청크")
     print(f"recall@{settings.top_k_rerank}: 기준 {base_recall:.4f} → 현재 {recall:.4f} ({recall - base_recall:+.4f})")
     print(f"MRR: 기준 {base_mrr:.4f} → 현재 {mrr:.4f} ({mrr - base_mrr:+.4f})")
     print(f"판정: {verdict} (주의 {WARN}, 초과 {LIMIT})")
-    if not args.no_record:
+    if record:
         OUT.parent.mkdir(parents=True, exist_ok=True)
         with OUT.open("a", encoding="utf-8") as f:
             f.write(json.dumps(row, ensure_ascii=False) + "\n")
-    sys.exit(1 if verdict == "초과" else 0)
+    return row
+
+
+def main() -> None:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--no-record", action="store_true", help="결과를 기록하지 않음")
+    ap.add_argument("--if-needed", action="store_true",
+                    help="마지막 점검 뒤 청크가 --min-growth 이상 바뀌었을 때만 실행(작업 스케줄러용)")
+    ap.add_argument("--min-growth", type=int, default=200, help="--if-needed 기준 청크 수(기본 200)")
+    args = ap.parse_args()
+    if settings.vector_backend != "chroma":
+        raise SystemExit("로컬 백엔드(VECTOR_BACKEND=chroma)에서만 실행합니다. 원격 DB 는 전송량 한도를 소모합니다.")
+    if args.if_needed:
+        set_corpus("all")
+        grown, last = growth_since_last(load_vectorstore())
+        if grown < args.min_growth:
+            print(f"점검 생략: 마지막 점검({last['date']}) 뒤 바뀐 청크 {grown}개 < {args.min_growth}")
+            return
+        print(f"마지막 점검 뒤 바뀐 청크 {grown if last else '(기록 없음)'}개 → 점검합니다")
+    row = run(record=not args.no_record)
+    sys.exit(1 if row["verdict"] == "초과" else 0)
 
 
 if __name__ == "__main__":

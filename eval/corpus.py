@@ -47,3 +47,20 @@ def describe(name: str, vs) -> str:
     papers, chunks = auto_stats(vs)
     return f"{LABELS[name]} — 저장소의 자동 수집 논문 {papers}편/{chunks}청크 " + (
         "숨김" if name == "base" else "포함")
+
+
+def run_health_check(reason: str) -> int:
+    """DB 를 바꾼 스크립트가 끝에 부르는 코퍼스 점검(eval/corpus_health.py, LLM 없음, 2~3분).
+    별도 프로세스로 돌려 점검용 설정 변경(질의 변환 끔 등)이 부른 쪽에 번지지 않게 한다. 종료 코드를 돌려준다."""
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    if settings.vector_backend != "chroma":
+        print("(원격 DB 라 코퍼스 점검 생략 — 전송량 한도)")
+        return 0
+    print(f"\n=== 코퍼스 점검({reason}) — LLM 없음, 2~3분. 건너뛰려면 --no-health ===", flush=True)
+    rc = subprocess.call([sys.executable, str(Path(__file__).resolve().parent / "corpus_health.py")])
+    if rc == 1:
+        print("⚠️ 검색 품질 하락이 기준을 넘었습니다 — scripts/manage_auto_papers.py 로 정리하거나 AUTO_FETCH_MAX_CHUNKS 를 낮추세요.")
+    return rc

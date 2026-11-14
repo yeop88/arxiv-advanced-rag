@@ -127,6 +127,7 @@ def main() -> None:
     ap.add_argument("--kinds", nargs="+", choices=visual.KINDS, help="처리할 종류(기본: 표 + 설정으로 켠 종류)")
     ap.add_argument("--limit", type=int, default=0)
     ap.add_argument("--retitle", action="store_true", help="기존 표·그림·수식 청크 앞에 논문 제목 붙이기(LLM 없음)")
+    ap.add_argument("--no-health", action="store_true", help="끝난 뒤 코퍼스 점검(eval/corpus_health.py) 생략")
     args = ap.parse_args()
     kinds = tuple(args.kinds or visual.default_kinds())
     settings.exclude_auto_papers = False
@@ -168,6 +169,9 @@ def main() -> None:
         except Exception as e:  # noqa: BLE001 — 한 편 실패가 나머지를 막지 않게
             print(f"    실패: {type(e).__name__}: {str(e)[:150]}")
         time.sleep(3)
+    if todo and not args.no_health:   # 청크가 늘었으니 검색 품질이 유지되는지 확인
+        from eval.corpus import run_health_check
+        run_health_check(f"표·그림·수식 {len(todo)}편 처리 뒤")
 
 
 if __name__ == "__main__":

@@ -1,0 +1,49 @@
+# 푸시·PR 마다 회귀 검사. 모델·DB·LLM 이 필요 없는 테스트만 돈다
+# (tests/test_pipeline_offline.py 는 실제 벡터 DB 와 임베딩·리랭커 모델이 있어야 해서 로컬에서 실행).
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  python:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: 의존성 설치 (CPU 용 torch — 테스트는 모델을 가짜로 바꿔 씀)
+        run: |
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install -r requirements.txt
+      - name: 단위 테스트
+        run: python tests/test_units.py
+      - name: 서버(SSE) 테스트
+        run: python tests/test_server.py
+      - name: 청킹 테스트
+        run: python tests/test_chunking.py
+
+  frontend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - name: 화면 로직 테스트
+        run: npm test
+      - name: 타입 검사·빌드
+        run: npm run build
