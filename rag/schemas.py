@@ -20,7 +20,7 @@ class RetrievedChunk(BaseModel):
     section: str = ""         # 전문 기반일 때 섹션명(Method/Results 등)
     url: str = ""             # 원문 링크 (arXiv abs URL 등)
     origin: str = ""          # "auto" 면 챗봇이 자동 수집한 논문의 청크
-    kind: str = ""            # "table"/"figure" 면 표·그림 이해로 추가한 청크(rag/visual.py)
+    kind: str = ""            # "table"/"figure"/"equation" 면 표·그림·수식 이해로 추가한 청크(rag/visual.py)
     score: float = 0.0        # 벡터 유사도 또는 리랭크 점수
     rerank_score: float | None = None
 
@@ -58,3 +58,7 @@ class PipelineResult(BaseModel):
 
     # 단계별 소요시간(초) — 성능 관찰용
     timings: dict[str, float] = Field(default_factory=dict)
+
+
+# 표·그림·수식 청크 종류 — 검색에서 본문과 따로 다룬다(rag/stage2_rerank.py)
+VISUAL_KINDS = ("table", "figure", "equation")

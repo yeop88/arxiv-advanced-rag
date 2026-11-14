@@ -19,6 +19,7 @@ warnings.filterwarnings("ignore")
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from config import settings  # noqa: E402
+from rag.schemas import VISUAL_KINDS  # noqa: E402
 
 RESULTS = Path(__file__).resolve().parent / "results"
 
@@ -38,9 +39,9 @@ def _select(cands, raw, weight: float, vectors, floor: float = 0.0):
 
     for c, s in zip(cands, raw):
         c.rerank_score = s * (settings.auto_rerank_weight if c.origin == "auto" else 1.0)
-        if c.kind in ("table", "figure"):
+        if c.kind in VISUAL_KINDS:
             c.rerank_score *= weight
-    cands = [c for c in cands if c.kind not in ("table", "figure") or c.rerank_score >= floor]
+    cands = [c for c in cands if c.kind not in VISUAL_KINDS or c.rerank_score >= floor]
     ranked = sorted(cands, key=lambda c: c.rerank_score or 0.0, reverse=True)
     return _mmr_select(ranked, settings.top_k_rerank, settings.mmr_lambda, settings.same_source_penalty,
                        settings.rerank_max_per_source, vectors=vectors)
@@ -72,7 +73,7 @@ def main() -> None:
         cands, raw = _prepare(vs, q)
         table_prepared.append((q, src, cands, raw, get_vectors(vs, [c.id for c in cands if c.id])))
 
-    out = {"tables": kinds.count("table"), "figures": kinds.count("figure"), "rows": []}
+    out = {"tables": kinds.count("table"), "figures": kinds.count("figure"), "equations": kinds.count("equation"), "rows": []}
     base_hits = None
     for w, floor in [(w, f) for w in args.weights for f in args.floors]:
         recalls, mrrs, intrusions, hits = [], [], 0, []
@@ -81,10 +82,10 @@ def main() -> None:
             recalls.append(recall_at_k(sel, r["expected_sources"], settings.top_k_rerank))
             mrrs.append(reciprocal_rank(sel, r["expected_sources"]))
             # 정답이 아닌 논문의 표·그림 청크가 근거에 들어간 문항 수
-            intrusions += any(c.kind in ("table", "figure") and c.source not in r["expected_sources"] for c in sel)
+            intrusions += any(c.kind in VISUAL_KINDS and c.source not in r["expected_sources"] for c in sel)
         for q, src, cands, raw, vec in table_prepared:
             sel = _select(cands, raw, w, vec, floor)
-            hits.append(any(c.kind in ("table", "figure") and c.source == src for c in sel))
+            hits.append(any(c.kind in VISUAL_KINDS and c.source == src for c in sel))
         row = {"weight": w, "floor": floor, "recall": round(sum(recalls) / len(recalls), 4), "mrr": round(sum(mrrs) / len(mrrs), 4),
                "intrusion_questions": intrusions, "table_hits": sum(hits), "table_n": len(hits),
                "recalls": recalls}
@@ -94,7 +95,7 @@ def main() -> None:
               f" | 표 질문에서 그 논문 표가 top-5 {sum(hits)}/{len(hits)}", flush=True)
     name = f"visual_retrieval{'_' + args.tag if args.tag else ''}.json"
     (RESULTS / name).write_text(json.dumps(out, ensure_ascii=False), encoding="utf-8")
-    print(f"표 {out['tables']}개·그림 {out['figures']}개, 결과 {name}")
+    print(f"표 {out['tables']}개·그림 {out['figures']}개·수식 {out['equations']}개, 결과 {name}")
 
 
 if __name__ == "__main__":

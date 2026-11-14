@@ -530,13 +530,23 @@ def test_visual_parse() -> None:
         w = PdfWriter()
         w.add_blank_page(200, 200)
         w.write(buf)
-        orig_cp = V.caption_pages
-        V.caption_pages = lambda pdf: [(1, ["Table 2", "Figure 1"], page)]
-        got = V.extract(buf.getvalue())
-        V.caption_pages = orig_cp
+        orig_cp = V.page_labels
+        V.page_labels = lambda pdf, kinds: [(1, ["Table 2", "Figure 1"], page)]
+        got = V.extract(buf.getvalue(), kinds=("table", "figure"))
+        V.page_labels = orig_cp
     finally:
         V._ask = orig
     assert [i.label for i in got] == ["Table 2", "Figure 1"], "페이지 캡션에 없는 Table 9 는 버림"
+
+    # 수식: 번호 붙은 수식 줄 찾기(본문 문장 끝 "(3)" 은 제외), LaTeX 검사
+    eq_page = "C(r)= T(t)σ(r(t))c(r(t),d)dt, where T(t)=exp − σ(r(s))ds . (1)" + chr(10) + "as described in Section 2 (3)"
+    assert V.equation_labels(eq_page) == ["Equation 1"]
+    eq = V.parse("### Equation 1: expected color" + chr(10) + r"$$C(r)=\int T(t)\sigma(r(t))\,dt$$" + chr(10) + "C is the color.", 5)[0]
+    assert (eq.kind, eq.label) == ("equation", "Equation 1")
+    assert V.check_equation(eq.body, eq_page) == 1.0
+    assert V.check_equation(r"$$\alpha + \beta$$", eq_page) is None, "관계 기호 없음"
+    assert V.check_equation(r"$$y = \alpha \beta$$", eq_page) is None, "그리스 문자가 페이지에 없음"
+    assert V.greek_match(r"\sigma", "𝜎(x)") == 1.0, "수학 이탤릭은 NFKC 로 맞춘다"
     print("  test_visual_parse ✅")
 
 

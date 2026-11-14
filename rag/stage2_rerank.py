@@ -20,7 +20,7 @@ from langchain_core.documents import Document
 
 from config import settings
 from rag.llm import get_reranker
-from rag.schemas import RetrievedChunk
+from rag.schemas import VISUAL_KINDS, RetrievedChunk
 from rag.vectorstore import VectorStoreLike, get_all_documents, get_vectors
 
 
@@ -161,7 +161,7 @@ def _reciprocal_rank_fusion(
 
 
 def _is_visual(doc: Document) -> bool:
-    return (doc.metadata or {}).get("kind") in ("table", "figure")
+    return (doc.metadata or {}).get("kind") in VISUAL_KINDS
 
 
 def _split_visual(docs: list[Document], n_body: int) -> tuple[list[Document], list[Document]]:
@@ -264,7 +264,7 @@ def _mmr_select(
 
     # 같은 논문 청크는 유사도 하한을 올려 '중복'으로 취급
     # 표·그림 청크는 같은 논문의 본문과 따로 센다 — 본문 2개가 이미 뽑힌 논문의 표도 들어올 수 있게(§5.37)
-    sources = [c.source + ("#visual" if c.kind in ("table", "figure") else "") for c in candidates]
+    sources = [c.source + ("#visual" if c.kind in VISUAL_KINDS else "") for c in candidates]
     for i in range(len(candidates)):
         for j in range(len(candidates)):
             if i != j and sources[i] and sources[i] == sources[j]:
@@ -317,7 +317,7 @@ def rerank(question: str, candidates: list[RetrievedChunk],
         c.rerank_score = float(s) * (settings.auto_rerank_weight if c.origin == "auto" else 1.0)
     # 표·그림은 리랭커가 질문과 확실히 관련 있다고 본 것만 근거로 쓴다 — 빈 자리를 채우러 무관한 표가 들어오지 않게(§5.37)
     candidates = [c for c in candidates
-                  if c.kind not in ("table", "figure") or (c.rerank_score or 0.0) >= settings.visual_min_score]
+                  if c.kind not in VISUAL_KINDS or (c.rerank_score or 0.0) >= settings.visual_min_score]
 
     if settings.rerank_diversity:
         # 관련도순 정렬된 후보에 MMR 적용 (내부에서 다양성 재배치)

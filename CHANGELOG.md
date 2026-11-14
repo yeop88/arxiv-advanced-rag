@@ -5,6 +5,7 @@
 ## [Unreleased]
 
 ### Added
+- 수식 이해: 번호 붙은 수식이 있는 페이지를 로컬 멀티모달 모델로 LaTeX·기호 뜻으로 옮겨 근거 청크로 추가(`VISUAL_EQUATIONS`, 관계 기호·그리스 문자 대조 검사). 그림 설명은 영어로 변경. `enrich_visuals.py --all --kinds`로 종류별 추가, 논문마다 처리한 종류 기록
 - 표 검색 측정 도구 `eval/visual_retrieval_eval.py`(LLM 없음): 294문항 지표, 무관한 표가 근거에 든 문항, 표 질문 적중. 표 숫자 질문 7 → 11개
 - 본 DB 에 표 청크 적용: 전문 논문 37편 표 167개(백업 후 처리). 표 숫자 질문 4/7 → 7/7, 294문항 recall 0.9677 → 0.9660(1문항), MRR 그대로
 - 표 이해 `rag/visual.py`·`scripts/enrich_visuals.py`: 캡션이 있는 PDF 페이지를 이미지로 로컬 멀티모달 모델(Qwen3.6)에 보내 표를 마크다운으로 옮기고, 숫자 대조(페이지 텍스트에 있는 비율 80% 이상)를 통과한 표를 근거 청크로 추가. 표 숫자 질문 4/7 → 7/7. 그림 설명은 `VISUAL_FIGURES`(기본 끔), 측정 도구 `eval/visual_qa_eval.py`
