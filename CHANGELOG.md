@@ -86,6 +86,7 @@
 - 진행 보고서 (`docs/PROGRESS_REPORT.md`), 작업 지침 (`CLAUDE.md`)
 
 ### Changed
+- 자동 수집 예산 정리에서 표·그림·수식 청크가 있는 논문은 지우지 않음(청크는 예산에 계속 셈) (`rag/ingest/auto_fetch.py`)
 - `rag/` 를 역할별 하위 패키지로 정리: `core`(llm·prompts·schemas), `stages`(0~4단계), `store`(벡터DB·원문), `ingest`(수집·청크·자동 수집·표그림수식), `features`(비교표·조사·인용·알림). import 경로 일괄 변경, 294문항 검색 결과 문항별 동일
 - 진행 알림 `token` 이 누적 답변 대신 새 글자(`delta`)만 담음, 앞부분이 바뀌면 `answer_reset`
 - 그림·수식 청크 기본 켬(`VISUAL_FIGURES=1`, `VISUAL_EQUATIONS=1`), 표·그림·수식 후보 2개(`VISUAL_CANDIDATES=2`)

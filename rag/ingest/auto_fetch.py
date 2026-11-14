@@ -190,8 +190,11 @@ def evict_over_budget(vectorstore, protect: set[str] | None = None) -> list[dict
     """자동 수집 청크가 예산을 넘으면 오래 안 쓰인 논문부터 삭제하고, 지운 논문 목록을 돌려준다.
 
     순서: 마지막 사용일(안 쓰였으면 수집일)이 오래된 순, 같으면 사용 횟수가 적은 순.
-    protect(방금 수집한 논문)와 수동 수집 논문은 지우지 않는다.
+    protect(방금 수집한 논문)와 수동 수집 논문, 표·그림·수식 청크가 있는 논문은 지우지 않는다
+    (표·그림·수식은 논문당 1~3분 걸려 만든 것이라 다시 만들기 비싸다). 이 논문들의 청크도 예산에는 센다.
     """
+    from rag.core.schemas import VISUAL_KINDS
+
     budget = settings.auto_fetch_max_chunks
     if budget <= 0:
         return []
@@ -204,6 +207,8 @@ def evict_over_budget(vectorstore, protect: set[str] | None = None) -> list[dict
         if m.get("origin") == "auto":
             p = papers.setdefault(m["source"], {"ids": [], "title": m.get("title", ""), "fetched_at": m.get("fetched_at", "")})
             p["ids"].append(i)
+            if m.get("kind") in VISUAL_KINDS:
+                protect = protect | {m["source"]}
     total = sum(len(p["ids"]) for p in papers.values())
     if total <= budget:
         return []
