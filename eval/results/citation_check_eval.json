@@ -87,5 +87,24 @@
   "miscited": 2
  },
  "mean_precision": 0.968,
- "answers_all_supported": 46
+ "answers_all_supported": 46,
+ "numbers": {
+  "numeric_sentences": 8,
+  "alarms_on_original": 1,
+  "alarms_with_number_in_other_chunk": 1,
+  "changed_number_tested": 6,
+  "changed_number_caught": 1.0,
+  "reranker_on_changed_number": {
+   "mean_score_original": 0.799,
+   "mean_score_changed_number": 0.723,
+   "changed_still_passes": 1.0
+  }
+ },
+ "numbers_visual_qa": {
+  "answers": 17,
+  "numeric_sentences": 17,
+  "alarms": 3,
+  "changed_number_tested": 14,
+  "changed_number_caught": 1.0
+ }
 }

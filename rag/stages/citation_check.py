@@ -12,6 +12,8 @@ rag/stages/citation_check.py — 4b단계: 문장 단위 인용 확인 (LLM 없�
   weak       인용했지만 어느 근거도 기준 미만 → 근거가 약함
   uncited    인용 번호가 없는 주장 문장
   bad_ref    없는 근거 번호를 인용
+숫자 대조(상태와 별도): 문장의 숫자(소수·두 자리 이상, 연도 제외)가 인용한 근거 원문에 없으면 numbers_missing 에 담는다.
+리랭커는 '78.4' 와 '68.4' 를 거의 같은 점수로 보므로, 표 숫자를 잘못 옮기는 환각은 이 규칙이 잡는다.
 """
 from __future__ import annotations
 
@@ -33,6 +35,64 @@ _NOT_CLAIM = re.compile(
     r"|제공하지 않|(?:답변|답|비교 분석을 수행|설명)할 수 없|나와 있지 않|다루(?:고 있지|지) 않|확인할 수 없|알 수 없|정보가 없|무관합니다"
     r"|다음과 같(?:습니다|이 [가-힣]+(?:니다|있습니다))\s*$|정리하면 다음|요약하면 다음")
 
+# 답변 쪽 숫자: 영문·숫자·하이픈에 붙은 것(GPT-4, Top-20, bge-m3, v1.5)과 수식 안은 제외. 한국어 단위(2.7일, 3.5배)는 허용
+_ANSWER_NUM = re.compile(r"(?<![A-Za-z0-9_.\-/^])(\d{1,3}(?:,\d{3})+|\d+)(\.\d+)?(?![A-Za-z0-9_^]|\.\d)")
+# 근거 쪽 숫자: 넓게(표·본문 어디든)
+_CHUNK_NUM = re.compile(r"(\d{1,3}(?:,\d{3})+|\d+)(\.\d+)?")
+_INLINE_MATH = re.compile(r"\$[^$]+\$")
+
+
+# 큰 수 단위: 답변은 한국어(100만), 근거는 영어(1 million, 1M)로 쓰는 일이 많다 → 실제 값으로도 비교
+_KO_UNIT = re.compile(r"\s?(천만|천억|만|억|조|천)")
+_KO_SCALE = {"천": 1e3, "만": 1e4, "천만": 1e7, "억": 1e8, "천억": 1e11, "조": 1e12}
+_EN_UNIT = re.compile(r"\s?(thousand|million|billion|trillion|[KMB])\b")
+_EN_SCALE = {"thousand": 1e3, "k": 1e3, "million": 1e6, "m": 1e6, "billion": 1e9, "b": 1e9, "trillion": 1e12}
+
+
+def _norm(int_part: str, frac: str | None) -> str:
+    i = int_part.replace(",", "").lstrip("0") or "0"
+    f = (frac or "").rstrip("0").rstrip(".")
+    return i + (f if f and f != "." else "")
+
+
+def _num_str(v: float) -> str:
+    ip, fp = f"{v:.6f}".split(".")
+    return _norm(ip, "." + fp)
+
+
+def answer_numbers(text: str, ignore: set[str] | None = None) -> list[str]:
+    """대조할 숫자들(정규화). 한 자리 정수(개수·순서)와 연도(1900~2099)는 근거 없이도 흔해 뺀다.
+    '100만'·'1.2억' 처럼 단위가 붙으면 실제 값(1000000, 120000000)으로 바꾼다."""
+    out: list[str] = []
+    t = _INLINE_MATH.sub(" ", text)
+    for m in _ANSWER_NUM.finditer(t):
+        n = _norm(m.group(1), m.group(2))
+        unit = _KO_UNIT.match(t, m.end())
+        if unit:
+            n = _num_str(float(n) * _KO_SCALE[unit.group(1)])
+        elif "." not in n and (len(n) < 2 or (len(n) == 4 and 1900 <= int(n) <= 2099)):
+            continue
+        if n not in out and n not in (ignore or set()):
+            out.append(n)
+    return out
+
+
+def chunk_numbers(text: str) -> set[str]:
+    """근거에 있는 숫자들. 0.784 ↔ 78.4(%) 백분율 표기, '1 million'·'1M' 단위 표기도 같은 값으로 본다."""
+    out: set[str] = set()
+    text = text or ""
+    for m in _CHUNK_NUM.finditer(text):
+        n = _norm(m.group(1), m.group(2))
+        out.add(n)
+        v = float(n)
+        unit = _EN_UNIT.match(text, m.end())
+        if unit:
+            out.add(_num_str(v * _EN_SCALE[unit.group(1).lower()]))
+        if m.group(2):
+            out.update((_num_str(v * 100), _num_str(v / 100)))
+    return out
+
+
 # (문장, 근거) 쌍 목록 → 점수 목록. 기본은 리랭커. 테스트에서는 가짜를 넣는다.
 Scorer = Callable[[list[tuple[str, str]]], Sequence[float]]
 
@@ -45,12 +105,19 @@ class SentenceCheck:
     support: float | None = None    # 인용한 근거 중 최고 점수
     best: int | None = None         # 모든 근거 중 가장 잘 맞는 번호
     best_score: float | None = None
+    numbers_missing: list[str] = field(default_factory=list)   # 인용한 근거에 없는 숫자
+    numbers_found_in: list[int] = field(default_factory=list)  # 그 숫자가 모두 있는 다른 근거 번호
+
+    @property
+    def flagged(self) -> bool:
+        return self.status != "supported" or bool(self.numbers_missing)
 
 
 @dataclass
 class CitationReport:
     sentences: list[SentenceCheck] = field(default_factory=list)
     threshold: float = 0.0
+    numeric: int = 0                # 숫자를 대조한 문장 수
 
     def summary(self) -> dict:
         n = len(self.sentences)
@@ -69,11 +136,13 @@ class CitationReport:
             "precision": round(ok / len(cited), 3) if cited else None,
             # 인용 재현율: 주장 문장 중 뒷받침되는 인용이 달린 비율
             "recall": round(ok / n, 3) if n else None,
+            "numeric": self.numeric,        # 숫자를 대조한 문장 수
+            "number_mismatch": sum(bool(s.numbers_missing) for s in self.sentences),
         }
 
     def to_json(self) -> dict:
         return {"threshold": self.threshold, "summary": self.summary(),
-                "flagged": [asdict(s) for s in self.sentences if s.status != "supported"]}
+                "flagged": [asdict(s) for s in self.sentences if s.flagged]}
 
 
 def parse_cites(text: str) -> list[int]:
@@ -136,9 +205,24 @@ def _rerank_scorer(pairs: list[tuple[str, str]]) -> Sequence[float]:
     return get_reranker().predict(pairs, batch_size=32)
 
 
+def check_numbers(sentence: str, cites: list[int], chunk_nums: list[set[str]],
+                  ignore: set[str] | None = None) -> tuple[list[str], list[int], bool]:
+    """문장의 숫자 중 인용한 근거(없으면 모든 근거)에 없는 것, 그 숫자가 모두 있는 다른 근거 번호, 대조했는지."""
+    nums = answer_numbers(claim_text(sentence), ignore)
+    if not nums:
+        return [], [], False
+    k = len(chunk_nums)
+    valid = [n for n in cites if 1 <= n <= k] or list(range(1, k + 1))
+    have = set().union(*(chunk_nums[n - 1] for n in valid))
+    missing = [x for x in nums if x not in have]
+    elsewhere = [i + 1 for i in range(k) if i + 1 not in valid and missing and set(missing) <= chunk_nums[i]]
+    return missing, elsewhere, True
+
+
 def check(answer: str, chunks: list[RetrievedChunk], scorer: Scorer | None = None,
-          threshold: float | None = None) -> CitationReport:
-    """답변의 주장 문장마다 인용한 근거가 뒷받침하는지 점수로 확인."""
+          threshold: float | None = None, question: str = "") -> CitationReport:
+    """답변의 주장 문장마다 인용한 근거가 뒷받침하는지 점수로, 숫자가 근거에 있는지 규칙으로 확인.
+    question 의 숫자(예: '상위 20개')는 근거에 없어도 문제 삼지 않는다."""
     thr = settings.citation_support_threshold if threshold is None else threshold
     report = CitationReport(threshold=thr)
     sents = [s for s in split_sentences(answer) if _is_claim(s)]
@@ -147,6 +231,8 @@ def check(answer: str, chunks: list[RetrievedChunk], scorer: Scorer | None = Non
     pairs = [(claim_text(s), c.content) for s in sents for c in chunks]
     flat = [float(x) for x in (scorer or _rerank_scorer)(pairs)]
     k = len(chunks)
+    chunk_nums = [chunk_numbers(c.content) for c in chunks]
+    q_nums = set(answer_numbers(question)) | {_norm(*m.groups()) for m in _CHUNK_NUM.finditer(question or "")}
     for i, s in enumerate(sents):
         row = flat[i * k:(i + 1) * k]
         best = max(range(k), key=row.__getitem__)
@@ -163,8 +249,11 @@ def check(answer: str, chunks: list[RetrievedChunk], scorer: Scorer | None = Non
             status = "miscited"
         else:
             status = "weak"
+        missing, elsewhere, numeric = check_numbers(s, cites, chunk_nums, q_nums)
+        report.numeric += numeric
         report.sentences.append(SentenceCheck(
             text=claim_text(s), cites=cites, status=status,
             support=None if support is None else round(support, 3),
-            best=best + 1, best_score=round(row[best], 3)))
+            best=best + 1, best_score=round(row[best], 3),
+            numbers_missing=missing, numbers_found_in=elsewhere))
     return report

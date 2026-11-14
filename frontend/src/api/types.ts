@@ -59,6 +59,8 @@ export interface SentenceCheck {
   support: number | null;
   best: number | null;
   best_score: number | null;
+  numbers_missing: string[]; // 인용한 근거에 없는 숫자
+  numbers_found_in: number[]; // 그 숫자가 있는 다른 근거 번호
 }
 
 // 4b 문장 단위 인용 확인(rag/stages/citation_check.py) — 리랭커로 문장과 인용한 근거를 대조, LLM 없음
@@ -74,8 +76,10 @@ export interface CitationCheck {
     bad_ref: number;
     precision: number | null;
     recall: number | null;
+    numeric: number; // 숫자를 대조한 문장 수
+    number_mismatch: number; // 숫자가 인용한 근거에 없는 문장 수
   };
-  flagged: SentenceCheck[]; // supported 가 아닌 문장만
+  flagged: SentenceCheck[]; // 점수가 기준 미만이거나 숫자가 근거에 없는 문장
 }
 
 export interface AutoFetched {

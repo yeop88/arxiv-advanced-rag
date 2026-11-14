@@ -1,4 +1,4 @@
-// 4b 문장 단위 인용 확인 결과: 배지(맞는 문장 수) + 확인이 필요한 문장 목록(누르면 해당 근거를 펼침).
+// 4b 문장 단위 인용 확인 결과: 배지(맞는 문장 수·숫자 불일치) + 확인이 필요한 문장 목록(번호를 누르면 해당 근거를 펼침).
 import type { ChatResult, SentenceCheck, SentenceStatus } from "../../api/types";
 import type { CiteHandler } from "../common/Markdown";
 import { Collapsible } from "../common/Collapsible";
@@ -10,29 +10,54 @@ const LABEL: Record<Exclude<SentenceStatus, "supported">, string> = {
   bad_ref: "없는 근거 번호",
 };
 
-function Item({ s, onCite }: { s: SentenceCheck; onCite?: CiteHandler }) {
-  const status = s.status as Exclude<SentenceStatus, "supported">;
+function CiteButton({ n, onCite, suggest }: { n: number; onCite?: CiteHandler; suggest?: boolean }) {
   return (
-    <li className={`cc-item cc-${status}`}>
+    <button
+      type="button"
+      className={`cite${suggest ? " suggest" : ""}`}
+      title={suggest ? "더 맞는 근거 보기" : "인용한 근거 보기"}
+      onClick={() => onCite?.(n)}
+    >
+      {n}
+    </button>
+  );
+}
+
+function Item({ s, onCite }: { s: SentenceCheck; onCite?: CiteHandler }) {
+  const scoreIssue = s.status !== "supported";
+  const numIssue = s.numbers_missing.length > 0;
+  return (
+    <li className={`cc-item cc-${s.status}${numIssue ? " cc-number" : ""}`}>
       <span className="cc-text">{s.text}</span>
-      <span className="cc-why">
-        {LABEL[status]}
-        {s.cites.length > 0 &&
-          s.cites.map((n) => (
-            <button key={n} type="button" className="cite" title="인용한 근거 보기" onClick={() => onCite?.(n)}>
-              {n}
-            </button>
+      {scoreIssue && (
+        <span className="cc-why">
+          {LABEL[s.status as Exclude<SentenceStatus, "supported">]}
+          {s.cites.map((n) => (
+            <CiteButton key={n} n={n} onCite={onCite} />
           ))}
-        {status === "miscited" && s.best != null && (
-          <>
-            {" → "}
-            <button type="button" className="cite suggest" title="더 맞는 근거 보기" onClick={() => onCite?.(s.best!)}>
-              {s.best}
-            </button>
-          </>
-        )}
-        {s.support != null && <span className="muted"> · 점수 {s.support.toFixed(2)}</span>}
-      </span>
+          {s.status === "miscited" && s.best != null && (
+            <>
+              {" → "}
+              <CiteButton n={s.best} onCite={onCite} suggest />
+            </>
+          )}
+          {s.support != null && <span className="muted"> · 점수 {s.support.toFixed(2)}</span>}
+        </span>
+      )}
+      {numIssue && (
+        <span className="cc-why cc-num">
+          🔢 숫자 {s.numbers_missing.join(", ")} 이(가) {s.cites.length ? "인용한 근거" : "근거"}에 없음
+          {!scoreIssue && s.cites.map((n) => <CiteButton key={n} n={n} onCite={onCite} />)}
+          {s.numbers_found_in.length > 0 && (
+            <>
+              {" → 있는 근거"}
+              {s.numbers_found_in.map((n) => (
+                <CiteButton key={n} n={n} onCite={onCite} suggest />
+              ))}
+            </>
+          )}
+        </span>
+      )}
     </li>
   );
 }
@@ -40,16 +65,25 @@ function Item({ s, onCite }: { s: SentenceCheck; onCite?: CiteHandler }) {
 export function CitationCheckPanel({ result, onCite }: { result: ChatResult; onCite?: CiteHandler }) {
   const cc = result.citation_check;
   if (!cc || cc.summary.claims === 0) return null;
-  const { claims, supported } = cc.summary;
-  const all = supported === claims;
+  const { claims, supported, numeric, number_mismatch } = cc.summary;
   return (
     <div className="cite-check">
-      <span
-        className={`pill ${all ? "ok" : "warn"}`}
-        title={`문장마다 인용한 근거와 맞는지 리랭커 점수(기준 ${cc.threshold})로 확인했습니다. LLM 채점과 별개입니다.`}
-      >
-        🔎 인용 확인 {supported}/{claims}문장
-      </span>
+      <div className="verify-row">
+        <span
+          className={`pill ${supported === claims ? "ok" : "warn"}`}
+          title={`문장마다 인용한 근거와 맞는지 리랭커 점수(기준 ${cc.threshold})로 확인했습니다. LLM 채점과 별개입니다.`}
+        >
+          🔎 인용 확인 {supported}/{claims}문장
+        </span>
+        {numeric > 0 && (
+          <span
+            className={`pill ${number_mismatch ? "warn" : "ok"}`}
+            title="답변의 숫자(소수·두 자리 이상)가 인용한 근거 원문에 그대로 있는지 확인했습니다."
+          >
+            🔢 숫자 {number_mismatch ? `불일치 ${number_mismatch}문장` : `일치 ${numeric}문장`}
+          </span>
+        )}
+      </div>
       {cc.flagged.length > 0 && (
         <Collapsible title={`확인이 필요한 문장 ${cc.flagged.length}개`} className="cc-list">
           <ul>

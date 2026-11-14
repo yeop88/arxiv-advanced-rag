@@ -843,3 +843,9 @@ input[type="range"] {
 .cite.suggest {
   outline: 1px dashed var(--accent);
 }
+.cc-item.cc-number {
+  border-left-color: var(--warn);
+}
+.cc-why.cc-num {
+  color: var(--warn);
+}

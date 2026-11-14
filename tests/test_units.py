@@ -680,6 +680,24 @@ def test_citation_check() -> None:
     j = rep.to_json()
     assert len(j["flagged"]) == 3 and j["threshold"] == 0.05
     assert cc.check("", chunks, scorer=scorer).summary()["claims"] == 0
+
+    # 숫자 대조: 근거에 없는 숫자, 다른 근거에 있는 숫자, 표기 차이(%·쉼표·million/만), 무시할 숫자
+    assert cc.answer_numbers("Top-20 정확도 78.40%, GPT-4, 2020년, 3개, 1,024 토큰, 100만 시간, $x_{10}$") == \
+        ["78.4", "1024", "1000000"]
+    nums = cc.chunk_numbers("accuracy 0.784 with 1,024 tokens and 1 million hours")
+    assert {"78.4", "1024", "1000000"} <= nums
+    tchunks = [RetrievedChunk(content="Table 2: DPR top-20 accuracy 78.4, BM25 59.1"),
+               RetrievedChunk(content="FlashAttention trains GPT-2 in 2.7 days, 3.5x faster")]
+    ans = ("DPR 의 상위 20개 정확도는 78.4%입니다 [1]. BM25 는 68.1%입니다 [1]. "
+           "학습은 2.7일 걸리고 3.5배 빠릅니다 [1]. 질문에 나온 상위 20개는 문제 삼지 않습니다 [2].")
+    rep = cc.check(ans, tchunks, scorer=lambda pairs: [0.9] * len(pairs), threshold=0.05, question="상위 20개 정확도는?")
+    miss = {s.text.split()[0]: (s.numbers_missing, s.numbers_found_in) for s in rep.sentences}
+    assert miss["DPR"] == ([], []) and miss["질문에"] == ([], []), miss
+    assert miss["BM25"] == (["68.1"], []), "근거에 없는 숫자"
+    assert miss["학습은"] == (["2.7", "3.5"], [2]), "다른 근거에 있는 숫자 → 그 번호 제안"
+    s = rep.summary()
+    assert s["numeric"] == 3 and s["number_mismatch"] == 2 and s["supported"] == 4, s
+    assert len(rep.to_json()["flagged"]) == 2, "점수는 맞아도 숫자가 틀리면 확인 목록에"
     print("  test_citation_check ✅")
 
 

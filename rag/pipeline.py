@@ -251,12 +251,12 @@ class RAGPipeline:
                 emit("error", stage="verify", message=str(e))
             result.timings["4_verify"] = time.perf_counter() - t
 
-        # --- 4b: 문장 단위 인용 확인 (LLM 없음 — 리랭커로 문장과 인용한 근거를 대조) ---
+        # --- 4b: 문장 단위 인용 확인 (LLM 없음 — 리랭커로 문장과 인용한 근거를 대조, 숫자는 근거 원문과 규칙 대조) ---
         # 보조 단계 → 실패해도 답변은 그대로
         if settings.citation_check:
             t = time.perf_counter()
             try:
-                report = citation_check.check(answer, reranked).to_json()
+                report = citation_check.check(answer, reranked, question=standalone).to_json()
                 result.citation_check = report
                 result.timings["4b_citation_check"] = time.perf_counter() - t
                 emit("cite_check_done", summary=report["summary"], sec=result.timings["4b_citation_check"])
