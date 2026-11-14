@@ -16,11 +16,11 @@ import json
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 
-from rag import prompts
-from rag.llm import get_llm
-from rag.schemas import PipelineResult
-from rag.stage3_generate import format_context
-from rag.stage4_verify import _parse_json, verify
+from rag.core import prompts
+from rag.core.llm import get_llm
+from rag.core.schemas import PipelineResult
+from rag.stages.stage3_generate import format_context
+from rag.stages.stage4_verify import _parse_json, verify
 
 
 # 파이프라인이 근거 0건으로 종료할 때의 고정 메시지

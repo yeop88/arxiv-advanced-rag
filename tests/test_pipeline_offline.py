@@ -21,7 +21,7 @@ from config import settings
 
 
 def main() -> None:
-    # stage 모듈들은 'from rag.llm import get_llm' 로 import 하므로,
+    # stage 모듈들은 'from rag.core.llm import get_llm' 로 import 하므로,
     # 각 모듈의 get_llm 심볼을 직접 교체해야 함.
     fake_light = FakeListChatModel(
         responses=[
@@ -40,9 +40,9 @@ def main() -> None:
         return fake_light if light else fake_main
 
     # 각 stage 모듈의 get_llm 교체
-    import rag.stage1_query_transform as s1
-    import rag.stage3_generate as s3
-    import rag.stage4_verify as s4
+    import rag.stages.stage1_query_transform as s1
+    import rag.stages.stage3_generate as s3
+    import rag.stages.stage4_verify as s4
 
     s1.get_llm = fake_get_llm
     s3.get_llm = fake_get_llm
@@ -80,15 +80,16 @@ def main() -> None:
     expected = ["transform_start", "transform_done", "retrieve_start", "retrieve_done",
                 "generate_start", "generate_done", "verify_start", "verify_done"]
     assert names == expected, f"진행 알림 순서가 다름: {names}"
-    tokens = [kw["text"] for e, kw in events if e == "token"]
+    tokens = [kw["delta"] for e, kw in events if e == "token"]
     assert len(tokens) > 1, "답변이 토큰 단위로 스트리밍되지 않음"
-    assert tokens[-1].strip() == result2.answer, "스트리밍 마지막 텍스트와 최종 답변이 다름"
+    assert "".join(tokens).strip() == result2.answer, "스트리밍한 글자를 이어 붙인 것과 최종 답변이 다름"
+    assert "answer_reset" not in names, "평소 답변에서는 처음부터 다시 그리지 않아야 함"
     first_tok = next(i for i, (e, _) in enumerate(events) if e == "token")
     assert events[first_tok - 1][0] == "generate_start", "토큰은 generate_start 뒤에 와야 함"
     print(f"진행 알림 {len(names)}개 순서 OK, 답변 스트리밍 토큰 {len(tokens)}회")
 
     # --- 논문 자동 수집 2차 신호: 답변이 '찾을 수 없다'고 하면 수집 → 재검색 → 다시 작성 ---
-    import rag.auto_fetch as af
+    import rag.ingest.auto_fetch as af
 
     fake_main3 = FakeListChatModel(responses=[
         "제공된 논문에서는 해당 내용을 찾을 수 없습니다.",

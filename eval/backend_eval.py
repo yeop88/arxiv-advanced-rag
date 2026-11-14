@@ -84,7 +84,7 @@ def _wait_ready(max_wait: int) -> None:
 
 
 def run(args) -> None:
-    from rag.auto_fetch import answer_signal, needs_more
+    from rag.ingest.auto_fetch import answer_signal, needs_more
     from rag.pipeline import RAGPipeline
 
     records = load_eval_set(difficulty=args.difficulty, category=args.category, limit=args.n)

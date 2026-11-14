@@ -38,8 +38,8 @@ settings.exclude_auto_papers = True
 
 from eval.dataset import load_eval_set  # noqa: E402
 from eval.retrieval_metrics import recall_at_k, reciprocal_rank  # noqa: E402
-from rag.stage2_rerank import _chunk_key, retrieve_and_rerank  # noqa: E402
-from rag.vectorstore import load_vectorstore  # noqa: E402
+from rag.stages.stage2_rerank import _chunk_key, retrieve_and_rerank  # noqa: E402
+from rag.store.vectorstore import load_vectorstore  # noqa: E402
 
 
 def _fake_pinecone_store():
@@ -47,9 +47,9 @@ def _fake_pinecone_store():
     from fake_pinecone import FakePineconeIndex
     from migrate_to_pinecone import copy_into, export_chroma
 
-    from rag.docstore import DocStore
-    from rag.llm import get_embeddings
-    from rag.vectorstore import PineconeStore
+    from rag.store.docstore import DocStore
+    from rag.core.llm import get_embeddings
+    from rag.store.vectorstore import PineconeStore
 
     tmp = Path(tempfile.mkdtemp()) / "docstore.jsonl"
     store = PineconeStore(FakePineconeIndex(), "parity", get_embeddings(), DocStore(tmp))

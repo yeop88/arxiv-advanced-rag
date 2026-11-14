@@ -128,7 +128,7 @@ def _chunks(row):
 
 
 def rule_current(row) -> bool:
-    from rag.auto_fetch import answer_signal, needs_more
+    from rag.ingest.auto_fetch import answer_signal, needs_more
 
     ev = _chunks(row)
     return needs_more(ev) or answer_signal(row["standalone"], row["answer"], ev)
@@ -136,7 +136,7 @@ def rule_current(row) -> bool:
 
 def rule_sentence(row) -> bool:
     """후보: '찾을 수 없다' 문장에 근거 제목에 없는 명칭이 있을 때만 답변 신호."""
-    from rag import auto_fetch as af
+    from rag.ingest import auto_fetch as af
 
     ev = _chunks(row)
     if af.needs_more(ev):
@@ -151,7 +151,7 @@ def rule_sentence(row) -> bool:
 
 def rule_markers(row) -> bool:
     """후보: 거절 표현 확장("답할 수 없습니다" 등)."""
-    from rag import auto_fetch as af
+    from rag.ingest import auto_fetch as af
 
     extra = ("답할 수 없습니다", "답변할 수 없습니다", "설명할 수 없습니다")
     orig = af._NO_EVIDENCE_MARKERS

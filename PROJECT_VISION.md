@@ -50,11 +50,11 @@ arXiv Advanced RAG가 왜 필요한지, 앞으로 어떻게 넓힐 수 있는지
 
 | 과제 | 내용 | 수정 위치 |
 |---|---|---|
-| 인용 기반 논문 검색 | 인용 수를 반영해 파생 논문보다 원 논문을 먼저 찾기 | `rag/arxiv_source.py` |
-| 한국어 키워드 검색 | 형태소 분석기 적용 또는 bge-m3 sparse 출력 사용 | `rag/stage2_rerank.py` |
+| 인용 기반 논문 검색 | 인용 수를 반영해 파생 논문보다 원 논문을 먼저 찾기 | `rag/ingest/arxiv_source.py` |
+| 한국어 키워드 검색 | 형태소 분석기 적용 또는 bge-m3 sparse 출력 사용 | `rag/stages/stage2_rerank.py` |
 | 공정한 모델 비교 | 채점 모델을 고정하고 생성 모델만 바꿔 비교 | `eval/backend_eval.py` |
 | 실제 질문 평가셋 | 사용 기록에서 질문을 모아 평가셋에 추가 | `eval/eval_set.jsonl` |
-| 전송량 절감 | 벡터를 로컬에 캐시해 원격 조회 줄이기 | `rag/vectorstore.py` |
+| 전송량 절감 | 벡터를 로컬에 캐시해 원격 조회 줄이기 | `rag/store/vectorstore.py` |
 
 ### 중기: 연구 도구로 넓히기
 
@@ -70,9 +70,9 @@ arXiv Advanced RAG가 왜 필요한지, 앞으로 어떻게 넓힐 수 있는지
 
 | 바꿀 곳 | 파일 | 내용 |
 |---|---|---|
-| 문서 수집 | `scripts/ingest_*.py`, `rag/arxiv_source.py` | 대상 문서의 수집 경로 |
-| 청킹 | `rag/chunking.py` | 문서 구조에 맞는 분할 |
-| 프롬프트 | `rag/prompts.py` | 도메인별 답변·검증 규칙 |
+| 문서 수집 | `scripts/ingest_*.py`, `rag/ingest/arxiv_source.py` | 대상 문서의 수집 경로 |
+| 청킹 | `rag/ingest/chunking.py` | 문서 구조에 맞는 분할 |
+| 프롬프트 | `rag/core/prompts.py` | 도메인별 답변·검증 규칙 |
 | 평가셋 | `eval/eval_set.jsonl` | 도메인 질문과 정답 문서 |
 
 적용 후보로는 사내 기술 문서·장애 보고서, 특허, 법령·판례, 임상 가이드라인, 공공 정책 문서가 있습니다.

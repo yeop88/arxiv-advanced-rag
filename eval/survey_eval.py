@@ -37,8 +37,8 @@ def sentence_coverage(text: str) -> tuple[int, int]:
 
 
 def main() -> None:
-    from rag.survey import build_survey
-    from rag.vectorstore import load_vectorstore
+    from rag.features.survey import build_survey
+    from rag.store.vectorstore import load_vectorstore
 
     if settings.llm_provider != "local":
         raise SystemExit("로컬 LLM(LLM_PROVIDER=local)에서만 실행합니다.")

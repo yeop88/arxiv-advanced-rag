@@ -55,8 +55,8 @@ def target(row: dict) -> str:
 
 
 def pools(question: str, evidence: list[str], existing: set[str]) -> dict:
-    from rag import auto_fetch as af
-    from rag.arxiv_source import search_openalex, search_papers
+    from rag.ingest import auto_fetch as af
+    from rag.ingest.arxiv_source import search_openalex, search_papers
 
     queries = af.make_search_queries(question)
     base = []
@@ -82,8 +82,8 @@ def pools(question: str, evidence: list[str], existing: set[str]) -> dict:
 
 
 def choose(question: str, pool: dict, use_title: bool, use_common: bool, key: str | None = None) -> tuple:
-    from rag import auto_fetch as af
-    from rag.llm import get_reranker
+    from rag.ingest import auto_fetch as af
+    from rag.core.llm import get_reranker
 
     cands: dict = {}
     for src, on in (("base", True), ("title", use_title), ("common", use_common)):
@@ -107,7 +107,7 @@ def choose(question: str, pool: dict, use_title: bool, use_common: bool, key: st
 
 def run(heldout: bool = False) -> None:
     global OUT
-    from rag.vectorstore import load_vectorstore
+    from rag.store.vectorstore import load_vectorstore
 
     if settings.llm_provider != "local":
         raise SystemExit("로컬 LLM(LLM_PROVIDER=local)에서만 실행합니다.")

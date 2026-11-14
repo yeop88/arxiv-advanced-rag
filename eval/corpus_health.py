@@ -34,8 +34,8 @@ settings.use_hybrid = True
 from eval.corpus import auto_stats, set_corpus  # noqa: E402
 from eval.dataset import load_eval_set  # noqa: E402
 from eval.retrieval_metrics import recall_at_k, reciprocal_rank  # noqa: E402
-from rag.stage2_rerank import retrieve_and_rerank  # noqa: E402
-from rag.vectorstore import load_vectorstore  # noqa: E402
+from rag.stages.stage2_rerank import retrieve_and_rerank  # noqa: E402
+from rag.store.vectorstore import load_vectorstore  # noqa: E402
 
 OUT = Path(__file__).resolve().parent / "results" / "corpus_health.jsonl"
 WARN, LIMIT = 0.008, 0.01

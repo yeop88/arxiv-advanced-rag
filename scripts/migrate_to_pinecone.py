@@ -28,9 +28,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import numpy as np  # noqa: E402
 
 from config import settings  # noqa: E402
-from rag.docstore import DocStore  # noqa: E402
-from rag.llm import get_embeddings  # noqa: E402
-from rag.vectorstore import PineconeStore, _load_chroma, _pc_metadata, ensure_pinecone_index  # noqa: E402
+from rag.store.docstore import DocStore  # noqa: E402
+from rag.core.llm import get_embeddings  # noqa: E402
+from rag.store.vectorstore import PineconeStore, _load_chroma, _pc_metadata, ensure_pinecone_index  # noqa: E402
 
 PAGE = 500
 

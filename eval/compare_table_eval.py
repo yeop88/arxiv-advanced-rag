@@ -29,8 +29,8 @@ SETS = {
 
 
 def main() -> None:
-    from rag.compare_table import build_table
-    from rag.vectorstore import load_vectorstore
+    from rag.features.compare_table import build_table
+    from rag.store.vectorstore import load_vectorstore
 
     if settings.llm_provider != "local":
         raise SystemExit("로컬 LLM(LLM_PROVIDER=local)에서만 실행합니다.")

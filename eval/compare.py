@@ -45,9 +45,9 @@ from eval.dataset import load_eval_set  # noqa: E402
 from eval.ragas_lite import evaluate_result, is_answered  # noqa: E402
 from eval.retrieval_metrics import recall_at_k, reciprocal_rank  # noqa: E402
 from rag.pipeline import RAGPipeline  # noqa: E402
-from rag.stage1_query_transform import transform_query  # noqa: E402
-from rag.stage2_rerank import retrieve_and_rerank  # noqa: E402
-from rag.vectorstore import load_vectorstore  # noqa: E402
+from rag.stages.stage1_query_transform import transform_query  # noqa: E402
+from rag.stages.stage2_rerank import retrieve_and_rerank  # noqa: E402
+from rag.store.vectorstore import load_vectorstore  # noqa: E402
 
 # 비교할 설정 조합 — (이름, {바꿀 설정들})
 CONFIGS = [

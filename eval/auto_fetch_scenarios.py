@@ -35,8 +35,8 @@ settings.local_thinking_light = "off"
 settings.exclude_auto_papers = False
 settings.auto_fetch = True
 
-import rag.arxiv_source as A  # noqa: E402
-import rag.auto_fetch as af  # noqa: E402
+import rag.ingest.arxiv_source as A  # noqa: E402
+import rag.ingest.auto_fetch as af  # noqa: E402
 from eval.auto_fetch_e2e import prepare, use_test_db  # noqa: E402
 
 OUT = Path(__file__).resolve().parent / "results" / "scenarios.jsonl"

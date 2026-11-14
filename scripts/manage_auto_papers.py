@@ -23,8 +23,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from config import settings  # noqa: E402
 
 settings.exclude_auto_papers = False  # 관리 대상이 자동 수집분이므로 숨기지 않는다
-from rag.auto_fetch import is_back_matter  # noqa: E402
-from rag.vectorstore import delete_sources, load_vectorstore  # noqa: E402
+from rag.ingest.auto_fetch import is_back_matter  # noqa: E402
+from rag.store.vectorstore import delete_sources, load_vectorstore  # noqa: E402
 
 
 def auto_papers() -> dict[str, dict]:

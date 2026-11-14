@@ -5,71 +5,75 @@
 ## [Unreleased]
 
 ### Added
+- 챗봇을 FastAPI + React 로 새로 작성: 답변이 한 글자씩 끊김 없이 써짐(토큰을 새 글자만 SSE 로 즉시 전송, 화면은 버퍼에서 프레임마다 꺼내는 타자 효과 — 실제 화면 측정 프레임당 1~6글자·끊긴 프레임 0). 실행 `python -m server` (`server/`, `frontend/`)
+- 답변 중지 버튼(연결을 끊으면 서버 작업도 멈추고 잠금 해제), `[n]` 인용 칩(누르면 해당 근거 강조), 수식 KaTeX 렌더링, 대화·설정 브라우저 기억
+- Thinking 모드의 생각 과정을 실시간 표시: 로컬 서버가 따로 보내는 `reasoning_content` 를 보존(`rag/core/llm.py`)해 `reasoning` 알림으로 전달
+- 서버 테스트 `tests/test_server.py`(SSE 순서·토큰 delta·요청별 설정 복원·준비 대기·연결 끊김 시 중지), 화면 로직 테스트 `frontend/src/lib/lib.test.ts`
 - 수식 이해: 번호 붙은 수식이 있는 페이지를 로컬 멀티모달 모델로 LaTeX·기호 뜻으로 옮겨 근거 청크로 추가(150dpi, 관계 기호·그리스 문자 대조 검사). 그림 설명은 영어로 변경. `enrich_visuals.py --all --kinds`로 종류별 추가, 논문마다 처리한 종류 기록. 본 DB 37편에 그림 201·수식 168개, 표·그림·수식 질문 18/18
 - 표·그림·수식 청크 앞에 논문 제목(`--retitle`), 본문 후보 1위 논문의 표·그림·수식을 모두 리랭크 후보로(`VISUAL_FROM_TOP_PAPERS`)
 - 표 검색 측정 도구 `eval/visual_retrieval_eval.py`(LLM 없음): 294문항 지표, 무관한 표가 근거에 든 문항, 표 질문 적중. 표 숫자 질문 7 → 11개
 - 본 DB 에 표 청크 적용: 전문 논문 37편 표 167개(백업 후 처리). 표 숫자 질문 4/7 → 7/7, 294문항 recall 0.9677 → 0.9660(1문항), MRR 그대로
-- 표 이해 `rag/visual.py`·`scripts/enrich_visuals.py`: 캡션이 있는 PDF 페이지를 이미지로 로컬 멀티모달 모델(Qwen3.6)에 보내 표를 마크다운으로 옮기고, 숫자 대조(페이지 텍스트에 있는 비율 80% 이상)를 통과한 표를 근거 청크로 추가. 표 숫자 질문 4/7 → 7/7. 그림 설명은 `VISUAL_FIGURES`(기본 끔), 측정 도구 `eval/visual_qa_eval.py`
-- 관심 분야 알림 `rag/watch.py`·`scripts/watch_papers.py`: 등록한 주제의 arXiv 새 논문을 최신순으로 찾아(검색어 단어 AND) 관련도로 거르고 초록을 한국어로 요약한 소식지 생성, 이미 본 논문·DB 논문 제외. 챗봇 사이드바 등록·확인, arXiv 검색 최신순 정렬 옵션
-- 문헌 조사 초안 `rag/survey.py`: 주제의 관련 논문을 넓게 모아 연도·DB 안 인용 관계와 함께 소주제별 흐름 초안 작성(문장마다 [n], 참고문헌은 코드가 생성, 4단계 검증). 챗봇 사이드바 입력·마크다운 저장, 측정 도구 `eval/survey_eval.py`
-- 논문 비교표 `rag/compare_table.py`: 근거 논문 2~5편을 방법·데이터·결과·한계로 비교, 칸마다 근거 번호, 채운 칸만 4단계 검증 후 걸린 칸 ⚠ 표시. 챗봇 답변 아래 "비교표 만들기" 버튼, 측정 도구 `eval/compare_table_eval.py`
+- 표 이해 `rag/ingest/visual.py`·`scripts/enrich_visuals.py`: 캡션이 있는 PDF 페이지를 이미지로 로컬 멀티모달 모델(Qwen3.6)에 보내 표를 마크다운으로 옮기고, 숫자 대조(페이지 텍스트에 있는 비율 80% 이상)를 통과한 표를 근거 청크로 추가. 표 숫자 질문 4/7 → 7/7. 그림 설명은 `VISUAL_FIGURES`(기본 끔), 측정 도구 `eval/visual_qa_eval.py`
+- 관심 분야 알림 `rag/features/watch.py`·`scripts/watch_papers.py`: 등록한 주제의 arXiv 새 논문을 최신순으로 찾아(검색어 단어 AND) 관련도로 거르고 초록을 한국어로 요약한 소식지 생성, 이미 본 논문·DB 논문 제외. 챗봇 사이드바 등록·확인, arXiv 검색 최신순 정렬 옵션
+- 문헌 조사 초안 `rag/features/survey.py`: 주제의 관련 논문을 넓게 모아 연도·DB 안 인용 관계와 함께 소주제별 흐름 초안 작성(문장마다 [n], 참고문헌은 코드가 생성, 4단계 검증). 챗봇 사이드바 입력·마크다운 저장, 측정 도구 `eval/survey_eval.py`
+- 논문 비교표 `rag/features/compare_table.py`: 근거 논문 2~5편을 방법·데이터·결과·한계로 비교, 칸마다 근거 번호, 채운 칸만 4단계 검증 후 걸린 칸 ⚠ 표시. 챗봇 답변 아래 "비교표 만들기" 버튼, 측정 도구 `eval/compare_table_eval.py`
 - 원 논문 찾기 보강(A3, 기본 꺼짐): 경량 LLM 원 논문 제목 추정 → arXiv 제목 검색(`AUTO_FETCH_TITLE_GUESS`), 근거 논문들의 공통 참고문헌 후보(`AUTO_FETCH_COMMON_REFS`), 후보 찾기 분리 `find_candidates`, 측정 도구 `eval/original_paper_eval.py`
 - OpenAlex API 키 지원 `OPENALEX_API_KEY`(키 없는 요청은 네트워크 공유 하루 예산이라 금방 429)
-- 인용 그래프 `rag/citations.py`·`scripts/build_citation_graph.py`: OpenAlex 참고문헌·피인용 관계 저장(arXiv DOI로 찾고 안 되면 제목 검색, 513편 중 504편), 챗봇 근거별 선행·후속 연구 패널, 코퍼스 밖 주요 논문 조회(캐시), 공통 참고문헌 계산. 자동 수집 논문은 수집 때 추가 (`CITATION_GRAPH_PATH`)
+- 인용 그래프 `rag/features/citations.py`·`scripts/build_citation_graph.py`: OpenAlex 참고문헌·피인용 관계 저장(arXiv DOI로 찾고 안 되면 제목 검색, 513편 중 504편), 챗봇 근거별 선행·후속 연구 패널, 코퍼스 밖 주요 논문 조회(캐시), 공통 참고문헌 계산. 자동 수집 논문은 수집 때 추가 (`CITATION_GRAPH_PATH`)
 - 수집 신호 평가 세트 `eval/fetch_signal_set.py`(81문항, 자동 수집·검증을 끈 첫 답변과 근거 기록 → 규칙을 LLM 없이 재판정). 기록 파일은 논문 본문 조각이 있어 git 제외
 - 목표 달성률 문서 `docs/ACHIEVEMENT.md`(PROJECT_VISION 항목별 판정, 현재 목표 95%·로드맵 17%)와 발표 자료 `docs/presentation/`(슬라이드 구성안·대본, 그래프 6종과 생성 스크립트)
 - 자동 수집 시나리오 시험 `eval/auto_fetch_scenarios.py`: 다른 학문 분야, 영어, 멀티턴, 이상한 입력, 장애, 예산 초과, 토글, 동시 질문
-- 자동 수집 예산 `AUTO_FETCH_MAX_CHUNKS`(기본 2,000청크)와 사용 기록 기반 자동 정리: 넘으면 오래 안 쓰인 논문부터 삭제 (`rag/auto_fetch.py`, `storage/auto_usage.json`)
+- 자동 수집 예산 `AUTO_FETCH_MAX_CHUNKS`(기본 2,000청크)와 사용 기록 기반 자동 정리: 넘으면 오래 안 쓰인 논문부터 삭제 (`rag/ingest/auto_fetch.py`, `storage/auto_usage.json`)
 - 코퍼스 상태 점검 `eval/corpus_health.py`: 자동 수집 제외·포함 검색 지표를 비교해 정상/주의/초과 판정, 추세 기록(LLM 없음, 로컬 백엔드 전용)
 - 프로젝트 필요성과 확장 방향 문서 `PROJECT_VISION.md`
 - 자동 수집 실전 시험 `eval/auto_fetch_e2e.py`(시험용 DB 복사본에서 코퍼스 밖·무관한 질문·재질문·검색 지표 측정), `backend_eval.py` 기록에 최고 리랭크 점수 추가
 - `manage_auto_papers.py --strip-back-matter`: 이미 수집한 논문의 참고문헌·부록 청크만 삭제
 - 자동 수집 부작용 해결 방법 비교 `eval/auto_fetch_tuning.py`(관련도 기준·편수·가중치를 294문항과 코퍼스 밖 질문으로 측정, LLM 0회)
 - 자동 수집 논문 리랭크 가중치 `AUTO_RERANK_WEIGHT`(기본 0.7), 참고문헌·부록 제외 `AUTO_FETCH_DROP_BACK_MATTER`(기본 켜짐), 수집 점수 메타데이터 `fetch_score`, arXiv ID 직접 조회 `fetch_arxiv_by_ids`
-- 평가 코퍼스 선택 `--corpus base|all|both`: 자동 수집 논문(`origin=auto`)을 지우지 않고 평가에서만 숨김(기본 base → 이전 수치와 비교 가능), all 은 실제 챗봇 상태. 숨긴 보기 `ExcludeOriginStore`는 벡터 검색·BM25 원문 목록 양쪽에서 빼 '처음부터 없던 코퍼스'와 같은 결과 (`rag/vectorstore.py`, `eval/corpus.py`, `compare.py`, `backend_eval.py`, `EXCLUDE_AUTO_PAPERS`)
+- 평가 코퍼스 선택 `--corpus base|all|both`: 자동 수집 논문(`origin=auto`)을 지우지 않고 평가에서만 숨김(기본 base → 이전 수치와 비교 가능), all 은 실제 챗봇 상태. 숨긴 보기 `ExcludeOriginStore`는 벡터 검색·BM25 원문 목록 양쪽에서 빼 '처음부터 없던 코퍼스'와 같은 결과 (`rag/store/vectorstore.py`, `eval/corpus.py`, `compare.py`, `backend_eval.py`, `EXCLUDE_AUTO_PAPERS`)
 - 자동 수집 효과 측정 `eval/auto_fetch_effect.py`: 수집을 일으킨 질문들을 수집 전/후 코퍼스로 검색해 최고 점수·트리거·수집 논문 recall 비교(LLM 0회)
 - `compare.py --only`: 이름으로 설정 일부만 실행(예: `--only baseline` → LLM 0회)
-- 논문 자동 수집(자기 확장 RAG): 근거가 부족하면 arXiv 에서 관련 논문을 찾아 PDF 전문을 DB 에 추가하고 다시 검색·답변. 신호 2개 — ① 리랭크 최고 점수 < 0.2(평가셋 294문항 보정: 코퍼스 안 질문 4.1%만 오작동, 코퍼스 밖 8개 중 6개 감지) ② 답변이 '근거에서 찾을 수 없다'고 밝힘. 후보는 (질문, 제목+초록) 리랭크 0.3 이상만 최대 3편. 추가 논문은 `origin=auto` 표시 (`rag/auto_fetch.py`, `rag/pipeline.py`, `config.py AUTO_FETCH*`). 챗봇 사이드바 토글·진행 표시, 평가·테스트에서는 꺼짐
-- 논문 검색 출처 이중화: arXiv 검색 API 가 막히면(회사망 공용 IP 429) 30분간 OpenAlex 로 검색, PDF 는 arxiv.org 에서. arXiv 검색은 직접 호출·8초 제한(라이브러리 경유 시 실패까지 15~60초) (`rag/arxiv_source.py`)
+- 논문 자동 수집(자기 확장 RAG): 근거가 부족하면 arXiv 에서 관련 논문을 찾아 PDF 전문을 DB 에 추가하고 다시 검색·답변. 신호 2개 — ① 리랭크 최고 점수 < 0.2(평가셋 294문항 보정: 코퍼스 안 질문 4.1%만 오작동, 코퍼스 밖 8개 중 6개 감지) ② 답변이 '근거에서 찾을 수 없다'고 밝힘. 후보는 (질문, 제목+초록) 리랭크 0.3 이상만 최대 3편. 추가 논문은 `origin=auto` 표시 (`rag/ingest/auto_fetch.py`, `rag/pipeline.py`, `config.py AUTO_FETCH*`). 챗봇 사이드바 토글·진행 표시, 평가·테스트에서는 꺼짐
+- 논문 검색 출처 이중화: arXiv 검색 API 가 막히면(회사망 공용 IP 429) 30분간 OpenAlex 로 검색, PDF 는 arxiv.org 에서. arXiv 검색은 직접 호출·8초 제한(라이브러리 경유 시 실패까지 15~60초) (`rag/ingest/arxiv_source.py`)
 - 자동 수집 논문 관리 `scripts/manage_auto_papers.py`(목록·개별/전체 삭제, 수동 수집 논문 보호)
 - FreeToken 사용 가이드 `docs/FREETOKEN.md`(v0.2.2 기준): 구조·연결 설정·주요 명령(`ft ctl`/`serve`/`daemon`)·자원 관리(켜는 순서, MoE/KV 캐시)·측정 성능·문제 해결
 - 챗봇 시작 시 백그라운드 로딩 + 상태 관리: 임베딩·리랭커·벡터DB·BM25 를 미리 올리고, LLM 서버 `/health` 확인. 준비 전 질문은 진행 상황을 보여주며 대기 후 자동 진행, 사이드바 상태 2초 갱신 (`rag/warmup.py`, `ui_progress.py`, `app.py`)
-- 임베딩 모델도 GPU fp16 실행(`EMBED_DEVICE`/`RERANK_DEVICE`=auto): 질의 임베딩 148→22ms, 문서 20개 14.2→0.3s, 검색 결과 상위20 겹침 99.9% (`config.py`, `rag/llm.py`)
+- 임베딩 모델도 GPU fp16 실행(`EMBED_DEVICE`/`RERANK_DEVICE`=auto): 질의 임베딩 148→22ms, 문서 20개 14.2→0.3s, 검색 결과 상위20 겹침 99.9% (`config.py`, `rag/core/llm.py`)
 - 챗봇 실시간 진행 표시: 질문 입력 즉시 표시, 4단계 진행 로그(만든 검색 질의·고른 논문·검증 결과·재작성 여부)와 경과 시간을 0.5초마다 갱신, 답변은 생성되는 대로 스트리밍. 완료 시 단계별 소요 시간 요약 (`ui_progress.py`, `app.py`)
-- 파이프라인 진행 알림 `RAGPipeline.run(progress=...)`과 답변 토큰 스트리밍(`generate(on_token=...)`). 로컬 모델은 스트리밍 시 `<think>` 구간을 숨김 (`rag/pipeline.py`, `rag/stage3_generate.py`, `rag/llm.py get_llm(raw=)`)
+- 파이프라인 진행 알림 `RAGPipeline.run(progress=...)`과 답변 토큰 스트리밍(`generate(on_token=...)`). 로컬 모델은 스트리밍 시 `<think>` 구간을 숨김 (`rag/pipeline.py`, `rag/stages/stage3_generate.py`, `rag/core/llm.py get_llm(raw=)`)
 - 사내 프록시 CA 묶음 생성 `scripts/export_ca_bundle.py`(certifi + Windows 인증서 저장소 → `storage/ca_bundle.pem`)와 `CA_BUNDLE` 설정 — Pinecone 연결이 인증서 검증을 유지한 채 프록시를 통과
 - `.env.example` Pinecone 입력란(API 키·인덱스·네임스페이스·위치·docstore·CA_BUNDLE)
 - 챗봇 사이드바 Thinking 토글: 로컬 모델(Qwen 등)의 생성·검증 / 질의변환 thinking 을 실행 중에 켜고 끔. 답변마다 사용한 모드 표시 (`app.py`)
 - 평가 실패 방지: 생성·검증·질의변환·채점 실패(예: 서버 `503 model is still loading`)를 감지하면 기록하지 않고 서버 준비를 기다린 뒤 재시도, 계속 실패하면 중단 (`eval/backend_eval.py --retries/--max-wait`)
-- Pinecone 벡터 DB 지원 `VECTOR_BACKEND=pinecone`: 공식 SDK 위 어댑터(`PineconeStore`)가 Chroma 와 같은 메서드 모양을 제공해 파이프라인 코드 변경 없이 전환. 원문은 로컬 docstore(JSONL)에 보관해 BM25 하이브리드 검색 유지 (`rag/vectorstore.py`, `rag/docstore.py`, `config.py`)
+- Pinecone 벡터 DB 지원 `VECTOR_BACKEND=pinecone`: 공식 SDK 위 어댑터(`PineconeStore`)가 Chroma 와 같은 메서드 모양을 제공해 파이프라인 코드 변경 없이 전환. 원문은 로컬 docstore(JSONL)에 보관해 BM25 하이브리드 검색 유지 (`rag/store/vectorstore.py`, `rag/store/docstore.py`, `config.py`)
 - Chroma → Pinecone 이전 스크립트: Chroma 벡터를 재임베딩 없이 그대로 복사(ID 유지), `--dry-run` 점검·`--reset` (`scripts/migrate_to_pinecone.py`)
 - 검색 동일성 검증 `eval/vector_parity.py`(평가셋 전체로 벡터 검색 겹침률·최종 근거 일치율·recall/MRR 비교, `--fake` 오프라인 모드) + Pinecone 대역 `tests/fake_pinecone.py` + 어댑터 단위테스트
 - 백엔드 단위 평가 `eval/backend_eval.py`: 질문별 지표·단계별 지연을 JSONL 로 누적 기록(중단 후 이어서 실행), `--compare` 로 기록 간 비교. 채점 thinking 고정 옵션
-- 로컬 LLM 백엔드 `LLM_PROVIDER=local`: OpenAI 호환 서버(예: FreeToken Local의 Qwen3.6-35B-A3B)에 `LOCAL_BASE_URL`로 연결. 응답의 `<think>…</think>` 추론 자동 제거 (`rag/llm.py`, `config.py`)
-- provider별·모델별 effort 설정: 이름·값 체계가 달라 env 분리 — `ANTHROPIC_EFFORT[_LIGHT]`(output_config.effort), `OPENAI_REASONING_EFFORT[_LIGHT]`(reasoning_effort), `LOCAL_THINKING[_LIGHT]`(enable_thinking on/off). 잘못된 값은 즉시 오류. `LLM_TEMPERATURE`·`LLM_MAX_TOKENS` env 추가 (`config.py`, `rag/llm.py`, `.env.example`)
+- 로컬 LLM 백엔드 `LLM_PROVIDER=local`: OpenAI 호환 서버(예: FreeToken Local의 Qwen3.6-35B-A3B)에 `LOCAL_BASE_URL`로 연결. 응답의 `<think>…</think>` 추론 자동 제거 (`rag/core/llm.py`, `config.py`)
+- provider별·모델별 effort 설정: 이름·값 체계가 달라 env 분리 — `ANTHROPIC_EFFORT[_LIGHT]`(output_config.effort), `OPENAI_REASONING_EFFORT[_LIGHT]`(reasoning_effort), `LOCAL_THINKING[_LIGHT]`(enable_thinking on/off). 잘못된 값은 즉시 오류. `LLM_TEMPERATURE`·`LLM_MAX_TOKENS` env 추가 (`config.py`, `rag/core/llm.py`, `.env.example`)
 - 다분야 논문 대량 수집: 라이브 arXiv 수집으로 코퍼스 59→**490편**. CV·RL·GNN·speech·NLP·diffusion·추천·시계열·self-supervised·**멀티모달(162편)**·**양자화(44편)** 등 다분야 커버리지(초록 기반, Windows CA 번들로 프록시 SSL 통과)
 - 평가셋 대량 확대 12→**294문항**(단일홉 227·다중홉 67, easy81/medium144/hard69): `eval/gen_questions.py` 로 단일홉(논문별)·다중홉(`--multi-hop`, 임베딩 최근접 쌍) 질문을 경량 모델(`--light`)로 대량 생성 → 무료 검색지표로 자동 스크리닝(단일홉 recall=1.0·다중홉 recall≥0.5 통과분만) 승격
 - 평가셋 반자동 확대 도구: 코퍼스 논문별로 '그 논문만으로 답할 수 있는' 질문을 LLM으로 생성→검수/스크리닝→승격 (`eval/gen_questions.py`, `--dry-run`/`--light`/`--multi-hop` 지원)
-- 다양성 리랭킹(MMR) + 논문당 청크 상한: 전문 코퍼스에서 한 논문이 상위를 독점하는 쏠림을 막아 다중 홉 커버리지 개선 (`rag/stage2_rerank.py`, `config.rerank_diversity`/`mmr_lambda`/`same_source_penalty`/`rerank_max_per_source`). 2-arm A/B(hyde, 10문항): recall@5 0.653→0.750·answer_rel 0.754→0.771·faithfulness 유지, **tradeoff context_rel 0.625→0.546**(§5.5). 단위테스트 추가
+- 다양성 리랭킹(MMR) + 논문당 청크 상한: 전문 코퍼스에서 한 논문이 상위를 독점하는 쏠림을 막아 다중 홉 커버리지 개선 (`rag/stages/stage2_rerank.py`, `config.rerank_diversity`/`mmr_lambda`/`same_source_penalty`/`rerank_max_per_source`). 2-arm A/B(hyde, 10문항): recall@5 0.653→0.750·answer_rel 0.754→0.771·faithfulness 유지, **tradeoff context_rel 0.625→0.546**(§5.5). 단위테스트 추가
 - 학습용 Jupyter 노트북: 4단계(+0단계)를 셀 단위로 따라가며 각 단계 입출력을 확인 (`notebooks/advanced_rag_walkthrough.ipynb`)
 - 평가셋 외부화: 질문을 코드에서 분리해 단일 JSONL로 관리(`eval/eval_set.jsonl` + 로더 `eval/dataset.py`) — 난이도/카테고리 필터, 코드 수정 없이 확장. `compare.py`·`evaluate.py`가 이를 로드
 - 무료 검색 지표 recall@k·MRR·hit@k: `expected_sources`와 검색 결과만으로 계산(LLM 불필요) (`eval/retrieval_metrics.py`) — 대량 평가셋 저비용 스크리닝의 기반
 - `compare.py` 옵션: `--retrieval-only`(생성·검증·심판 생략, 저비용) / `--difficulty` / `--category` / `--n`
 - 코퍼스 대폭 확장: 샘플 논문 26→**57편** — RAG/IR·검색·임베딩 심화 10편(ColBERT·ANCE·BEIR·E5·BGE-M3·IRCoT·Self-Ask·DrQA·MS MARCO·GTR) + **주요 AI/LLM 논문 21편**(Transformer·BERT·GPT-3·InstructGPT·CoT·T5·RoBERTa·LLaMA·Llama2·Chinchilla·PaLM·GPT-4·Scaling Laws·Flan·Emergent·ReAct·ToT·LoRA·attention·word2vec·LLM Survey) (`data/sample_papers.json`)
 - 전문(full-text) 수집: 다중 홉 평가 질문이 참조하는 핵심 논문 15편을 PDF 전문으로 교체 수집 → 섹션 청킹, 코퍼스 37→1,319청크. 재측정에서 설정 간 격차가 드러남(§5.3)
-- arXiv 수집 옵션 `--ids`(논문 ID 직접 지정) / `--replace`(초록→전문 교체, 기존 청크 삭제 후 재적재) + `delete_sources()` (`scripts/ingest_arxiv.py`, `rag/vectorstore.py`)
+- arXiv 수집 옵션 `--ids`(논문 ID 직접 지정) / `--replace`(초록→전문 교체, 기존 청크 삭제 후 재적재) + `delete_sources()` (`scripts/ingest_arxiv.py`, `rag/store/vectorstore.py`)
 - 수집 중복 제거: 이미 벡터DB에 있는 논문(source)은 재수집 시 자동 건너뜀 (`scripts/ingest_arxiv.py`, `scripts/ingest_sample.py`) — 반복 실행·누적 수집 안전
 - arXiv 수집 다중 검색어: `--query` 에 여러 주제를 한 번에 지정, rate-limit 지연·재시도 내장 (`scripts/ingest_arxiv.py`)
 - 로컬 문서 수집: PDF/txt/md 폴더를 섹션 청킹으로 수집 (`scripts/ingest_local.py`) — 한국어 논문(RISS/DBpia에서 받은 PDF) 경로
-- 섹션 감지 한국어 확장: 초록/서론/방법/결과/결론 등 국문 섹션 제목 인식 (`rag/chunking.py`)
-- LLM 응답 캐싱(SQLite): 동일 프롬프트 재호출 비용·지연 제거 (`rag/llm.py`, `config.enable_llm_cache`) — 측정상 4.6s→0.002s
+- 섹션 감지 한국어 확장: 초록/서론/방법/결과/결론 등 국문 섹션 제목 인식 (`rag/ingest/chunking.py`)
+- LLM 응답 캐싱(SQLite): 동일 프롬프트 재호출 비용·지연 제거 (`rag/core/llm.py`, `config.enable_llm_cache`) — 측정상 4.6s→0.002s
 - 단위 테스트: RRF/파싱/문맥화 순수함수 (`tests/test_units.py`)
 - 인용 출처 패널: 챗봇 답변의 `[n]` 인용에 대응하는 제목·섹션·arXiv 링크·원문 스니펫 표시 (`app.py` render_sources, `RetrievedChunk.link`/`url`)
-- 섹션 인식 청킹: 논문 전문을 섹션(Abstract/Method/Results 등)으로 나눠 청킹하고 `section` 메타 부여 (`rag/chunking.py`). 인용 헤더에 섹션 표시, 테스트 `tests/test_chunking.py`
-- 멀티턴 대화: 0단계 질의 문맥화 — 후속질문을 히스토리로 독립형 질문으로 재작성 (`rag/contextualize.py`, `pipeline.run(chat_history=...)`)
+- 섹션 인식 청킹: 논문 전문을 섹션(Abstract/Method/Results 등)으로 나눠 청킹하고 `section` 메타 부여 (`rag/ingest/chunking.py`). 인용 헤더에 섹션 표시, 테스트 `tests/test_chunking.py`
+- 멀티턴 대화: 0단계 질의 문맥화 — 후속질문을 히스토리로 독립형 질문으로 재작성 (`rag/stages/contextualize.py`, `pipeline.run(chat_history=...)`)
 - 4단계 Advanced RAG 파이프라인 (질의변환 → 리랭킹 → 생성 → 검증)
-- 질의변환 3전략: multi_query / HyDE / decompose (`rag/stage1_query_transform.py`)
-- 하이브리드 검색: BM25 + 벡터를 RRF로 융합 (`rag/stage2_rerank.py`, `config.use_hybrid`)
+- 질의변환 3전략: multi_query / HyDE / decompose (`rag/stages/stage1_query_transform.py`)
+- 하이브리드 검색: BM25 + 벡터를 RRF로 융합 (`rag/stages/stage2_rerank.py`, `config.use_hybrid`)
 - 크로스인코더 리랭킹 (bge-reranker-v2-m3)
 - 인용 기반 생성 + LLM-as-judge 검증 + 자기수정 재생성
 - arXiv 수집 스크립트 (`scripts/ingest_arxiv.py`) + 오프라인 샘플 수집 (`scripts/ingest_sample.py`)
@@ -82,24 +86,26 @@
 - 진행 보고서 (`docs/PROGRESS_REPORT.md`), 작업 지침 (`CLAUDE.md`)
 
 ### Changed
+- `rag/` 를 역할별 하위 패키지로 정리: `core`(llm·prompts·schemas), `stages`(0~4단계), `store`(벡터DB·원문), `ingest`(수집·청크·자동 수집·표그림수식), `features`(비교표·조사·인용·알림). import 경로 일괄 변경, 294문항 검색 결과 문항별 동일
+- 진행 알림 `token` 이 누적 답변 대신 새 글자(`delta`)만 담음, 앞부분이 바뀌면 `answer_reset`
 - 그림·수식 청크 기본 켬(`VISUAL_FIGURES=1`, `VISUAL_EQUATIONS=1`), 표·그림·수식 후보 2개(`VISUAL_CANDIDATES=2`)
 - BM25 단어 나누기 `BM25_TOKENIZER`(기본 regex): 공백 대신 영문·숫자와 한글을 따로 떼고 한글 조사를 제거. 실제 코퍼스 recall@5 0.9660 → 0.9677, MRR 0.9485 → 0.9543. kiwi(형태소 분석)도 선택 가능, 비교 도구 `eval/bm25_tokenizer_eval.py`
-- 수집 신호: 한 근거 청크에 이름이 단어로 2번 이상 나오면 그 논문을 원 논문으로 보고 근거 있음으로 판단(제목에 이름이 없는 HyDE 등). 코퍼스 안 질문의 신호 5/42 → 3/42, 필요한 수집은 그대로 (`rag/auto_fetch.py`)
+- 수집 신호: 한 근거 청크에 이름이 단어로 2번 이상 나오면 그 논문을 원 논문으로 보고 근거 있음으로 판단(제목에 이름이 없는 HyDE 등). 코퍼스 안 질문의 신호 5/42 → 3/42, 필요한 수집은 그대로 (`rag/ingest/auto_fetch.py`)
 - 원 논문만 넣기 `AUTO_FETCH_TITLE_ONLY`(기본 켬): 추정 제목과 맞고 관련도 기준을 넘는 원 논문을 찾으면 그 1편만 추가(파생 논문이 다른 질문 근거에 끼어들어 answer_relevance −0.063 → −0.003). 관련도 미달로 제목만 맞은 경우는 다른 후보도 함께
 - 실전 시험 `auto_fetch_e2e.py`: 수집 뒤 15초 쉬어 arXiv 요청 제한 회피, 추정한 원 논문 제목 기록
 - 원 논문 제목 추정 기본 켬(`AUTO_FETCH_TITLE_GUESS=1`): 확인용 12문항에서 원 논문 선정 58% → 100%
 - OpenAlex 사용을 설정으로 끌 수 있게 함(`OPENALEX_ENABLED`, 기본 꺼짐): 자동 수집은 arXiv 만, 인용 그래프는 저장된 것만, DB 밖 인용 조회 옵션 숨김. arXiv API 요청 사이 3초 간격
-- 원 논문 제목 추정: 프롬프트에 약어 예시, 제목 일치 기준 0.6, 거의 정확한 제목(0.9 이상)은 관련도 기준 면제, 더 정확히 맞는 후보 우선 (`rag/auto_fetch.py`, `rag/prompts.py`)
-- 수집 신호의 제목 비교 보완: 띄어쓰기·하이픈 무시, 대문자 약어는 제목 머리글자와도 대조(GraphRAG↔Graph RAG, VQA↔Visual Question Answering). 코퍼스 안 질문의 신호 8/30 → 6/30 (`rag/auto_fetch.py`)
-- 비교 질문 수집 신호 보완: 명칭이 여럿일 때 제목에 있거나 근거 청크 2개 이상에 나와야 근거 있음으로 판단(다른 논문이 한 번 언급만 해도 수집하지 않던 문제, 코퍼스 안 신호 7/30 유지) (`rag/auto_fetch.py answer_signal`)
+- 원 논문 제목 추정: 프롬프트에 약어 예시, 제목 일치 기준 0.6, 거의 정확한 제목(0.9 이상)은 관련도 기준 면제, 더 정확히 맞는 후보 우선 (`rag/ingest/auto_fetch.py`, `rag/core/prompts.py`)
+- 수집 신호의 제목 비교 보완: 띄어쓰기·하이픈 무시, 대문자 약어는 제목 머리글자와도 대조(GraphRAG↔Graph RAG, VQA↔Visual Question Answering). 코퍼스 안 질문의 신호 8/30 → 6/30 (`rag/ingest/auto_fetch.py`)
+- 비교 질문 수집 신호 보완: 명칭이 여럿일 때 제목에 있거나 근거 청크 2개 이상에 나와야 근거 있음으로 판단(다른 논문이 한 번 언급만 해도 수집하지 않던 문제, 코퍼스 안 신호 7/30 유지) (`rag/ingest/auto_fetch.py answer_signal`)
 - 시나리오 시험: 비교 질문 시나리오 추가, 멀티턴 기대값 수정, 수집 사유 기록, `--only` 결과는 별도 파일 (`eval/auto_fetch_scenarios.py`)
-- 자동 수집 답변 신호 강화: 답변이 근거 부족을 밝히고 질문의 고유 명칭이 근거에 없을 때만 수집(코퍼스 안 질문의 신호 47%→23%) (`rag/auto_fetch.py answer_signal`)
+- 자동 수집 답변 신호 강화: 답변이 근거 부족을 밝히고 질문의 고유 명칭이 근거에 없을 때만 수집(코퍼스 안 질문의 신호 47%→23%) (`rag/ingest/auto_fetch.py answer_signal`)
 - 자동 수집 후보에 OpenAlex 인용 수 순 검색 추가, 관련도 0.5 이상 중 최다 인용 논문 우선 선정(`AUTO_FETCH_CITATION_SEARCH`, `AUTO_FETCH_ANCHOR_SCORE`): 원 논문 수집 2/12→6/12
 - 자동 수집 검색어당 후보 8→20개(`AUTO_FETCH_CANDIDATES`): 후보에서 잘리던 원 논문 포함. 후보 20·참고문헌 제외·가중치 0.7 조합으로 평가셋 recall 하락 −0.0085→−0.0017, 원 논문 3/7→5/7
 - README 에 단계별 사용 모델·실행 위치 표와 2단계 검색 구성 요소(임베딩·BM25·RRF·리랭커·MMR) 설명 추가, GPU 안내를 현재 동작(`auto`)에 맞게 수정
 - `vector_parity.py`는 자동 수집 논문을 숨기고 비교(자동 수집분은 Pinecone 에만 있어 그대로면 두 백엔드 코퍼스가 달라짐). 자동 수집 중복 판단·`manage_auto_papers.py`는 숨김 설정과 무관하게 전체를 봄
-- arXiv 수집 공용 코드를 `rag/arxiv_source.py`로 분리(클라이언트·PDF 전문·청킹), `scripts/ingest_arxiv.py`는 이를 사용(동작 동일)
-- 2단계(검색·리랭크) 속도 개선: 리랭크+MMR 4.74s→0.06s(294문항 평균). MMR 이 후보를 CPU 로 다시 임베딩하던 것을 벡터 스토어에 저장된 벡터를 ID 로 꺼내 쓰도록 변경(Chroma `get`·Pinecone `fetch`, 결과 동일), 리랭커 GPU fp16(294문항 중 1문항 근소한 점수 뒤집힘 → recall@5 0.9711→0.9694, `RERANK_FP16=0`으로 끌 수 있음). 검색 결과에 청크 ID 를 싣도록 함 (`rag/llm.py`, `rag/stage2_rerank.py`, `rag/vectorstore.py`, `rag/schemas.py`)
+- arXiv 수집 공용 코드를 `rag/ingest/arxiv_source.py`로 분리(클라이언트·PDF 전문·청킹), `scripts/ingest_arxiv.py`는 이를 사용(동작 동일)
+- 2단계(검색·리랭크) 속도 개선: 리랭크+MMR 4.74s→0.06s(294문항 평균). MMR 이 후보를 CPU 로 다시 임베딩하던 것을 벡터 스토어에 저장된 벡터를 ID 로 꺼내 쓰도록 변경(Chroma `get`·Pinecone `fetch`, 결과 동일), 리랭커 GPU fp16(294문항 중 1문항 근소한 점수 뒤집힘 → recall@5 0.9711→0.9694, `RERANK_FP16=0`으로 끌 수 있음). 검색 결과에 청크 ID 를 싣도록 함 (`rag/core/llm.py`, `rag/stages/stage2_rerank.py`, `rag/store/vectorstore.py`, `rag/core/schemas.py`)
 - `.env.example`을 FreeToken Local(local) 기준으로 재구성: local 설정을 기본 활성화(Qwen3.6-35B-A3B, thinking 메인 on/경량 off, temperature 0.6, max_tokens 8192), Claude·OpenAI는 주석 처리된 대안 블록으로, 백엔드 선택지별 필수 값 안내 추가
 - 기본 질의변환 모드를 **`hyde` → `multi_query`로 번복**: 확장 평가셋 검색 A/B(hyde 최하)에 더해 **생성지표 2-arm 교차검증**(hard 31문항)에서도 multi_query가 모든 지표 우위/동률(faithfulness 0.953 vs 0.950)로 확정(ADR-001 재검토, §5.7). (`config.py`)
 - 평가 하네스가 질문을 하드코딩 대신 `eval/eval_set.jsonl`에서 로드하도록 변경 (`eval/compare.py`, `eval/evaluate.py`)
@@ -115,8 +121,11 @@
 
 ### Fixed
 - 표 청크가 리랭크 후보 자리를 차지해 본문 근거가 빠지던 문제(이슈 20): 본문·표 후보와 BM25 색인 분리, 표 최소 리랭크 점수 `VISUAL_MIN_SCORE`(0.1), 표 후보 수 `VISUAL_CANDIDATES`(1), 논문당 상한은 표를 따로 셈. 294문항 지표 기준과 같음, 표 질문 11/11
-- 검색어 앞 숫자가 지워지던 버그: "3D Gaussian"이 "D Gaussian", "4-bit"가 "bit"로 바뀌어 엉뚱한 논문을 검색 (`rag/stage1_query_transform.py`)
-- PDF 깨진 문자로 임베딩이 실패하면 자동 수집 전체가 조용히 중단되던 문제: 문자 정리, 논문별 예외 처리 (`rag/arxiv_source.py`, `rag/auto_fetch.py`)
+- 검색어 앞 숫자가 지워지던 버그: "3D Gaussian"이 "D Gaussian", "4-bit"가 "bit"로 바뀌어 엉뚱한 논문을 검색 (`rag/stages/stage1_query_transform.py`)
+- PDF 깨진 문자로 임베딩이 실패하면 자동 수집 전체가 조용히 중단되던 문제: 문자 정리, 논문별 예외 처리 (`rag/ingest/arxiv_source.py`, `rag/ingest/auto_fetch.py`)
 - arXiv 대량 수집 중 한 검색어의 HTTP 429가 예외로 전체 실행을 중단시켜 수집분이 전부 유실되던 문제 → 검색어별 격리(실패 검색어만 건너뛰고 나머지는 저장) (`scripts/ingest_arxiv.py`)
 - arxiv 4.x에서 제거된 `Result.download_pdf` 사용으로 `--fulltext` 실패 → `pdf_url` 직접 다운로드(클라이언트 세션의 CA 설정 재사용)로 수정 (`scripts/ingest_arxiv.py`)
-- Anthropic 최신 API 버전에서 `temperature` 파라미터 400 에러 → 제거 (`rag/llm.py`)
+- Anthropic 최신 API 버전에서 `temperature` 파라미터 400 에러 → 제거 (`rag/core/llm.py`)
+
+### Removed
+- Streamlit 화면(`app.py`, `ui_progress.py`)과 `streamlit` 의존성 — FastAPI + React 로 대체

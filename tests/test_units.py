@@ -20,7 +20,7 @@ from langchain_core.documents import Document
 
 def test_rrf() -> None:
     """RRF: 두 랭킹에서 모두 상위인 문서가 1등이 되어야 한다."""
-    from rag.stage2_rerank import _reciprocal_rank_fusion
+    from rag.stages.stage2_rerank import _reciprocal_rank_fusion
 
     A = Document(page_content="doc A")
     B = Document(page_content="doc B")
@@ -38,7 +38,7 @@ def test_rrf() -> None:
 
 def test_split_lines() -> None:
     """_split_lines: 번호/불릿 접두 제거, 빈 줄 제거."""
-    from rag.stage1_query_transform import _split_lines
+    from rag.stages.stage1_query_transform import _split_lines
 
     out = _split_lines("1. first\n- second\n\n  3) third  ")
     assert out == ["first", "second", "third"], out
@@ -49,7 +49,7 @@ def test_split_lines() -> None:
 
 def test_parse_json() -> None:
     """_parse_json: 코드펜스/주변 텍스트가 있어도 JSON 추출."""
-    from rag.stage4_verify import _parse_json
+    from rag.stages.stage4_verify import _parse_json
 
     assert _parse_json('{"grounded": true}')["grounded"] is True
     fenced = '```json\n{"faithfulness": 0.8}\n```'
@@ -61,7 +61,7 @@ def test_parse_json() -> None:
 
 def test_contextualize_no_history() -> None:
     """히스토리가 없으면 LLM 호출 없이 원문 그대로 반환해야 한다."""
-    from rag.contextualize import contextualize
+    from rag.stages.contextualize import contextualize
 
     q = "리랭킹은 왜 필요한가요?"
     assert contextualize(q, None) == q
@@ -79,9 +79,9 @@ class _FakeEmbeddings:
 
 def test_mmr_per_source_cap() -> None:
     """MMR: 논문당 상한으로 한 논문의 쏠림을 막고 커버리지를 넓혀야 한다."""
-    import rag.llm as llm
-    from rag.schemas import RetrievedChunk
-    from rag.stage2_rerank import _mmr_select
+    import rag.core.llm as llm
+    from rag.core.schemas import RetrievedChunk
+    from rag.stages.stage2_rerank import _mmr_select
 
     orig = llm.get_embeddings
     llm.get_embeddings = lambda: _FakeEmbeddings()
@@ -130,8 +130,8 @@ def test_pinecone_store_adapter() -> None:
     sys.path.insert(0, str(Path(__file__).resolve().parent))
     from fake_pinecone import FakePineconeIndex
 
-    from rag.docstore import DocStore
-    from rag.vectorstore import PineconeStore, get_all_documents
+    from rag.store.docstore import DocStore
+    from rag.store.vectorstore import PineconeStore, get_all_documents
 
     path = Path(tempfile.mkdtemp()) / "docstore.jsonl"
     store = PineconeStore(FakePineconeIndex(), "t", _OneHotEmbeddings(), DocStore(path))
@@ -160,8 +160,8 @@ def test_exclude_auto_view() -> None:
     sys.path.insert(0, str(Path(__file__).resolve().parent))
     from fake_pinecone import FakePineconeIndex
 
-    from rag.docstore import DocStore
-    from rag.vectorstore import ExcludeOriginStore, PineconeStore, get_all_documents, get_vectors
+    from rag.store.docstore import DocStore
+    from rag.store.vectorstore import ExcludeOriginStore, PineconeStore, get_all_documents, get_vectors
 
     def make(with_auto: bool):
         st = PineconeStore(FakePineconeIndex(), "t", _OneHotEmbeddings(),
@@ -192,9 +192,9 @@ def test_exclude_auto_view() -> None:
 
 def test_auto_rerank_weight() -> None:
     """가중치: 자동 수집 청크 점수만 낮추고, 1.0 이면 순위가 그대로여야 한다."""
-    import rag.stage2_rerank as s2
+    import rag.stages.stage2_rerank as s2
     from config import settings
-    from rag.schemas import RetrievedChunk
+    from rag.core.schemas import RetrievedChunk
 
     class _Fake:
         def predict(self, pairs):
@@ -213,7 +213,7 @@ def test_auto_rerank_weight() -> None:
         assert [c.source for c in got] == ["B", "A"] and abs(got[1].rerank_score - 0.45) < 1e-9, got
     finally:
         s2.get_reranker, settings.rerank_diversity, settings.auto_rerank_weight = orig
-    from rag.auto_fetch import is_back_matter
+    from rag.ingest.auto_fetch import is_back_matter
 
     assert is_back_matter("References") and is_back_matter("Appendix A") and is_back_matter("BIBLIOGRAPHY")
     assert not is_back_matter("3.2 Method") and not is_back_matter(None)
@@ -224,8 +224,8 @@ def test_auto_fetch_decisions() -> None:
     """답변 신호는 대상이 근거에 없을 때만, 선정은 인용이 가장 많은 관련 논문을 먼저."""
     from types import SimpleNamespace as NS
 
-    import rag.auto_fetch as af
-    from rag.schemas import RetrievedChunk
+    import rag.ingest.auto_fetch as af
+    from rag.core.schemas import RetrievedChunk
 
     assert af.named_terms("SimCLR와 BM25, RAG 및 Neural 모델") == ["SimCLR", "BM25"]
     no = "제공된 논문에서는 찾을 수 없습니다."
@@ -275,7 +275,7 @@ def test_auto_fetch_decisions() -> None:
     assert not af.title_similar("Proximal Policy Optimization Algorithms", "Policy Optimization for Robots with PPO")
     assert not af.title_similar("Vision Transformer", "Vision Transformer with Deformable Attention"), "짧은 추정은 파생 논문과 안 맞음"
     from config import settings as _s
-    from rag.arxiv_source import openalex_params
+    from rag.ingest.arxiv_source import openalex_params
     _k, _s.openalex_api_key = _s.openalex_api_key, ""
     assert openalex_params({"a": 1}) == {"a": 1}
     _s.openalex_api_key = "k"
@@ -291,11 +291,11 @@ def test_evict_over_budget() -> None:
     sys.path.insert(0, str(Path(__file__).resolve().parent))
     from fake_pinecone import FakePineconeIndex
 
-    import rag.auto_fetch as af
+    import rag.ingest.auto_fetch as af
     from config import settings
-    from rag.docstore import DocStore
-    from rag.schemas import RetrievedChunk
-    from rag.vectorstore import PineconeStore
+    from rag.store.docstore import DocStore
+    from rag.core.schemas import RetrievedChunk
+    from rag.store.vectorstore import PineconeStore
 
     tmp = Path(tempfile.mkdtemp())
     st = PineconeStore(FakePineconeIndex(), "t", _OneHotEmbeddings(), DocStore(tmp / "d.jsonl"))
@@ -321,7 +321,7 @@ def test_evict_over_budget() -> None:
 
 def test_paper_search_parsers() -> None:
     """arXiv Atom 응답 해석(직접 호출 경로)과 OpenAlex 초록 역색인 복원."""
-    import rag.arxiv_source as A
+    import rag.ingest.arxiv_source as A
 
     atom = b"""<feed xmlns="http://www.w3.org/2005/Atom"><entry>
       <id>http://arxiv.org/abs/2303.04137v5</id><published>2023-03-07T17:00:00Z</published>
@@ -360,7 +360,7 @@ def test_citation_graph() -> None:
     import tempfile
 
     from config import settings
-    from rag import citations as C
+    from rag.features import citations as C
 
     orig = settings.citation_graph_path
     with tempfile.TemporaryDirectory() as d:
@@ -389,8 +389,8 @@ def test_citation_graph() -> None:
 
 def test_compare_table() -> None:
     """비교표: 칸별 인용 점검, 표 형식, 논문별 전역 번호(LLM 없이 요약 함수를 바꿔 끼움)."""
-    from rag import compare_table as T
-    from rag.schemas import RetrievedChunk
+    from rag.features import compare_table as T
+    from rag.core.schemas import RetrievedChunk
 
     assert T.check_citations({"방법": "A를 제안 [2]", "데이터": "근거 없음", "결과": "좋음", "한계": "범위 밖 [9]"},
                              range(1, 4)) == ["결과", "한계"]
@@ -419,8 +419,8 @@ def test_compare_table() -> None:
 def test_survey() -> None:
     """문헌 조사 초안: 근거 머리의 연도·선행 관계, 참고문헌은 코드가 생성, 검색 폭 설정 복원(LLM 없이)."""
     from config import settings
-    from rag import survey as S
-    from rag.schemas import RetrievedChunk
+    from rag.features import survey as S
+    from rag.core.schemas import RetrievedChunk
 
     g = {"papers": {"A": {"oa": "W1", "title": "A", "cited_by": 9, "year": 2017, "refs": []},
                     "B": {"oa": "W2", "title": "B", "cited_by": 1, "year": 2019, "refs": ["W1"]}},
@@ -449,7 +449,7 @@ def test_survey() -> None:
 def test_bm25_tokenize() -> None:
     """BM25 단어 나누기: 조사·문장부호가 붙은 영어 용어를 원래 용어로."""
     from config import settings
-    from rag.stage2_rerank import bm25_tokenize
+    from rag.stages.stage2_rerank import bm25_tokenize
 
     keep = settings.bm25_tokenizer
     try:
@@ -468,9 +468,9 @@ def test_watch() -> None:
     import datetime as dt
     import tempfile
 
-    import rag.arxiv_source as A
+    import rag.ingest.arxiv_source as A
     from config import settings
-    from rag import watch as W
+    from rag.features import watch as W
 
     today = dt.date(2026, 11, 12)
     papers = [A.Paper(pid="n1", title="RAG new", summary="rag", published=dt.date(2026, 11, 11)),
@@ -484,7 +484,7 @@ def test_watch() -> None:
         settings.watch_path, settings.watch_digest_dir = f"{d}/w.json", f"{d}/dg"
         A.search_arxiv = lambda q, n, **kw: (calls.append((q, kw.get("sort"))), papers)[1]
         W._summarize = lambda topic, title, abstract: f"요약:{title}"
-        import rag.llm as L
+        import rag.core.llm as L
         orig_rr = L.get_reranker
         L.get_reranker = lambda: type("R", (), {"predict": staticmethod(lambda pairs: [0.9 if "rag" in t.lower() else 0.0 for _, t in pairs])})()
         try:
@@ -506,7 +506,7 @@ def test_watch() -> None:
 
 def test_visual_parse() -> None:
     """표·그림: 모델 응답 해석, 숫자 대조, 페이지 캡션에 없는 항목 버리기(모델 호출 없이)."""
-    from rag import visual as V
+    from rag.ingest import visual as V
 
     raw = chr(10).join(["### Table 2: Top-20 accuracy", "```markdown", "| Model | NQ |", "|---|---|", "| DPR | 78.4 |",
                    "| BM25 | 59.1 |", "```", "### Figure 1: Overview", "그림은 두 인코더를 보여 준다.", "### Table 9: 지어낸 표",
@@ -552,12 +552,12 @@ def test_visual_parse() -> None:
 
 def test_visual_retrieval() -> None:
     """표·그림 청크: 본문 후보와 따로 나누기, 최소 점수 미만은 근거에서 빼기, 논문당 상한은 본문과 따로 세기."""
-    import rag.llm as llm
+    import rag.core.llm as llm
     from langchain_core.documents import Document
 
     from config import settings
-    from rag.schemas import RetrievedChunk
-    from rag.stage2_rerank import _mmr_select, _split_visual
+    from rag.core.schemas import RetrievedChunk
+    from rag.stages.stage2_rerank import _mmr_select, _split_visual
 
     docs = [Document(page_content=f"d{i}", metadata={"kind": "table"} if i in (1, 3) else {}) for i in range(6)]
     body, visual = _split_visual(docs, 3)
@@ -575,7 +575,7 @@ def test_visual_retrieval() -> None:
     finally:
         llm.get_embeddings = orig
 
-    import rag.stage2_rerank as s2
+    import rag.stages.stage2_rerank as s2
 
     class _R:
         def predict(self, pairs):
@@ -600,6 +600,45 @@ def test_visual_retrieval() -> None:
     print("  test_visual_retrieval ✅")
 
 
+
+def test_local_reasoning_stream() -> None:
+    """로컬 서버의 delta.reasoning_content(thinking 추론)를 메시지 조각에 보존하고, 생성 단계가 본문과 따로 넘기는가."""
+    from langchain_core.messages import AIMessageChunk
+    from langchain_core.prompts import ChatPromptTemplate
+
+    from rag.core.llm import _local_chat_class
+    from rag.stages import stage3_generate as s3
+
+    llm = _local_chat_class()(model="m", base_url="http://localhost:1/v1", api_key="x")
+    gen = llm._convert_chunk_to_generation_chunk(
+        {"choices": [{"index": 0, "delta": {"role": "assistant", "content": None, "reasoning_content": "생각"}}]},
+        AIMessageChunk, None)
+    assert gen.message.additional_kwargs.get("reasoning_content") == "생각" and gen.message.content == ""
+    plain = llm._convert_chunk_to_generation_chunk({"choices": [{"index": 0, "delta": {"content": "답"}}]}, AIMessageChunk, None)
+    assert "reasoning_content" not in plain.message.additional_kwargs and plain.message.content == "답"
+
+    from langchain_core.runnables import RunnableGenerator
+
+    def fake_stream(inputs):  # get_llm(raw=True) 대역: 추론 조각 2개 → 본문 조각 2개
+        for _ in inputs:
+            pass
+        yield AIMessageChunk(content="", additional_kwargs={"reasoning_content": "음"})
+        yield AIMessageChunk(content="", additional_kwargs={"reasoning_content": "…"})
+        yield AIMessageChunk(content="답은 ")
+        yield AIMessageChunk(content="4 [1].")
+
+    orig = s3.get_llm
+    s3.get_llm = lambda light=False, raw=False: RunnableGenerator(fake_stream)
+    try:
+        tokens, thoughts = [], []
+        out = s3._run(ChatPromptTemplate.from_messages([("user", "{q}")]), {"q": "2+2"}, tokens.append, thoughts.append)
+    finally:
+        s3.get_llm = orig
+    assert out == "답은 4 [1]." and thoughts == ["음", "…"], (out, thoughts)
+    assert tokens[-1] == "답은 4 [1].", "on_token 은 누적 본문(추론 제외)"
+    print("  test_local_reasoning_stream ✅")
+
+
 def main() -> None:
     print("단위 테스트 실행:")
     test_rrf()
@@ -620,6 +659,7 @@ def main() -> None:
     test_watch()
     test_visual_parse()
     test_visual_retrieval()
+    test_local_reasoning_stream()
     print("모든 단위 테스트 통과 ✅")
 
 

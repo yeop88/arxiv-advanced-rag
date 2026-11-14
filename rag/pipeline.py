@@ -19,7 +19,7 @@ rag/pipeline.py — 4단계를 하나로 엮는 오케스트레이터
    최종 답변 + 검증 리포트
 
 각 단계 산출물을 PipelineResult 에 모두 담아 반환하므로,
-Streamlit 에서 단계별로 펼쳐 보며 "무슨 일이 일어났는지" 학습할 수 있습니다.
+챗봇 화면에서 단계별로 펼쳐 보며 "무슨 일이 일어났는지" 학습할 수 있습니다.
 """
 from __future__ import annotations
 
@@ -27,22 +27,49 @@ import time
 from typing import Any, Callable
 
 from config import settings
-from rag import auto_fetch
-from rag import stage1_query_transform as s1
-from rag import stage2_rerank as s2
-from rag import stage3_generate as s3
-from rag import stage4_verify as s4
-from rag.contextualize import ChatHistory, contextualize
-from rag.schemas import PipelineResult
-from rag.vectorstore import VectorStoreLike, load_vectorstore
+from rag.ingest import auto_fetch
+from rag.stages import stage1_query_transform as s1
+from rag.stages import stage2_rerank as s2
+from rag.stages import stage3_generate as s3
+from rag.stages import stage4_verify as s4
+from rag.stages.contextualize import ChatHistory, contextualize
+from rag.core.schemas import PipelineResult
+from rag.store.vectorstore import VectorStoreLike, load_vectorstore
 
 # 진행 알림: progress(event, **info). 화면(챗봇)에 단계별 진행을 보여주는 데 쓴다.
 #   transform_start / transform_done(queries, sec)
 #   retrieve_start / retrieve_done(n_candidates, papers, sec)
-#   generate_start / token(text) / generate_done(sec, chars)
+#   generate_start / token(delta) / generate_done(sec, chars)   — token 은 새로 생긴 글자만(delta)
+#   answer_reset: 화면에 보이던 답변을 지우고 처음부터(추론 태그 정리 등 드문 경우)
+#   reasoning(delta): thinking 모드에서 답을 쓰기 전 추론 조각(답변 본문에는 넣지 않음)
 #   verify_start / verify_done(grounded, faithfulness, unsupported, sec)
 #   regenerate_start(attempt, unsupported) / error(stage, message)
 Progress = Callable[..., Any]
+
+
+class _TokenDelta:
+    """생성 단계가 넘기는 '지금까지의 답변'을 새로 생긴 부분(delta)만 알림으로 보낸다.
+    매번 전체를 보내면 답변이 길수록 전송량이 제곱으로 늘고 화면이 덩어리로 갱신된다."""
+
+    def __init__(self, emit):
+        self.emit, self.shown = emit, ""
+
+    def restart(self) -> None:
+        self.shown = ""
+
+    def __call__(self, text: str) -> None:
+        if text.startswith(self.shown):
+            delta = text[len(self.shown):]
+        else:  # 앞부분이 바뀌었다(예: '<thi' 가 '<think>' 로 완성돼 숨겨짐) → 처음부터 다시
+            self.emit("answer_reset")
+            delta = text
+        self.shown = text
+        if delta:
+            self.emit("token", delta=delta)
+
+    def reasoning(self, delta: str) -> None:
+        """thinking 모델의 추론 조각 — 답변 본문과 따로 '생각하는 중'으로 보여 준다."""
+        self.emit("reasoning", delta=delta)
 
 
 class RAGPipeline:
@@ -101,7 +128,8 @@ class RAGPipeline:
             if progress is not None:
                 progress(event, **info)
 
-        on_token = (lambda text: emit("token", text=text)) if progress is not None else None
+        on_token = _TokenDelta(emit) if progress is not None else None
+        on_reasoning = on_token.reasoning if on_token else None
 
         # --- 0단계(전처리): 멀티턴 문맥화 ---
         t = time.perf_counter()
@@ -152,7 +180,7 @@ class RAGPipeline:
         t = time.perf_counter()
         emit("generate_start", n_chunks=len(reranked))
         try:
-            answer = s3.generate(standalone, reranked, on_token=on_token)
+            answer = s3.generate(standalone, reranked, on_token=on_token, on_reasoning=on_reasoning)
         except Exception as e:  # noqa: BLE001
             result.answer = f"답변 생성 중 오류가 발생했습니다: {e}"
             result.timings["3_generate"] = time.perf_counter() - t
@@ -172,7 +200,9 @@ class RAGPipeline:
                 t = time.perf_counter()
                 emit("generate_start", n_chunks=len(reranked), again=True)
                 try:
-                    answer = s3.generate(standalone, reranked, on_token=on_token)
+                    if on_token:
+                        on_token.restart()  # 다시 쓰는 답변은 처음부터 표시
+                    answer = s3.generate(standalone, reranked, on_token=on_token, on_reasoning=on_reasoning)
                 except Exception as e:  # noqa: BLE001
                     emit("error", stage="generate", message=str(e))  # 실패하면 첫 답변 유지
                 result.timings["3c_generate_again"] = time.perf_counter() - t
@@ -201,8 +231,10 @@ class RAGPipeline:
                 ):
                     # 근거 없는 주장을 피드백으로 넣어 재생성 → 재검증
                     emit("regenerate_start", attempt=attempts + 1, unsupported=verification.unsupported_claims)
+                    if on_token:
+                        on_token.restart()
                     answer = s3.regenerate(standalone, reranked, verification.unsupported_claims,
-                                           on_token=on_token)
+                                           on_token=on_token, on_reasoning=on_reasoning)
                     t2 = time.perf_counter()
                     emit("verify_start", again=True)
                     verification = s4.verify(answer, reranked)

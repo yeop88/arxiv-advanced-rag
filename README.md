@@ -4,7 +4,7 @@
 **눈에 보이도록** 분리해 구현한 학습용 + 제품급 품질의 **비영리** 프로젝트입니다.
 
 - **도메인**: arXiv 학술논문 Q&A (영어 논문 기반, 한국어 질문·논문 지원)
-- **스택**: LangChain · Streamlit · HuggingFace(임베딩/리랭커) · Claude/OpenAI API
+- **스택**: LangChain · FastAPI(SSE 스트리밍) · React(TypeScript, Vite) · HuggingFace(임베딩/리랭커) · Claude/OpenAI/로컬 LLM
 - **특징**: LLM 백엔드 교체 가능, 단계별 하이퍼파라미터 실험, 검증(자기수정) 내장
 - **성격**: 비영리 — 학습·연구·개인용. 상업적 수익 모델은 다루지 않습니다.
 - **필요성과 확장 방향**: [PROJECT_VISION.md](PROJECT_VISION.md)
@@ -28,29 +28,29 @@
 ```
 질문 (+ 대화 히스토리)
  │
- ▼ [0단계] 멀티턴 문맥화   rag/contextualize.py
+ ▼ [0단계] 멀티턴 문맥화   rag/stages/contextualize.py
  │   후속질문을 이전 맥락으로 '독립형 질문'으로 재작성 (히스토리 없으면 통과)
  ▼
 독립형 질문
  │
- ▼ [1단계] 질의 변환      rag/stage1_query_transform.py
+ ▼ [1단계] 질의 변환      rag/stages/stage1_query_transform.py
  │   multi_query : 여러 각도로 재작성 (기본값, 근거: docs/ADR-001 재검토)
  │   hyde        : 가상 답변 생성 후 그것으로 검색
  │   decompose   : 복합 질문을 하위 질문으로 분해
  ▼
 여러 검색 질의
  │
- ▼ [2단계] 검색 + 리랭킹   rag/stage2_rerank.py
+ ▼ [2단계] 검색 + 리랭킹   rag/stages/stage2_rerank.py
  │   벡터검색(bi-encoder)으로 넓게 → 크로스인코더로 정밀 재정렬
  ▼
 엄선된 근거 top-k
  │
- ▼ [3단계] 생성(인용)      rag/stage3_generate.py
+ ▼ [3단계] 생성(인용)      rag/stages/stage3_generate.py
  │   근거만 사용, 문장마다 [번호] 인용 → 환각 억제 + 출처 추적
  ▼
 초안 답변
  │
- ▼ [4단계] 검증            rag/stage4_verify.py
+ ▼ [4단계] 검증            rag/stages/stage4_verify.py
  │   LLM-as-judge 로 groundedness 채점
  │   실패 시 → 3단계로 돌아가 자기수정 재생성
  ▼
@@ -58,7 +58,7 @@
 ```
 
 각 단계는 독립 모듈이라, 하나씩 열어 보며 학습하거나 교체 실험할 수 있습니다.
-프롬프트는 전부 [rag/prompts.py](rag/prompts.py) 한 곳에 모아 두었습니다 (품질의 8할).
+프롬프트는 전부 [rag/core/prompts.py](rag/core/prompts.py) 한 곳에 모아 두었습니다 (품질의 8할).
 
 ### 단계별 사용 모델과 실행 위치
 
@@ -163,16 +163,26 @@ python scripts/ingest_sample.py
 #    (c) 한국어 논문 등 로컬 PDF/텍스트 폴더 (RISS/DBpia에서 받은 PDF 투입)
 python scripts/ingest_local.py --dir ./my_papers --reset
 
-# 4) 챗봇 실행
-streamlit run app.py
+# 4) 챗봇 화면 빌드 (처음 한 번, 화면 코드를 바꿨을 때만 — Node.js 20 이상)
+cd frontend && npm install && npm run build && cd ..
+
+# 5) 챗봇 실행 → 브라우저에서 http://127.0.0.1:8000
+python -m server                # --port 8000, --host 127.0.0.1 (기본값)
 ```
+
+> 🛠️ **화면 개발**: `python -m server` 를 켠 채 `cd frontend && npm run dev` → http://localhost:5173
+> (코드를 고치면 바로 반영, API 는 8000 번 서버로 넘김). API 문서는 http://127.0.0.1:8000/docs.
 
 > 💬 **챗봇형 UI**: 대화창에 질문하면 근거 기반 답변 + 검증 배지 + **📑 근거 출처 패널**
 > (각 `[n]` 인용의 제목·섹션·arXiv 링크·원문) + "단계별 내부 동작"을 펼쳐 볼 수 있습니다.
 > **멀티턴 지원** — "그럼 둘 중 뭐가 더 느려?" 같은 후속질문도 이전 맥락을 반영해 답합니다
-> (0단계 질의 문맥화). 사내 서버/Streamlit Cloud 에 그대로 배포 가능
+> (0단계 질의 문맥화). 대화는 브라우저에 기억돼 새로고침해도 남습니다(🗑️ 대화 초기화로 지움).
+> **✍️ 실시간 답변** — 답변은 한 글자씩 끊김 없이 써집니다. 서버는 토큰이 생기는 즉시 새 글자만 SSE 로 보내고,
+> 화면은 받은 글자를 버퍼에 두었다가 화면 프레임마다 조금씩 꺼내 보여 줍니다(토큰이 몰려 오거나 잠깐 끊겨도 일정한 속도).
+> 실제 화면 측정: 프레임당 1~6글자, 글자가 안 나온 최장 구간 17ms(한 프레임), 끊긴 프레임 0. `[n]` 인용은 칩으로 표시되고
+> 누르면 해당 근거가 펼쳐집니다. 수식은 KaTeX 로 그립니다. 답하는 중 **■ 중지**로 멈출 수 있습니다.
 > **⏱️ 실시간 진행 표시** — 질문하면 4단계가 각각 무엇을 하는지(만든 검색 질의, 고른 논문, 검증 결과)와 경과 시간이
-> 계속 갱신되고, 답변은 써지는 대로 보입니다. 로컬 모델처럼 오래 걸려도 어디까지 왔는지 알 수 있습니다.
+> 계속 갱신됩니다. Thinking 모드에서는 답을 쓰기 전 모델의 생각 과정이 실시간으로 흘러가고, 답을 쓰기 시작하면 접힙니다.
 > **📥 논문 자동 수집** — DB 에 맞는 근거가 없으면 arXiv 에서 관련 논문을 찾아 **전문**을 DB 에 추가하고 다시 답합니다
 > (관련도 기준을 넘는 논문만, 로컬 모델이 추정한 원 논문 제목으로도 찾아 원 논문 우선, 질문당 최대 3편, 참고문헌·부록은 제외, 사이드바에서 끄기 가능). 추가된 논문은 `python scripts/manage_auto_papers.py`로 보고 지울 수 있습니다.
 > OpenAlex는 기본으로 꺼져 있어(`OPENALEX_ENABLED=0`) 후보는 arXiv에서만 찾습니다. 켜면 인용 순 검색이 더해지지만, 회사망처럼 여럿이 같은 IP를 쓰면 무료 예산이 금방 바닥납니다(429) — 이때는 openalex.org 무료 키를 `OPENALEX_API_KEY`에 넣으세요.
@@ -191,7 +201,7 @@ streamlit run app.py
 > 인용 그래프를 만들어 두세요(LLM 없음, 약 2분). 자동 수집 논문은 수집될 때 그래프에 추가됩니다.
 > **🧠 Thinking 토글**(로컬 모델 전용) — 사이드바에서 생성·검증 / 질의변환의 thinking 을 켜고 끌 수 있습니다.
 > 켜면 다중 홉 비교에 유리하지만 느립니다(측정: 질문당 off 약 1분, on 약 3~4분. 같은 채점 기준으로 hard 30문항 answer_relevance 0.640 → 0.697).
-> (API 키는 secrets 로 주입, 벡터DB는 사전 구축).
+> 사이드바 설정은 그 질문에만 적용되고(서버 기본값은 `.env`), 브라우저에 기억됩니다.
 
 > 💡 첫 실행 시 HuggingFace 임베딩(bge-m3)·리랭커 모델을 다운로드하므로 몇 분 걸립니다.
 > GPU 가 있으면 자동으로 사용합니다(`EMBED_DEVICE`·`RERANK_DEVICE`, 기본 `auto`).
@@ -224,24 +234,46 @@ python eval/compare.py --n 3    # 설정 조합별 A/B 비교표 (하이브리�
 
 ```
 exam03_Advanced_RAG/
-├── config.py                  # 전역 설정 (모델·청크·top_k 등)
-├── rag/
-│   ├── prompts.py             # ⭐ 4단계 프롬프트 (학습 핵심)
-│   ├── schemas.py             # 단계별 데이터 구조
-│   ├── llm.py                 # LLM/임베딩/리랭커 팩토리 (교체 가능)
-│   ├── vectorstore.py         # 벡터 DB 로드/구축 (Chroma | Pinecone 어댑터)
-│   ├── docstore.py            # 원문 보관소(JSONL) — Pinecone 사용 시 BM25·본문 기준
-│   ├── stage1_query_transform.py
-│   ├── stage2_rerank.py
-│   ├── stage3_generate.py
-│   ├── stage4_verify.py
-│   ├── citations.py           # 인용 그래프(선행·후속 연구, 공통 참고문헌)
-│   ├── compare_table.py       # 논문 비교표(방법·데이터·결과·한계)
-│   ├── survey.py              # 문헌 조사 초안(소주제별 흐름 + 참고문헌)
-│   ├── watch.py               # 관심 분야 알림(새 논문 소식지)
-│   ├── visual.py              # 표 이해(페이지 이미지 → 마크다운 표, 숫자 대조)
-│   └── pipeline.py            # 4단계 오케스트레이터
-├── rag/chunking.py            # 섹션 인식 청킹 (영문/국문 섹션 감지)
+├── config.py                  # 전역 설정 (모델·청크·top_k 등, .env 로 덮어씀)
+├── rag/                       # RAG 핵심 라이브러리 (화면과 무관 — 평가·스크립트도 이것을 씀)
+│   ├── pipeline.py            # 4단계 오케스트레이터 (진행 알림·토큰 스트리밍)
+│   ├── warmup.py              # 서버 시작 시 모델·DB 예열 + LLM 서버 상태 확인
+│   ├── core/
+│   │   ├── prompts.py         # ⭐ 4단계 프롬프트 (학습 핵심)
+│   │   ├── schemas.py         # 단계별 데이터 구조
+│   │   └── llm.py             # LLM/임베딩/리랭커 팩토리 (백엔드 교체는 여기 한 곳)
+│   ├── stages/                # 0 문맥화 → 1 질의변환 → 2 검색·리랭킹 → 3 생성 → 4 검증
+│   │   ├── contextualize.py
+│   │   ├── stage1_query_transform.py
+│   │   ├── stage2_rerank.py
+│   │   ├── stage3_generate.py
+│   │   └── stage4_verify.py
+│   ├── store/
+│   │   ├── vectorstore.py     # 벡터 DB 로드/구축 (Chroma | Pinecone 어댑터)
+│   │   └── docstore.py        # 원문 보관소(JSONL) — Pinecone 사용 시 BM25·본문 기준
+│   ├── ingest/
+│   │   ├── arxiv_source.py    # arXiv·OpenAlex 검색, PDF 전문 파싱
+│   │   ├── chunking.py        # 섹션 인식 청킹 (영문/국문 섹션 감지)
+│   │   ├── auto_fetch.py      # 근거 부족 시 논문 자동 수집·예산 관리
+│   │   └── visual.py          # 표·그림·수식 이해(페이지 이미지 → 근거 청크)
+│   └── features/
+│       ├── citations.py       # 인용 그래프(선행·후속 연구, 공통 참고문헌)
+│       ├── compare_table.py   # 논문 비교표(방법·데이터·결과·한계)
+│       ├── survey.py          # 문헌 조사 초안(소주제별 흐름 + 참고문헌)
+│       └── watch.py           # 관심 분야 알림(새 논문 소식지)
+├── server/                    # FastAPI — 화면에 API 제공 (python -m server)
+│   ├── app.py                 # 앱 생성, 빌드된 화면(frontend/dist) 제공, 시작 시 예열
+│   ├── runtime.py             # 공유 상태: 로더·LLM 상태·LLM 작업 잠금 + 요청별 설정
+│   ├── streaming.py           # 스레드 작업의 진행 알림·토큰 → SSE (연결 끊기면 작업 중지)
+│   ├── schemas.py             # 요청 형식, 결과 → JSON
+│   └── routes/                # /api/status·config·chat·compare-table·survey·citations·watch
+├── frontend/                  # React + TypeScript (Vite)
+│   └── src/
+│       ├── api/               # REST·SSE 클라이언트, 응답 타입
+│       ├── hooks/             # useChat(대화·스트림), useTypewriter(타자 효과), useJob, useStatus
+│       ├── lib/               # 순수 로직(타자 속도, 마크다운 블록 분할, 진행 문구) + 테스트
+│       ├── components/        # chat/ · answer/ · sidebar/ · common/
+│       └── styles/            # 전역 스타일(라이트/다크)
 ├── scripts/
 │   ├── ingest_arxiv.py        # arXiv 수집 (--fulltext/--ca-bundle/--insecure)
 │   ├── ingest_sample.py       # 번들 샘플 수집 (네트워크 불필요)
@@ -250,7 +282,7 @@ exam03_Advanced_RAG/
 │   ├── manage_auto_papers.py  # 자동 수집 논문(origin=auto) 목록·삭제
 │   ├── build_citation_graph.py # 인용 그래프(OpenAlex 참고문헌·피인용) 생성
 │   ├── watch_papers.py        # 관심 분야 알림(주제 등록·새 논문 소식지)
-│   └── enrich_visuals.py      # 표를 근거 청크로 추가(로컬 멀티모달 모델)
+│   └── enrich_visuals.py      # 표·그림·수식을 근거 청크로 추가(로컬 멀티모달 모델)
 ├── eval/
 │   ├── eval_set.jsonl         # 평가셋 단일 소스(질문+정답논문+난이도)
 │   ├── dataset.py             # 평가셋 로더(난이도/카테고리 필터)
@@ -261,22 +293,21 @@ exam03_Advanced_RAG/
 │   ├── compare.py             # 설정 조합별 A/B 비교(--retrieval-only 등)
 │   ├── backend_eval.py        # 현재 LLM 백엔드로 질문별 지표·지연 기록 + 기록 간 비교
 │   ├── corpus.py              # 평가 코퍼스 선택(--corpus base|all|both: 자동 수집 논문 제외/포함)
-│   ├── auto_fetch_effect.py   # 자동 수집 전/후 검색 비교(수집을 일으킨 질문들)
-│   ├── auto_fetch_tuning.py   # 자동 수집 설정별(기준·편수·가중치) 부작용 비교
-│   ├── auto_fetch_e2e.py      # 자동 수집 실전 시험(시험용 DB 복사본)
-│   ├── auto_fetch_scenarios.py  # 자동 수집 시나리오 시험(분야·멀티턴·장애·예산 등)
+│   ├── auto_fetch_*.py        # 자동 수집 효과·설정·실전·시나리오 시험
+│   ├── visual_*_eval.py       # 표·그림·수식 검색·답변 평가
 │   ├── corpus_health.py       # 코퍼스 증가에 따른 검색 품질 점검
 │   └── vector_parity.py       # Chroma vs Pinecone 검색 결과 동일성 검증
-├── tests/                     # 단위·오프라인 테스트 (fake_pinecone.py: Pinecone 대역)
+├── tests/                     # 단위·오프라인·서버(SSE) 테스트 (fake_pinecone.py: Pinecone 대역)
 ├── notebooks/
 │   └── advanced_rag_walkthrough.ipynb  # 4단계 셀 단위 학습 노트북
-├── docs/
-│   ├── PROGRESS_REPORT.md     # 진행 보고서(A/B 결과·이슈·로드맵)
-│   ├── ADR-001-query-transform-default.md  # 기본 질의변환 모드 결정 기록
-│   └── FREETOKEN.md           # FreeToken(로컬 LLM 서버) 사용법·자원 관리·문제 해결 (v0.2.2)
-├── ui_progress.py             # 챗봇 실시간 진행 표시(백그라운드 실행 + 0.5초 갱신)
-└── app.py                     # Streamlit 챗봇 UI
+└── docs/
+    ├── PROGRESS_REPORT.md     # 진행 보고서(A/B 결과·이슈·로드맵)
+    ├── ADR-001-query-transform-default.md  # 기본 질의변환 모드 결정 기록
+    └── FREETOKEN.md           # FreeToken(로컬 LLM 서버) 사용법·자원 관리·문제 해결 (v0.2.2)
 ```
+
+테스트: `python tests/test_units.py` · `python tests/test_pipeline_offline.py` · `python tests/test_server.py` ·
+`cd frontend && npm test`
 
 ---
 
@@ -356,5 +387,5 @@ python eval/gen_questions.py --n 20   # 코퍼스에서 질문 후보 생성(사
 
 ## 📝 참고
 
-- LLM 백엔드는 [rag/llm.py](rag/llm.py) 한 파일에서 Claude ↔ OpenAI ↔ (추가 시) Ollama 로 전환됩니다.
+- LLM 백엔드는 [rag/core/llm.py](rag/core/llm.py) 한 파일에서 Claude ↔ OpenAI ↔ (추가 시) Ollama 로 전환됩니다.
 - 비용 절감을 위해 질의변환 같은 쉬운 작업은 가벼운 모델(`LLM_MODEL_LIGHT`)을 씁니다.

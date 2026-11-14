@@ -35,8 +35,8 @@ settings.query_transform_mode = "none"
 
 from eval.corpus import set_corpus  # noqa: E402
 from eval.retrieval_metrics import recall_at_k  # noqa: E402
-from rag.stage2_rerank import retrieve_and_rerank  # noqa: E402
-from rag.vectorstore import load_vectorstore  # noqa: E402
+from rag.stages.stage2_rerank import retrieve_and_rerank  # noqa: E402
+from rag.store.vectorstore import load_vectorstore  # noqa: E402
 
 
 def fetch_groups(vs) -> dict[str, dict]:

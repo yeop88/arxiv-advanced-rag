@@ -13,7 +13,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from rag.chunking import section_aware_split, split_into_sections
+from rag.ingest.chunking import section_aware_split, split_into_sections
 
 # 논문 전문을 흉내 낸 합성 텍스트 (번호형 + 이름형 섹션 혼용)
 SAMPLE_PAPER = """A Study of Retrieve-then-Rerank Pipelines

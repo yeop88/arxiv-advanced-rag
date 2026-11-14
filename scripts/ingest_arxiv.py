@@ -22,8 +22,8 @@ import arxiv  # noqa: E402
 from langchain_core.documents import Document  # noqa: E402
 
 from config import settings  # noqa: E402
-from rag.arxiv_source import make_client, norm_id, result_to_chunks  # noqa: E402
-from rag.vectorstore import build_vectorstore, delete_sources  # noqa: E402
+from rag.ingest.arxiv_source import make_client, norm_id, result_to_chunks  # noqa: E402
+from rag.store.vectorstore import build_vectorstore, delete_sources  # noqa: E402
 
 
 def _existing_sources() -> set[str]:
@@ -32,7 +32,7 @@ def _existing_sources() -> set[str]:
     재수집 시 같은 논문이 중복 청크로 쌓이는 것을 막기 위해 사용한다.
     """
     try:
-        from rag.vectorstore import load_vectorstore  # 지역 import: DB 없을 때 대비
+        from rag.store.vectorstore import load_vectorstore  # 지역 import: DB 없을 때 대비
 
         raw = load_vectorstore().get()
         return {
@@ -159,7 +159,7 @@ def main() -> None:
 
     print(f"[2/2] 임베딩 + 벡터DB 저장 ({settings.vector_backend})")
     build_vectorstore(chunks)
-    print(f"완료! 총 {len(chunks)}개 청크 저장. 이제 `streamlit run app.py` 로 실행하세요.")
+    print(f"완료! 총 {len(chunks)}개 청크 저장. 이제 `python -m server` 로 챗봇을 실행하세요.")
 
 
 if __name__ == "__main__":

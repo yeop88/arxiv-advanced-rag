@@ -17,12 +17,12 @@ warnings.filterwarnings("ignore")
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from config import settings  # noqa: E402
-from rag import citations  # noqa: E402
+from rag.features import citations  # noqa: E402
 
 
 def db_papers() -> dict[str, str]:
     """DB 논문의 arXiv ID → 제목."""
-    from rag.vectorstore import load_vectorstore
+    from rag.store.vectorstore import load_vectorstore
 
     settings.exclude_auto_papers = False
     metas = load_vectorstore().get(include=["metadatas"])["metadatas"]

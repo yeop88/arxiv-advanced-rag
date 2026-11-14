@@ -26,7 +26,7 @@ warnings.filterwarnings("ignore")
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from config import settings  # noqa: E402
-from rag.schemas import VISUAL_KINDS  # noqa: E402
+from rag.core.schemas import VISUAL_KINDS  # noqa: E402
 
 
 def _done() -> dict:
@@ -96,8 +96,8 @@ def papers(vs) -> dict[str, dict]:
 def enrich(src: str, meta: dict, vs, kinds: tuple[str, ...]) -> list[dict]:
     from langchain_core.documents import Document
 
-    from rag import visual
-    from rag.arxiv_source import http_session
+    from rag.ingest import visual
+    from rag.ingest.arxiv_source import http_session
 
     resp = http_session().get(f"https://arxiv.org/pdf/{src}", timeout=90)
     resp.raise_for_status()
@@ -116,8 +116,8 @@ def enrich(src: str, meta: dict, vs, kinds: tuple[str, ...]) -> list[dict]:
 
 
 def main() -> None:
-    from rag import visual
-    from rag.vectorstore import load_vectorstore
+    from rag.ingest import visual
+    from rag.store.vectorstore import load_vectorstore
 
     ap = argparse.ArgumentParser()
     ap.add_argument("--list", action="store_true")

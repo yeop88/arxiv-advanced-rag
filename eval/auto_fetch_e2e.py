@@ -83,7 +83,7 @@ def prepare() -> None:
     """본 Chroma 를 시험용으로 그대로 복사한다."""
     import shutil
 
-    from rag.vectorstore import load_vectorstore
+    from rag.store.vectorstore import load_vectorstore
 
     settings.exclude_auto_papers = False
     if Path(TEST_CHROMA).exists():
@@ -108,7 +108,7 @@ def _ask(pipe, question: str) -> tuple:
 
 
 def _row(kind: str, question: str, key: str | None, res, events, sec: float) -> dict:
-    from rag.auto_fetch import answer_lacks_evidence
+    from rag.ingest.auto_fetch import answer_lacks_evidence
 
     reasons = [kw.get("reason") for ev, kw in events if ev == "fetch_start"]
     sources = sorted({s for ev, kw in events if ev == "fetch_candidates" for s in kw.get("sources", [])})
@@ -166,8 +166,8 @@ def repeat() -> None:
 def retrieval(label: str) -> None:
     from eval.dataset import load_eval_set
     from eval.retrieval_metrics import recall_at_k, reciprocal_rank
-    from rag.stage2_rerank import retrieve_and_rerank
-    from rag.vectorstore import load_vectorstore
+    from rag.stages.stage2_rerank import retrieve_and_rerank
+    from rag.store.vectorstore import load_vectorstore
 
     settings.auto_fetch = False
     settings.query_transform_mode = "none"

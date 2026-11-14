@@ -27,8 +27,8 @@ def main() -> None:
     from eval.corpus import set_corpus
     from eval.dataset import load_eval_set
     from eval.retrieval_metrics import recall_at_k, reciprocal_rank
-    from rag import stage2_rerank as s2
-    from rag.vectorstore import load_vectorstore
+    from rag.stages import stage2_rerank as s2
+    from rag.store.vectorstore import load_vectorstore
 
     ap = argparse.ArgumentParser()
     ap.add_argument("--corpus", default="base", choices=["base", "all"])

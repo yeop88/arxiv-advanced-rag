@@ -41,9 +41,9 @@ settings.exclude_auto_papers = False
 
 from eval.dataset import load_eval_set  # noqa: E402
 from eval.retrieval_metrics import recall_at_k, reciprocal_rank  # noqa: E402
-from rag.auto_fetch import is_back_matter  # noqa: E402
-from rag.stage2_rerank import retrieve_and_rerank  # noqa: E402
-from rag.vectorstore import ExcludeOriginStore, load_vectorstore  # noqa: E402
+from rag.ingest.auto_fetch import is_back_matter  # noqa: E402
+from rag.stages.stage2_rerank import retrieve_and_rerank  # noqa: E402
+from rag.store.vectorstore import ExcludeOriginStore, load_vectorstore  # noqa: E402
 
 OUT = Path(__file__).resolve().parent / "results" / "auto_fetch_tuning.json"
 
@@ -91,8 +91,8 @@ def auto_papers(vs) -> dict[str, dict]:
 
 def backfill_scores(papers: dict[str, dict]) -> None:
     """점수 없는 논문: 초록을 다시 찾아 수집 때와 같은 방식 (질문, 제목+초록) 으로 채점."""
-    from rag.arxiv_source import fetch_arxiv_by_ids
-    from rag.llm import get_reranker
+    from rag.ingest.arxiv_source import fetch_arxiv_by_ids
+    from rag.core.llm import get_reranker
 
     missing = [pid for pid, p in papers.items() if p["score"] is None]
     if not missing:
@@ -140,9 +140,9 @@ def kept_ids(vs, sources: set[str], spec: dict) -> set[str]:
 
 def select_wider(vs, n: int) -> None:
     """후보를 n 개로 넓혀 수집 때와 같은 기준으로 다시 고른다. 기존 자동 수집분을 지우지 않고 새 논문만 추가."""
-    from rag.arxiv_source import http_session, result_to_chunks, search_papers
-    from rag.auto_fetch import make_search_queries
-    from rag.llm import get_reranker
+    from rag.ingest.arxiv_source import http_session, result_to_chunks, search_papers
+    from rag.ingest.auto_fetch import make_search_queries
+    from rag.core.llm import get_reranker
 
     settings.local_thinking_light = "off"
     metas = [m or {} for m in vs.get()["metadatas"]]
@@ -193,7 +193,7 @@ def measure(vs, records: list[dict]) -> dict:
 
 
 def collect(vs) -> None:
-    from rag.auto_fetch import fetch_and_ingest
+    from rag.ingest.auto_fetch import fetch_and_ingest
 
     settings.local_thinking_light = "off"
     print(f"수집 설정: 기준 {settings.auto_fetch_min_score}, 최대 {settings.auto_fetch_max_papers}편")

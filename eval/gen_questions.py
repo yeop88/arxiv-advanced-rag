@@ -29,7 +29,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from langchain_core.output_parsers import StrOutputParser  # noqa: E402
 from langchain_core.prompts import ChatPromptTemplate  # noqa: E402
 
-from rag.vectorstore import get_all_documents, load_vectorstore  # noqa: E402
+from rag.store.vectorstore import get_all_documents, load_vectorstore  # noqa: E402
 
 # 오프라인 평가 도구 전용 프롬프트(파이프라인 프롬프트가 아니므로 여기 둔다)
 GEN_PROMPT = """당신은 학술 RAG 시스템의 평가셋을 만드는 출제자입니다.
@@ -86,7 +86,7 @@ def _nearest_pairs(per_source: dict, sources: list[str]) -> list[tuple[str, str]
     """각 논문의 '대표 청크 임베딩' 최근접 다른 논문을 짝지어 (a,b) 쌍 반환(중복 쌍 제거)."""
     import numpy as np
 
-    from rag.llm import get_embeddings
+    from rag.core.llm import get_embeddings
 
     embs = np.array(
         get_embeddings().embed_documents([per_source[s]["content"][:1500] for s in sources]),
@@ -141,8 +141,8 @@ def main() -> None:
             print("(dry-run: LLM 호출 없음)")
             return
 
-    from rag.llm import get_llm
-    from rag.stage4_verify import _parse_json
+    from rag.core.llm import get_llm
+    from rag.stages.stage4_verify import _parse_json
 
     llm = get_llm(light=args.light)
     out_path = Path(args.out)

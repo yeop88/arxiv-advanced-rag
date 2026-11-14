@@ -19,15 +19,15 @@ warnings.filterwarnings("ignore")
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from config import settings  # noqa: E402
-from rag.schemas import VISUAL_KINDS  # noqa: E402
+from rag.core.schemas import VISUAL_KINDS  # noqa: E402
 
 RESULTS = Path(__file__).resolve().parent / "results"
 
 
 def _prepare(vs, question: str):
     """후보 청크와 리랭커 원점수(가중치 적용 전)."""
-    from rag.llm import get_reranker
-    from rag.stage2_rerank import retrieve_hybrid
+    from rag.core.llm import get_reranker
+    from rag.stages.stage2_rerank import retrieve_hybrid
 
     cands = retrieve_hybrid(vs, [question])
     raw = get_reranker().predict([(question, c.content) for c in cands]) if cands else []
@@ -35,7 +35,7 @@ def _prepare(vs, question: str):
 
 
 def _select(cands, raw, weight: float, vectors, floor: float = 0.0):
-    from rag.stage2_rerank import _mmr_select
+    from rag.stages.stage2_rerank import _mmr_select
 
     for c, s in zip(cands, raw):
         c.rerank_score = s * (settings.auto_rerank_weight if c.origin == "auto" else 1.0)
@@ -51,7 +51,7 @@ def main() -> None:
     from eval.dataset import load_eval_set
     from eval.retrieval_metrics import recall_at_k, reciprocal_rank
     from eval.visual_qa_eval import QUESTIONS
-    from rag.vectorstore import get_vectors, load_vectorstore
+    from rag.store.vectorstore import get_vectors, load_vectorstore
 
     ap = argparse.ArgumentParser()
     ap.add_argument("--weights", type=float, nargs="+", default=[1.0, 0.9, 0.8, 0.7])

@@ -8,7 +8,7 @@ scripts/ingest_local.py — 로컬 PDF/텍스트 폴더 수집 (한국어 논문
   임베딩(bge-m3)은 한국어를 지원하므로 한국어 논문이 그대로 검색됩니다.
 
 지원 형식: .pdf, .txt, .md
-섹션 인식 청킹(rag/chunking.py)을 적용해 각 청크에 section 메타를 붙입니다.
+섹션 인식 청킹(rag/ingest/chunking.py)을 적용해 각 청크에 section 메타를 붙입니다.
 
 사용:
     python scripts/ingest_local.py --dir ./my_papers
@@ -25,8 +25,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from langchain_core.documents import Document  # noqa: E402
 
 from config import settings  # noqa: E402
-from rag.chunking import section_aware_split  # noqa: E402
-from rag.vectorstore import build_vectorstore, reset_vectorstore  # noqa: E402
+from rag.ingest.chunking import section_aware_split  # noqa: E402
+from rag.store.vectorstore import build_vectorstore, reset_vectorstore  # noqa: E402
 
 SUPPORTED = {".pdf", ".txt", ".md"}
 
@@ -87,7 +87,7 @@ def main() -> None:
 
     print(f"[2/2] 임베딩 + 벡터DB 저장 ({settings.vector_backend})")
     build_vectorstore(chunks)
-    print(f"완료! 총 {len(chunks)}개 청크 저장. `streamlit run app.py` 로 실행하세요.")
+    print(f"완료! 총 {len(chunks)}개 청크 저장. `python -m server` 로 챗봇을 실행하세요.")
 
 
 if __name__ == "__main__":

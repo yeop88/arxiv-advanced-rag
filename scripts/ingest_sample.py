@@ -19,7 +19,7 @@ from langchain_core.documents import Document  # noqa: E402
 from langchain_text_splitters import RecursiveCharacterTextSplitter  # noqa: E402
 
 from config import settings  # noqa: E402
-from rag.vectorstore import build_vectorstore  # noqa: E402
+from rag.store.vectorstore import build_vectorstore  # noqa: E402
 
 SAMPLE_PATH = Path(__file__).resolve().parent.parent / "data" / "sample_papers.json"
 
@@ -27,7 +27,7 @@ SAMPLE_PATH = Path(__file__).resolve().parent.parent / "data" / "sample_papers.j
 def _existing_sources() -> set[str]:
     """이미 벡터DB에 저장된 source 집합. 재실행 시 같은 논문 중복 적재를 막는다."""
     try:
-        from rag.vectorstore import load_vectorstore
+        from rag.store.vectorstore import load_vectorstore
 
         raw = load_vectorstore().get()
         return {

@@ -20,7 +20,7 @@ warnings.filterwarnings("ignore")
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from config import settings  # noqa: E402
-from rag import watch  # noqa: E402
+from rag.features import watch  # noqa: E402
 
 
 def main() -> None:
@@ -37,7 +37,7 @@ def main() -> None:
     if args.remove:
         watch.remove_topic(args.remove)
     if args.run:
-        from rag.vectorstore import load_vectorstore
+        from rag.store.vectorstore import load_vectorstore
 
         settings.exclude_auto_papers = False
         md, path = watch.run(load_vectorstore(), lookback_days=args.days,

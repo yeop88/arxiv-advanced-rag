@@ -39,8 +39,8 @@ class PipelineLoader:
         return out
 
     def _load(self) -> None:
-        from rag import stage2_rerank as s2
-        from rag.llm import get_embeddings, get_reranker
+        from rag.stages import stage2_rerank as s2
+        from rag.core.llm import get_embeddings, get_reranker
         from rag.pipeline import RAGPipeline
 
         try:

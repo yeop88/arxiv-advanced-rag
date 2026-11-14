@@ -22,8 +22,11 @@ rank-bm25>=0.2.2                 # 하이브리드 검색의 BM25
 arxiv>=2.1.0                     # arXiv API 클라이언트
 pypdf>=4.0.0                     # 논문 PDF 파싱
 
-# === UI ===
-streamlit>=1.38.0
+# === 서버·화면 ===
+# 화면(frontend/)은 React — Node.js 20 이상에서 `npm install && npm run build`
+fastapi>=0.110.0
+uvicorn>=0.29.0
+httpx>=0.27.0                    # 서버 테스트(TestClient)
 
 # === 유틸 ===
 python-dotenv>=1.0.0

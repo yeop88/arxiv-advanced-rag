@@ -20,7 +20,7 @@ FreeToken 앱(GUI)
 ```
 
 - **우리 코드는 FreeToken을 켜고 끄거나 자원 설정을 바꾸지 않는다.** 앱에서 띄운 서버에 요청만 보낸다.
-- 연결은 `rag/llm.py`의 `LLM_PROVIDER=local` 경로(`ChatOpenAI` + `base_url`) 한 곳뿐이다.
+- 연결은 `rag/core/llm.py`의 `LLM_PROVIDER=local` 경로(`ChatOpenAI` + `base_url`) 한 곳뿐이다.
 - 준비 상태 확인은 인증이 필요 없는 `/health` 경로만 쓴다(`rag/warmup.py`의 `llm_status`).
 
 ### 현재 서버 실행 설정 (2026-11-10 프로세스 확인)
@@ -157,7 +157,7 @@ API 키가 걸린 서버는 `FREETOKEN_API_KEY` 환경변수나 `--api-key`로 �
 
 ## 7. 관련 파일
 
-- `rag/llm.py` — `LLM_PROVIDER=local` 연결, thinking 플래그, `<think>` 제거
+- `rag/core/llm.py` — `LLM_PROVIDER=local` 연결, thinking 플래그, `<think>` 제거
 - `rag/warmup.py` — `/health` 기반 LLM 준비 상태(`llm_status`)
 - `eval/backend_eval.py` — 서버 로딩 중(503) 실패를 기록하지 않고 대기·재시도
 - `docs/PROGRESS_REPORT.md` §5-B — FreeToken Qwen3.6 평가 결과
