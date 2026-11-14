@@ -15,6 +15,7 @@ import json
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 
+from config import settings
 from rag.core import prompts
 from rag.core.llm import get_llm
 from rag.core.schemas import RetrievedChunk, VerificationResult
@@ -34,17 +35,23 @@ def _parse_json(text: str) -> dict:
     return json.loads(t)
 
 
-def verify(answer: str, chunks: list[RetrievedChunk]) -> VerificationResult:
-    """답변의 근거 충실도를 검증."""
+def verify(answer: str, chunks: list[RetrievedChunk], question: str | None = None,
+           version: str | None = None) -> VerificationResult:
+    """답변의 근거 충실도를 검증. v2 는 질문을 함께 받아 '근거에 있는데 빠뜨린 부분'까지 본다."""
     context = format_context(chunks)
+    version = version or settings.verify_prompt
+    v2 = version == "v2" and question is not None
     prompt = ChatPromptTemplate.from_messages(
         [
             ("system", prompts.VERIFICATION_SYSTEM),
-            ("user", prompts.VERIFICATION_USER),
+            ("user", prompts.VERIFICATION_V2_USER if v2 else prompts.VERIFICATION_USER),
         ]
     )
     chain = prompt | get_llm(light=False) | StrOutputParser()
-    raw = chain.invoke({"context": context, "answer": answer})
+    inputs = {"context": context, "answer": answer}
+    if v2:
+        inputs["question"] = question
+    raw = chain.invoke(inputs)
 
     try:
         data = _parse_json(raw)
@@ -53,6 +60,8 @@ def verify(answer: str, chunks: list[RetrievedChunk]) -> VerificationResult:
             faithfulness=float(data.get("faithfulness", 0.0)),
             unsupported_claims=list(data.get("unsupported_claims", []) or []),
             reasoning=str(data.get("reasoning", "")),
+            completeness=str(data.get("completeness", "") or "") if v2 else "",
+            missed=[str(x) for x in (data.get("missed") or [])] if v2 else [],
         )
     except (json.JSONDecodeError, ValueError, KeyError) as e:
         # 파싱 실패 시 보수적으로 "검증 불가" 처리

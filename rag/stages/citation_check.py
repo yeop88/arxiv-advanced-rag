@@ -13,6 +13,8 @@ rag/stages/citation_check.py — 4b단계: 문장 단위 인용 확인 (LLM 없�
   uncited    인용 번호가 없는 주장 문장
   bad_ref    없는 근거 번호를 인용
   contradicted 리랭커는 뒷받침으로 봤지만 함의(NLI) 판정이 인용한 근거 모두와 모순으로 봄(같은 주제, 다른 말) §5.44
+  inherited  인용 번호는 없지만 바로 앞·뒤 문장이 인용한 근거가 이 문장도 뒷받침(같은 근거를 이어 쓰는 주제문·맺음문) §5.47
+  summary    인용 번호 없는 짧은 종합 문장("두 접근은 목표가 다릅니다", "서로 보완적입니다") — 숫자가 없을 때만, 경보 아님 §5.47
   table_row  표의 데이터 행(문장이 아니라 점수는 매기지 않고 숫자만 대조, 주장 문장 수에는 넣지 않음)
 숫자 대조(상태와 별도): 문장의 숫자(소수·두 자리 이상, 연도 제외)가 인용한 근거 원문에 없으면 numbers_missing 에 담는다.
 리랭커는 '78.4' 와 '68.4' 를 거의 같은 점수로 보므로, 표 숫자를 잘못 옮기는 환각은 이 규칙이 잡는다.
@@ -35,7 +37,15 @@ MIN_CLAIM_CHARS = 12   # 이보다 짧은 문장(제목·연결 문구)은 확�
 _NOT_CLAIM = re.compile(
     r"찾을 수 없|포함되어 있지 않|포함돼 있지 않|언급(?:이|은|되어 있지|하지|되지) ?(?:않|없)|언급이 없|설명(?:할 수 없|하지 않|이 없)"
     r"|제공하지 않|(?:답변|답|비교 분석을 수행|설명)할 수 없|나와 있지 않|다루(?:고 있지|지) 않|확인할 수 없|알 수 없|정보가 없|무관합니다"
-    r"|다음과 같(?:습니다|이 [가-힣]+(?:니다|있습니다))\s*$|정리하면 다음|요약하면 다음|다음과 같이|답변드립니다")
+    r"|다음과 같(?:습니다|이 [가-힣]+(?:니다|있습니다))\s*$|정리하면 다음|요약하면 다음|다음과 같이|답변드립니다"
+    # 기준 세트 판정(§5.47): '근거가 없다'를 다르게 말한 문장과 수식 소개 문구도 주장이 아니다
+    r"|근거(?:가|는)? 부족|제공되지 않|제공된 근거에(?:는)? 없|근거 없음|수행할 수 없|포함되지 않|다음 (?:식|수식)으로")
+# 종합 문장: 인용 없이 앞뒤 내용을 묶는 짧은 관계 진술(기준 세트에서 사람 쪽 판정은 모두 '근거 있음', §5.47)
+_SUMMARY = re.compile(r"차이(?:가|점)|공통점|다릅니다|구분됩니다|대조됩니다")   # "보완"은 뺌: 근거 없는 결합 추론이 숨음(81개 답변 대조)
+SUMMARY_MAX_CHARS = 60
+# 문장으로 확인할 수 없는 행: 수식으로 시작하는 줄(리랭커가 LaTeX 를 읽지 못해 늘 '근거 약함'이 됨)
+_MATH_LINE = re.compile(r"^\s*\$\$")
+OK_STATUSES = ("supported", "inherited", "summary", "table_row")
 # 소제목 줄("입력 데이터와 특징 표현 방식의 차이"): 인용이 없고 문장처럼 끝나지 않는 짧은 줄 — 시험 질문 50개에서 '인용 없음'의 대부분(§5.46)
 _SENTENCE_END = re.compile(r"(?:[.!?。]|[다요음임함됨])\s*$")
 HEADING_MAX_CHARS = 40
@@ -132,7 +142,7 @@ class SentenceCheck:
 
     @property
     def flagged(self) -> bool:
-        return self.status not in ("supported", "table_row") or bool(self.numbers_missing)
+        return self.status not in OK_STATUSES or bool(self.numbers_missing)
 
 
 @dataclass
@@ -156,10 +166,12 @@ class CitationReport:
             "uncited": count("uncited"),
             "bad_ref": count("bad_ref"),
             "contradicted": count("contradicted"),
+            "inherited": count("inherited"),
+            "summary": count("summary"),
             # 인용 정확도: 인용 단 문장 중 인용한 근거가 뒷받침하는 비율
             "precision": round(ok / len(cited), 3) if cited else None,
-            # 인용 재현율: 주장 문장 중 뒷받침되는 인용이 달린 비율
-            "recall": round(ok / n, 3) if n else None,
+            # 인용 재현율: 주장 문장 중 뒷받침되는 인용이 달린(또는 앞뒤 문장의 인용을 이어받은) 비율
+            "recall": round((ok + count("inherited")) / n, 3) if n else None,
             "numeric": self.numeric,        # 숫자를 대조한 문장·표 행 수
             "number_mismatch": sum(bool(s.numbers_missing) for s in self.sentences + self.table_rows),
             "table_rows": len(self.table_rows),
@@ -253,7 +265,7 @@ def _is_heading(sentence: str) -> bool:
 def _is_claim(sentence: str) -> bool:
     c = claim_text(sentence)
     return (len(c) >= MIN_CLAIM_CHARS and not c.endswith(":") and not _NOT_CLAIM.search(c)
-            and not _is_heading(sentence))
+            and not _is_heading(sentence) and not _MATH_LINE.match(sentence))
 
 
 _NLI_MODEL = "MoritzLaurer/mDeBERTa-v3-base-xnli-multilingual-nli-2mil7"
@@ -328,7 +340,9 @@ def check(answer: str, chunks: list[RetrievedChunk], scorer: Scorer | None = Non
     question 의 숫자(예: '상위 20개')는 근거에 없어도 문제 삼지 않는다."""
     thr = settings.citation_support_threshold if threshold is None else threshold
     report = CitationReport(threshold=thr)
-    sents = [s for s in split_sentences(answer) if _is_claim(s)]
+    every = split_sentences(answer)
+    idx = [j for j, s in enumerate(every) if _is_claim(s)]
+    sents = [every[j] for j in idx]
     rows = table_rows(answer)
     if not (sents or rows) or not chunks:
         return report
@@ -346,7 +360,16 @@ def check(answer: str, chunks: list[RetrievedChunk], scorer: Scorer | None = Non
         valid = [n for n in cites if 1 <= n <= k]
         support = max((row[n - 1] for n in valid), default=None)
         if not cites:
-            status = "uncited"
+            # 앞·뒤 문장이 인용한 근거가 이 문장도 뒷받침하면 이어받은 것으로 본다(주제문·맺음문)
+            j = idx[i]
+            near = [n for jj in (j - 1, j + 1) if 0 <= jj < len(every) for n in parse_cites(every[jj]) if 1 <= n <= k]
+            inherit = max((row[n - 1] for n in near), default=None)
+            if inherit is not None and inherit >= thr:
+                status, support = "inherited", inherit
+            elif len(claim_text(s)) <= SUMMARY_MAX_CHARS and _SUMMARY.search(s) and not answer_numbers(s):
+                status = "summary"
+            else:
+                status = "uncited"
         elif not valid:
             status = "bad_ref"
         elif support >= thr:

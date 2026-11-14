@@ -42,6 +42,9 @@ class VerificationResult(BaseModel):
         default_factory=list, description="근거에 없는 주장 목록"
     )
     reasoning: str = Field(default="", description="판단 근거")
+    # 검증 v2(VERIFY_PROMPT=v2)만 채운다: 질문의 부분 중 답한 정도, 근거에 답이 있는데 빠뜨린 부분
+    completeness: str = Field(default="", description="full | partial | none (v2)")
+    missed: list[str] = Field(default_factory=list, description="근거에 있는데 답하지 않은 부분 (v2)")
 
 
 class PipelineResult(BaseModel):
@@ -49,6 +52,7 @@ class PipelineResult(BaseModel):
     question: str
     standalone_question: str = ""                                  # 0단계: 문맥화된 질문
     transformed_queries: list[str] = Field(default_factory=list)   # 1단계 산출
+    sub_questions: list[str] = Field(default_factory=list)         # 다중 홉 분해 하위 질문(MULTIHOP_DECOMPOSE)
     retrieved: list[RetrievedChunk] = Field(default_factory=list)  # 벡터검색 결과
     reranked: list[RetrievedChunk] = Field(default_factory=list)   # 2단계 산출
     answer: str = ""                                               # 3단계 산출

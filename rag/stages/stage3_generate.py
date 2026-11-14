@@ -72,7 +72,7 @@ def generate(question: str, chunks: list[RetrievedChunk], on_token: TokenCallbac
     """근거 기반 답변 생성. on_token 을 주면 생성되는 대로 누적 답변을 콜백으로 전달(화면 스트리밍용)."""
     prompt = ChatPromptTemplate.from_messages(
         [
-            ("system", prompts.GENERATION_SYSTEM),
+            ("system", prompts.generation_system()),
             ("user", prompts.GENERATION_USER),
         ]
     )
@@ -84,7 +84,7 @@ def regenerate(question: str, chunks: list[RetrievedChunk], unsupported: list[st
     """검증 실패 시, 문제점 피드백을 넣어 재생성."""
     prompt = ChatPromptTemplate.from_messages(
         [
-            ("system", prompts.GENERATION_SYSTEM),
+            ("system", prompts.generation_system()),
             ("user", prompts.REGENERATION_USER),
         ]
     )

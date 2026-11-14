@@ -52,8 +52,11 @@ def flag_scores(human_bad: list[bool], auto_flag: list[bool]) -> dict:
     }
 
 
+_OK = ("supported", "inherited", "summary", "table_row")   # citation_check.OK_STATUSES (모델을 올리지 않으려 복사)
+
+
 def citation_flag(s: dict) -> bool:
-    return s["status"] != "supported" or bool(s.get("numbers_missing"))
+    return s["status"] not in _OK or bool(s.get("numbers_missing"))
 
 
 def recheck(items: dict, labels: dict) -> tuple[dict, dict]:
@@ -68,7 +71,7 @@ def recheck(items: dict, labels: dict) -> tuple[dict, dict]:
         chunks = [RetrievedChunk(content=x["content"], source=x["source"], title=x["title"], section=x["section"])
                   for x in it["sources"]]
         rep = cc.check(it["answer"], chunks, question=it["question"], nli=False)
-        now = {s.text: (s.status != "supported" or bool(s.numbers_missing)) for s in rep.sentences}
+        now = {s.text: s.flagged for s in rep.sentences}
         flags = []
         for i, s in enumerate(it["citation_check"]["sentences"]):
             h = lab["sentences"].get(str(i))

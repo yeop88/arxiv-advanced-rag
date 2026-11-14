@@ -354,8 +354,38 @@ def rerank(question: str, candidates: list[RetrievedChunk],
     return ranked[: settings.top_k_rerank]
 
 
+def ensure_sub_coverage(sub_questions: list[str], candidates: list[RetrievedChunk],
+                        selected: list[RetrievedChunk], scorer=None) -> list[RetrievedChunk]:
+    """다중 홉 몫 보장(§5.48): 하위 질문마다 그 질문에 가장 맞는 후보 청크를 골라, 그 논문이 선택에 없으면
+    가장 많이 뽑힌 논문의 가장 낮은 청크와 바꾼다. 원 질문 하나로만 리랭크하면 한쪽 논문이 자리를 다 차지해
+    다른 하위 질문의 근거가 빠지던 문제(검색 누락 5건 중 다수)를 막는다. 개수(top_k)는 그대로다."""
+    if len(sub_questions) < 2 or not candidates or not selected:
+        return selected
+    if scorer is None:
+        reranker = get_reranker()
+        scorer = lambda pairs: [float(x) for x in reranker.predict(pairs)]  # noqa: E731
+    out = list(selected)
+    for sq in sub_questions:
+        scores = scorer([(sq, rerank_input(c)) for c in candidates])
+        best_i = max(range(len(candidates)), key=scores.__getitem__)
+        best = candidates[best_i]
+        if scores[best_i] < settings.multihop_min_score or any(c.source == best.source for c in out):
+            continue
+        counts: dict[str, int] = {}
+        for c in out:
+            counts[c.source] = counts.get(c.source, 0) + 1
+        crowded = max(counts, key=counts.get)
+        if counts[crowded] < 2:   # 모든 논문이 한 자리씩이면 맨 끝 청크와 바꾼다
+            victim = len(out) - 1
+        else:
+            victim = max(i for i, c in enumerate(out) if c.source == crowded)
+        out[victim] = best
+    return out
+
+
 def retrieve_and_rerank(
-    vectorstore: VectorStoreLike, question: str, queries: list[str]
+    vectorstore: VectorStoreLike, question: str, queries: list[str],
+    sub_questions: list[str] | None = None,
 ) -> tuple[list[RetrievedChunk], list[RetrievedChunk]]:
     """검색 + 리랭킹을 한 번에. (검색결과, 리랭킹결과) 튜플 반환 — 시각화용.
 
@@ -377,6 +407,8 @@ def retrieve_and_rerank(
             break
         retrieved = retrieved + extra
         reranked = rerank(question, retrieved, vectorstore)
+    if sub_questions and len(sub_questions) >= 2:
+        reranked = ensure_sub_coverage(sub_questions, retrieved, reranked)
     return retrieved, reranked
 
 

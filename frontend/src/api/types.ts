@@ -86,7 +86,17 @@ export interface Verification {
   unsupported: string[];
 }
 
-export type SentenceStatus = "supported" | "miscited" | "weak" | "uncited" | "bad_ref" | "table_row" | "contradicted";
+// inherited(앞뒤 문장의 인용을 이어받음)·summary(인용 없는 짧은 종합 문장)는 경보가 아니다 — 숫자가 틀릴 때만 목록에 나온다
+export type SentenceStatus =
+  | "supported"
+  | "miscited"
+  | "weak"
+  | "uncited"
+  | "bad_ref"
+  | "table_row"
+  | "contradicted"
+  | "inherited"
+  | "summary";
 
 export interface SentenceCheck {
   text: string;
@@ -112,6 +122,8 @@ export interface CitationCheck {
     weak: number;
     uncited: number;
     bad_ref: number;
+    inherited?: number;
+    summary?: number;
     precision: number | null;
     recall: number | null;
     numeric: number; // 숫자를 대조한 문장 수

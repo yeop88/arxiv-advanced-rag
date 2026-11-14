@@ -3,7 +3,9 @@ import type { ChatResult, SentenceCheck, SentenceStatus } from "../../api/types"
 import type { CiteHandler } from "../common/Markdown";
 import { Collapsible } from "../common/Collapsible";
 
-const LABEL: Record<Exclude<SentenceStatus, "supported" | "table_row">, string> = {
+type OkStatus = "supported" | "table_row" | "inherited" | "summary"; // 점수 경보가 아닌 상태
+const OK: SentenceStatus[] = ["supported", "table_row", "inherited", "summary"];
+const LABEL: Record<Exclude<SentenceStatus, OkStatus>, string> = {
   weak: "근거가 약함 — 근거를 넘어선 종합·추론일 수 있어요",
   miscited: "다른 근거가 더 맞음",
   uncited: "인용 번호 없음",
@@ -25,7 +27,7 @@ function CiteButton({ n, onCite, suggest }: { n: number; onCite?: CiteHandler; s
 }
 
 function Item({ s, onCite }: { s: SentenceCheck; onCite?: CiteHandler }) {
-  const scoreIssue = s.status !== "supported" && s.status !== "table_row"; // 표 행은 점수 없이 숫자만
+  const scoreIssue = !OK.includes(s.status); // 표 행은 점수 없이 숫자만, 이어받은·종합 문장은 숫자만
   const numIssue = s.numbers_missing.length > 0;
   return (
     <li className={`cc-item cc-${s.status}${numIssue ? " cc-number" : ""}`}>
@@ -35,7 +37,7 @@ function Item({ s, onCite }: { s: SentenceCheck; onCite?: CiteHandler }) {
       </span>
       {scoreIssue && (
         <span className="cc-why">
-          {LABEL[s.status as Exclude<SentenceStatus, "supported" | "table_row">]}
+          {LABEL[s.status as Exclude<SentenceStatus, OkStatus>]}
           {s.cites.map((n) => (
             <CiteButton key={n} n={n} onCite={onCite} />
           ))}

@@ -49,6 +49,18 @@ from rag.store.vectorstore import VectorStoreLike, load_vectorstore
 Progress = Callable[..., Any]
 
 
+def sub_questions(question: str) -> list[str]:
+    """다중 홉 분해가 켜져 있으면 하위 질문(2개 이상일 때만 의미 있음). 실패하면 빈 목록(보조 단계)."""
+    if not settings.multihop_decompose:
+        return []
+    try:
+        subs = s1.transform_query(question, mode="decompose")
+    except Exception as e:  # noqa: BLE001
+        print(f"[경고] 다중 홉 분해 실패, 건너뜀: {e}")
+        return []
+    return subs if len(subs) >= 2 else []
+
+
 class _TokenDelta:
     """생성 단계가 넘기는 '지금까지의 답변'을 새로 생긴 부분(delta)만 알림으로 보낸다.
     매번 전체를 보내면 답변이 길수록 전송량이 제곱으로 늘고 화면이 덩어리로 갱신된다."""
@@ -105,7 +117,8 @@ class RAGPipeline:
             return None
         t = time.perf_counter()
         emit("retrieve_start", n_queries=len(queries), again=True)
-        retrieved, reranked = s2.retrieve_and_rerank(self.vectorstore, standalone, queries)
+        retrieved, reranked = s2.retrieve_and_rerank(self.vectorstore, standalone, queries,
+                                                     sub_questions=result.sub_questions)
         result.retrieved, result.reranked = retrieved, reranked
         result.timings["2c_retrieve_again"] = time.perf_counter() - t
         emit("retrieve_done", n_candidates=len(retrieved),
@@ -153,6 +166,11 @@ class RAGPipeline:
         except Exception as e:  # noqa: BLE001
             print(f"[경고] 질의변환 실패, 원 질문으로 진행: {e}")
             queries = [standalone]
+        # 다중 홉 분해(§5.48): 하위 질문을 검색어에 더하고 2단계에서 하위 질문마다 근거 자리를 보장
+        subs = sub_questions(standalone)
+        result.sub_questions = subs
+        if len(subs) >= 2:
+            queries = list(dict.fromkeys([*queries, *subs]))
         result.transformed_queries = queries
         result.timings["1_query_transform"] = time.perf_counter() - t
         emit("transform_done", queries=queries, sec=result.timings["1_query_transform"])
@@ -160,7 +178,7 @@ class RAGPipeline:
         # --- 2단계: 검색 + 리랭킹 ---
         t = time.perf_counter()
         emit("retrieve_start", n_queries=len(queries))
-        retrieved, reranked = s2.retrieve_and_rerank(self.vectorstore, standalone, queries)
+        retrieved, reranked = s2.retrieve_and_rerank(self.vectorstore, standalone, queries, sub_questions=subs)
         result.retrieved = retrieved
         result.reranked = reranked
         result.timings["2_retrieve_rerank"] = time.perf_counter() - t

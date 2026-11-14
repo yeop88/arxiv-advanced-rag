@@ -73,7 +73,11 @@ def _retrieve_only(vs, question: str):
         queries = transform_query(question, settings.query_transform_mode)
     except Exception:  # noqa: BLE001
         queries = [question]
-    _, reranked = retrieve_and_rerank(vs, question, queries)
+    from rag.pipeline import sub_questions   # 다중 홉 분해(MULTIHOP_DECOMPOSE)가 켜져 있으면 파이프라인과 같게
+    subs = sub_questions(question)
+    if subs:
+        queries = list(dict.fromkeys([*queries, *subs]))
+    _, reranked = retrieve_and_rerank(vs, question, queries, sub_questions=subs)
     return reranked
 
 

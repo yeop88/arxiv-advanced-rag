@@ -694,7 +694,7 @@ def test_citation_check() -> None:
         "## 요약",
         "DPR 은 질문과 문단을 따로 인코딩합니다 [1]. ColBERT 는 토큰 단위로 늦게 상호작용합니다 [1].",
         "- BM25 는 정확한 단어 일치에 강한 희소 검색입니다 [3].",
-        "두 방식을 섞으면 서로의 약점을 보완할 수 있습니다.",
+        "두 방식은 입력을 다루는 방식이 서로 다릅니다.",
         "| 표 | 행 |",
         "```", "code [1]", "```",
         "제공된 논문에서는 지연 시간 수치를 찾을 수 없습니다.",
@@ -713,14 +713,24 @@ def test_citation_check() -> None:
     rep = cc.check(answer, chunks, scorer=scorer, threshold=0.05, nli=False)
     status = {s.text.split()[0]: s.status for s in rep.sentences}
     assert status == {"DPR": "supported", "ColBERT": "miscited", "BM25": "supported",
-                      "두": "uncited", "없는": "bad_ref"}, status
+                      "두": "summary", "없는": "bad_ref"}, status   # 인용 없는 짧은 종합 문장은 경보 아님(§5.47)
     colbert = next(s for s in rep.sentences if s.text.startswith("ColBERT"))
     assert colbert.best == 2, "더 맞는 근거 번호를 제안"
     summ = rep.summary()
     assert summ["claims"] == 5 and summ["cited"] == 4 and summ["supported"] == 2 and summ["precision"] == 0.5, summ
     j = rep.to_json()
-    assert len(j["flagged"]) == 3 and j["threshold"] == 0.05
+    assert len(j["flagged"]) == 2 and j["threshold"] == 0.05
     assert cc.check("", chunks, scorer=scorer, nli=False).summary()["claims"] == 0
+
+    # 인용 이어받기: 인용 없는 주제문이라도 바로 뒤 문장이 인용한 근거가 뒷받침하면 inherited(§5.47)
+    irep = cc.check("이 논문은 DPR 이라는 밀집 검색기를 새로 제안합니다. DPR 은 질문과 문단을 따로 인코딩합니다 [1]. "
+                    "ColBERT 라는 다른 모델도 따로 존재한다고 알려져 있습니다.", chunks, scorer=scorer, threshold=0.05, nli=False)
+    assert [x.status for x in irep.sentences] == ["inherited", "supported", "uncited"], irep.sentences
+    assert irep.summary()["recall"] == round(2 / 3, 3)
+    # '근거가 없다'를 다르게 말한 문장·수식 줄은 주장이 아님
+    assert not cc._is_claim("REALM의 비용 정보는 제공된 근거에 없습니다 [근거 없음]")
+    assert not cc._is_claim("두 접근의 결합 효과를 입증할 근거가 부족합니다")
+    assert not cc._is_claim("$$ \bar{B} = (\Delta A)^{-1}(\exp(\Delta A) - I) \Delta B $$ 로 계산됩니다")
 
     # 숫자 대조: 근거에 없는 숫자, 다른 근거에 있는 숫자, 표기 차이(%·쉼표·million/만), 무시할 숫자
     assert cc.answer_numbers("Top-20 정확도 78.40%, GPT-4, 2020년, 3개, 1,024 토큰, 100만 시간, $x_{10}$") == \
@@ -764,6 +774,24 @@ def test_citation_check() -> None:
     print("  test_citation_check ✅")
 
 
+def test_sub_coverage() -> None:
+    """다중 홉 몫 보장: 하위 질문의 최고 논문이 선택에 없으면 가장 많이 뽑힌 논문의 끝 청크와 바꾼다(§5.48)."""
+    from rag.core.schemas import RetrievedChunk
+    from rag.stages.stage2_rerank import ensure_sub_coverage
+
+    a1, a2, a3 = (RetrievedChunk(content=f"RAG part {i}", source="A") for i in range(3))
+    b1 = RetrievedChunk(content="REALM pretraining", source="B")
+    c1 = RetrievedChunk(content="unrelated", source="C")
+    cands = [a1, a2, a3, b1, c1]
+    scorer = lambda pairs: [0.9 if q.split()[0] in d else 0.01 for q, d in pairs]  # noqa: E731
+    out = ensure_sub_coverage(["RAG 는 무엇", "REALM 은 무엇"], cands, [a1, a2, a3], scorer=scorer)
+    assert [c.source for c in out] == ["A", "A", "B"], out
+    assert ensure_sub_coverage(["REALM 하나"], cands, [a1, a2], scorer=scorer) == [a1, a2], "하위 질문 1개면 그대로"
+    low = ensure_sub_coverage(["RAG x", "없음 y"], cands, [a1, a2], scorer=scorer)
+    assert low == [a1, a2], "하위 질문 최고 점수가 낮으면 보장하지 않음"
+    print("  test_sub_coverage ✅")
+
+
 def main() -> None:
     print("단위 테스트 실행:")
     test_rrf()
@@ -788,6 +816,7 @@ def main() -> None:
     test_rerank_title_prefix()
     test_followup_helpers()
     test_citation_check()
+    test_sub_coverage()
     print("모든 단위 테스트 통과 ✅")
 
 
