@@ -5,6 +5,7 @@
 ## [Unreleased]
 
 ### Added
+- 본문 청크 맥락 2차 실험(`contextual_header_eval.py --round 2`): 리랭커 입력에만 제목을 붙이는 방식·점수 평균·다양성 조정 비교, 다중 홉 recall·자동 수집 신호 비율 측정
 - 본문 청크 맥락 실험 `eval/contextual_header_eval.py`(LLM 없음, 시험용 DB 사본): 검색 입력에만 `제목 · 섹션` 머리말을 붙여 임베딩·BM25·리랭커 단계별로 294문항 비교. MRR +0.025 / recall −0.006(다중 홉 손해)으로 기본 적용은 보류
 - 회귀 검사 자동화: GitHub Actions `.github/workflows/tests.yml`(푸시·PR 마다 단위·서버·청킹 테스트와 화면 테스트·타입 검사·빌드, CPU torch), README 배지
 - 코퍼스 점검 자동 실행: `enrich_visuals.py`·`manage_auto_papers.py`(삭제)가 끝날 때 `corpus_health` 실행(`--no-health` 로 생략), `corpus_health.py --if-needed`(마지막 점검 뒤 200청크 이상 바뀐 경우만 — 작업 스케줄러용), 기록에 전체 청크 수 추가
@@ -92,6 +93,7 @@
 - 진행 보고서 (`docs/PROGRESS_REPORT.md`), 작업 지침 (`CLAUDE.md`)
 
 ### Changed
+- 리랭커 입력에 논문 제목을 붙임(`RERANK_TITLE_PREFIX`, 기본 켬 — 저장 글·LLM 근거는 그대로): 294문항 MRR 0.9545 → 0.9700, 다중 홉 recall 0.8955 → 0.9055, recall 0.9711 → 0.9700, 코퍼스 안 질문의 수집 신호 4.1% → 3.4%. 무관한 표·그림이 근거에 드는 문항이 4 → 7 로 늘어 `VISUAL_MIN_SCORE` 0.1 → 0.2(다시 4, 표·그림·수식 질문 적중 그대로)
 - 자동 수집 예산 정리에서 표·그림·수식 청크가 있는 논문은 지우지 않음(청크는 예산에 계속 셈) (`rag/ingest/auto_fetch.py`)
 - `rag/` 를 역할별 하위 패키지로 정리: `core`(llm·prompts·schemas), `stages`(0~4단계), `store`(벡터DB·원문), `ingest`(수집·청크·자동 수집·표그림수식), `features`(비교표·조사·인용·알림). import 경로 일괄 변경, 294문항 검색 결과 문항별 동일
 - 진행 알림 `token` 이 누적 답변 대신 새 글자(`delta`)만 담음, 앞부분이 바뀌면 `answer_reset`
@@ -127,6 +129,7 @@
 - `ingest_arxiv.py`: 전문 모드가 섹션 인식 청킹을 사용하도록 변경(청크 단위로 수집, 중복 청킹 제거)
 
 ### Fixed
+- 숫자 대조 오경보: 근거가 숫자를 영어 낱말로 쓴 경우("an order-of-magnitude" ↔ 답변 "10배", ten·hundred 등)를 같은 값으로 봄 — 실제 챗봇 시험에서 발견
 - `requirements.txt` 에 빠져 있던 `pdfplumber`(표·그림·수식 이해)와 `requests` 추가 — 새 환경에서 설치하면 표 처리·단위 테스트가 실패하던 문제(CI 첫 실행에서 발견)
 - 표 청크가 리랭크 후보 자리를 차지해 본문 근거가 빠지던 문제(이슈 20): 본문·표 후보와 BM25 색인 분리, 표 최소 리랭크 점수 `VISUAL_MIN_SCORE`(0.1), 표 후보 수 `VISUAL_CANDIDATES`(1), 논문당 상한은 표를 따로 셈. 294문항 지표 기준과 같음, 표 질문 11/11
 - 검색어 앞 숫자가 지워지던 버그: "3D Gaussian"이 "D Gaussian", "4-bit"가 "bit"로 바뀌어 엉뚱한 논문을 검색 (`rag/stages/stage1_query_transform.py`)

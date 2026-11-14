@@ -108,6 +108,10 @@ class Settings:
     rerank_max_per_source: int = 2  # 최종 top_k 에 같은 논문 청크 최대 개수(0=무제한).
                                     # MMR의 관련도 격차를 못 이기는 쏠림을 '보장'으로 막는다
 
+    # 리랭커 입력에 논문 제목 붙이기(저장 글·LLM 근거는 그대로). 294문항: MRR 0.9545→0.9700, 다중 홉 recall 0.8955→0.9055,
+    # recall 0.9711→0.9700, 코퍼스 안 질문의 수집 신호 4.1%→3.4%(§5.42). 0 이면 끔
+    rerank_title_prefix: bool = os.getenv("RERANK_TITLE_PREFIX", "1") not in ("0", "false", "False")
+
     # --- 하이브리드 검색 (BM25 키워드 + 벡터 의미) ---
     # True 면 BM25(정확 매칭)와 벡터(의미)를 RRF 로 융합 → 고유명사·약어에 강해짐
     use_hybrid: bool = True
@@ -178,8 +182,8 @@ class Settings:
     visual_candidates: int = int(os.getenv("VISUAL_CANDIDATES", "2"))
     # 본문 후보 상위 몇 논문의 표·그림·수식 청크를 모두 리랭크 후보에 넣을지(0 = 끔). §5.38
     visual_from_top_papers: int = int(os.getenv("VISUAL_FROM_TOP_PAPERS", "1"))
-    # 표·그림 청크가 근거에 들어가는 최소 리랭크 점수(0 = 제한 없음). §5.37
-    visual_min_score: float = float(os.getenv("VISUAL_MIN_SCORE", "0.1"))
+    # 표·그림 청크가 근거에 들어가는 최소 리랭크 점수(0 = 제한 없음). §5.37. 리랭커 제목 붙이기와 함께 0.1→0.2(§5.42)
+    visual_min_score: float = float(os.getenv("VISUAL_MIN_SCORE", "0.2"))
     # 자동 수집 논문(origin=auto)을 검색에서 숨김. 지우지 않고 '기준 코퍼스'만으로 평가할 때 쓴다
     # (평가 스크립트의 --corpus base 가 켠다. 챗봇은 꺼 둔 채로 자동 수집분까지 검색)
     exclude_auto_papers: bool = os.getenv("EXCLUDE_AUTO_PAPERS", "0") in ("1", "true", "True")

@@ -312,6 +312,15 @@ def _mmr_select(
     return [candidates[i] for i in selected]
 
 
+def rerank_input(c: RetrievedChunk) -> str:
+    """리랭커가 볼 글. 본문 청크는 앞에 논문 제목을 붙인다 — "We propose…" 같은 문단도 어느 논문인지 알게(§5.42).
+    저장된 글·LLM 이 읽는 근거는 그대로다. 표·그림·수식 청크는 이미 제목으로 시작한다(§5.38)."""
+    title = (c.title or "").strip()
+    if not settings.rerank_title_prefix or not title or c.content.startswith(title):
+        return c.content
+    return f"{title}\n{c.content}"
+
+
 def rerank(question: str, candidates: list[RetrievedChunk],
            vectorstore: VectorStoreLike | None = None) -> list[RetrievedChunk]:
     """크로스인코더로 재정렬 후 상위 top_k_rerank 반환.
@@ -322,7 +331,7 @@ def rerank(question: str, candidates: list[RetrievedChunk],
         return []
 
     reranker = get_reranker()
-    pairs = [(question, c.content) for c in candidates]
+    pairs = [(question, rerank_input(c)) for c in candidates]
     scores = reranker.predict(pairs)  # 각 쌍의 관련도 점수
 
     for c, s in zip(candidates, scores):

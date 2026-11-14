@@ -47,6 +47,11 @@ _KO_UNIT = re.compile(r"\s?(천만|천억|만|억|조|천)")
 _KO_SCALE = {"천": 1e3, "만": 1e4, "천만": 1e7, "억": 1e8, "천억": 1e11, "조": 1e12}
 _EN_UNIT = re.compile(r"\s?(thousand|million|billion|trillion|[KMB])\b")
 _EN_SCALE = {"thousand": 1e3, "k": 1e3, "million": 1e6, "m": 1e6, "billion": 1e9, "b": 1e9, "trillion": 1e12}
+# 근거가 숫자를 영어 낱말로 쓴 경우("an order-of-magnitude larger" → 답변 "10배"). 실제 답변에서 오경보로 발견(§5.42)
+_EN_WORD_NUMS = [(re.compile(r"\btwo orders?[\s-]of[\s-]magnitude", re.I), "100"),
+                 (re.compile(r"\b(?:an|one) orders?[\s-]of[\s-]magnitude|\border[\s-]of[\s-]magnitude", re.I), "10"),
+                 (re.compile(r"\bten\b|\btenfold\b", re.I), "10"), (re.compile(r"\btwenty\b", re.I), "20"),
+                 (re.compile(r"\bhundred\b|\bhundredfold\b", re.I), "100"), (re.compile(r"\bthousand\b", re.I), "1000")]
 
 
 def _norm(int_part: str, frac: str | None) -> str:
@@ -90,6 +95,9 @@ def chunk_numbers(text: str) -> set[str]:
             out.add(_num_str(v * _EN_SCALE[unit.group(1).lower()]))
         if m.group(2):
             out.update((_num_str(v * 100), _num_str(v / 100)))
+    for pat, n in _EN_WORD_NUMS:
+        if pat.search(text):
+            out.add(n)
     return out
 
 

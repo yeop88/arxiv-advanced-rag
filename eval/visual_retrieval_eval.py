@@ -27,10 +27,10 @@ RESULTS = Path(__file__).resolve().parent / "results"
 def _prepare(vs, question: str):
     """후보 청크와 리랭커 원점수(가중치 적용 전)."""
     from rag.core.llm import get_reranker
-    from rag.stages.stage2_rerank import retrieve_hybrid
+    from rag.stages.stage2_rerank import rerank_input, retrieve_hybrid
 
     cands = retrieve_hybrid(vs, [question])
-    raw = get_reranker().predict([(question, c.content) for c in cands]) if cands else []
+    raw = get_reranker().predict([(question, rerank_input(c)) for c in cands]) if cands else []
     return cands, [float(s) for s in raw]
 
 

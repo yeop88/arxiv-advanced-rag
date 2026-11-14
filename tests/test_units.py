@@ -646,6 +646,26 @@ def test_local_reasoning_stream() -> None:
     print("  test_local_reasoning_stream ✅")
 
 
+def test_rerank_title_prefix() -> None:
+    """리랭커 입력: 본문 청크 앞에 논문 제목, 이미 제목으로 시작하는 청크(표·그림)와 제목 없는 청크는 그대로."""
+    from config import settings
+    from rag.core.schemas import RetrievedChunk
+    from rag.stages.stage2_rerank import rerank_input
+
+    body = RetrievedChunk(content="We propose a dual encoder.", title="Dense Passage Retrieval")
+    table = RetrievedChunk(content="Dense Passage Retrieval\nTable 2: ...", title="Dense Passage Retrieval", kind="table")
+    assert rerank_input(body) == "Dense Passage Retrieval\nWe propose a dual encoder."
+    assert rerank_input(table) == table.content
+    assert rerank_input(RetrievedChunk(content="x")) == "x"
+    keep = settings.rerank_title_prefix
+    settings.rerank_title_prefix = False
+    try:
+        assert rerank_input(body) == body.content, "끄면 그대로"
+    finally:
+        settings.rerank_title_prefix = keep
+    print("  test_rerank_title_prefix ✅")
+
+
 def test_citation_check() -> None:
     """4b 문장 단위 인용 확인: 문장 분리·인용 번호 해석·문장 상태(가짜 점수기)."""
     from rag.core.schemas import RetrievedChunk
@@ -689,6 +709,8 @@ def test_citation_check() -> None:
         ["78.4", "1024", "1000000"]
     nums = cc.chunk_numbers("accuracy 0.784 with 1,024 tokens and 1 million hours")
     assert {"78.4", "1024", "1000000"} <= nums
+    assert "10" in cc.chunk_numbers("impose an order-of-magnitude larger space footprint"), "영어 낱말 숫자"
+    assert "10" not in cc.chunk_numbers("orders are placed"), "낱말 일부와 헷갈리지 않게"
     tchunks = [RetrievedChunk(content="Table 2: DPR top-20 accuracy 78.4, BM25 59.1"),
                RetrievedChunk(content="FlashAttention trains GPT-2 in 2.7 days, 3.5x faster")]
     ans = ("DPR 의 상위 20개 정확도는 78.4%입니다 [1]. BM25 는 68.1%입니다 [1]. "
@@ -725,6 +747,7 @@ def main() -> None:
     test_visual_parse()
     test_visual_retrieval()
     test_local_reasoning_stream()
+    test_rerank_title_prefix()
     test_citation_check()
     print("모든 단위 테스트 통과 ✅")
 

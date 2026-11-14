@@ -1,2 +1,3 @@
 {"date": "2026-11-11", "auto_papers": 25, "auto_chunks": 1660, "budget": 2000, "base_recall": 0.9694, "base_mrr": 0.9521, "recall": 0.966, "mrr": 0.9485, "verdict": "정상"}
 {"date": "2026-11-15", "auto_papers": 24, "auto_chunks": 1884, "total_chunks": 4456, "budget": 2000, "base_recall": 0.9711, "base_mrr": 0.9545, "recall": 0.9694, "mrr": 0.9545, "verdict": "정상"}
+{"date": "2026-11-15", "auto_papers": 24, "auto_chunks": 1884, "total_chunks": 4456, "budget": 2000, "base_recall": 0.97, "base_mrr": 0.97, "recall": 0.97, "mrr": 0.97, "verdict": "정상"}

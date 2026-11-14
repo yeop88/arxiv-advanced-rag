@@ -103,8 +103,8 @@
  "numbers_visual_qa": {
   "answers": 17,
   "numeric_sentences": 17,
-  "alarms": 3,
-  "changed_number_tested": 14,
+  "alarms": 4,
+  "changed_number_tested": 13,
   "changed_number_caught": 1.0
  }
 }
