@@ -133,6 +133,7 @@ def run() -> None:
     from rag.pipeline import RAGPipeline
 
     settings.auto_fetch = True
+    settings.local_thinking = settings.local_thinking_light = "off"  # 환경값과 무관하게 같은 조건(§5.51)
     pipe = RAGPipeline()
     run_out = out_path("run")
     run_out.unlink(missing_ok=True)
@@ -151,6 +152,7 @@ def repeat() -> None:
     from rag.pipeline import RAGPipeline
 
     settings.auto_fetch = True
+    settings.local_thinking = settings.local_thinking_light = "off"  # 환경값과 무관하게 같은 조건(§5.51)
     settings.enable_verification = False
     pipe = RAGPipeline()
     repeat_out = out_path("repeat")

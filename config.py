@@ -41,8 +41,9 @@ class Settings:
     openai_reasoning_effort_light: str = os.getenv("OPENAI_REASONING_EFFORT_LIGHT", "")
     # Local(Qwen3 계열): 등급형 effort 가 아니라 thinking on|off
     # → chat_template_kwargs.enable_thinking 로 전달(vLLM·SGLang 방식, 서버가 무시할 수도 있음)
-    local_thinking: str = os.getenv("LOCAL_THINKING", "")
-    local_thinking_light: str = os.getenv("LOCAL_THINKING_LIGHT", "")
+    # 기본 끔(2026-11-15 사용자 결정): 켬은 결과 이득 없이 8배 느렸다(§5.51). 웹 화면은 요청마다 켬/끔을 보낸다
+    local_thinking: str = os.getenv("LOCAL_THINKING", "off")
+    local_thinking_light: str = os.getenv("LOCAL_THINKING_LIGHT", "off")
 
     # --- 임베딩 / 리랭커 (HuggingFace 로컬) ---
     embed_model: str = os.getenv("EMBED_MODEL", "BAAI/bge-m3")

@@ -200,7 +200,7 @@ python -m server                # --port 8000, --host 127.0.0.1 (기본값)
 > (관련도 기준을 넘는 논문만, 로컬 모델이 추정한 원 논문 제목으로도 찾아 원 논문 우선, 질문당 최대 3편, 참고문헌·부록은 제외, 사이드바에서 끄기 가능). 추가된 논문은 `python scripts/manage_auto_papers.py`로 보고 지울 수 있습니다.
 > OpenAlex는 기본으로 꺼져 있어(`OPENALEX_ENABLED=0`) 후보는 arXiv에서만 찾습니다. 켜면 인용 순 검색이 더해지지만, 회사망처럼 여럿이 같은 IP를 쓰면 무료 예산이 금방 바닥납니다(429) — 이때는 openalex.org 무료 키를 `OPENALEX_API_KEY`에 넣으세요.
 > 평가는 지우지 않고도 자동 수집분을 빼고(기본) 또는 넣고 할 수 있습니다(`--corpus`, 아래 학습·평가 도구).
-> 코퍼스가 커지면 검색 품질이 조금씩 내려가므로, 자동 수집은 **2,000청크까지만** 유지하고 넘으면 오래 안 쓰인 논문부터 지웁니다(`AUTO_FETCH_MAX_CHUNKS`). 표·그림·수식을 처리한 논문은 지우지 않습니다. `python eval/corpus_health.py`로 상태를 점검할 수 있습니다
+> 코퍼스가 커지면 검색 품질이 조금씩 내려가므로, 자동 수집은 **2,000청크까지만** 유지하고 넘으면 오래 안 쓰인 논문부터 지웁니다(`AUTO_FETCH_MAX_CHUNKS`). 표·그림·수식을 처리한 논문과 그날 수집했거나 근거로 쓰인 논문은 지우지 않습니다(그래서 예산을 잠시 넘길 수 있습니다). `python eval/corpus_health.py`로 상태를 점검할 수 있습니다
 > (LLM 없음, 2~3분). 표·그림·수식 처리와 자동 수집 논문 삭제 스크립트는 끝날 때 이 점검을 자동으로 돌리고(`--no-health`로 생략),
 > 챗봇이 모은 논문은 `python eval/corpus_health.py --if-needed`(마지막 점검 뒤 200청크 이상 바뀐 경우만)를 작업 스케줄러에 매일 걸어 두면 됩니다.
 > **📊 표·그림·수식 이해** — `python scripts/enrich_visuals.py --auto`(또는 `--all`)로 전문이 있는 논문의 표·그림·수식을 로컬 모델(이미지 입력)이 읽어 근거로 추가합니다.
@@ -395,7 +395,10 @@ python eval/vector_parity.py                      # 평가셋 전체로 Chroma �
   |---|---|---|---|
   | `anthropic` | `ANTHROPIC_EFFORT` / `_LIGHT` | `output_config.effort` | low·medium·high·xhigh·max |
   | `openai` | `OPENAI_REASONING_EFFORT` / `_LIGHT` | `reasoning_effort` | none·minimal·low·medium·high·xhigh |
-  | `local` (Qwen3 등) | `LOCAL_THINKING` / `_LIGHT` | `chat_template_kwargs.enable_thinking` | on·off |
+  | `local` (Qwen3 등) | `LOCAL_THINKING` / `_LIGHT` | `chat_template_kwargs.enable_thinking` | on·off (기본 off) |
+
+  로컬 Thinking 은 기본 끔입니다. 웹 화면은 질문마다 `🧠 깊게 생각` 칩·설정 창의 선택을 보내므로 이 env 와 무관하고,
+  env 값은 화면을 거치지 않는 스크립트에만 쓰입니다(평가 스크립트는 같은 조건을 위해 항상 끔).
 
 - **로컬 모델(OpenAI 호환 서버)**: `LLM_PROVIDER=local`, `LOCAL_BASE_URL`, `LLM_MODEL`(서버의 모델 id)을 설정.
   응답에 섞인 `<think>…</think>` 추론은 자동 제거됩니다. 자세한 예시는 `.env.example` 참고.
