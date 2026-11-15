@@ -146,7 +146,7 @@ export function describeEvent(event: string, info: any): ProgressUpdate | null {
           {
             text: `✓ ${info.grounded ? "✅ 근거 충실" : "⚠️ 근거 부족"} · faithfulness ${(info.faithfulness ?? 0).toFixed(2)}${
               bad ? ` · 근거 없는 주장 ${bad}개` : ""
-            } (${sec(info.sec)})`,
+            }${info.missed?.length ? ` · 빠뜨린 부분 ${info.missed.length}개` : ""} (${sec(info.sec)})`,
             sub: true,
           },
         ],

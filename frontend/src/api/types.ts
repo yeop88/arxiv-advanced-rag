@@ -84,6 +84,9 @@ export interface Verification {
   grounded: boolean;
   faithfulness: number;
   unsupported: string[];
+  // 검증 v2(VERIFY_PROMPT=v2)만 채움: 질문에 대해 근거로 답할 수 있는데 빠뜨린 부분
+  completeness?: "full" | "partial" | "none" | "";
+  missed?: string[];
 }
 
 // inherited(앞뒤 문장의 인용을 이어받음)·summary(인용 없는 짧은 종합 문장)는 경보가 아니다 — 숫자가 틀릴 때만 목록에 나온다

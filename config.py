@@ -128,19 +128,22 @@ class Settings:
     # hyde→multi_query 재검토 경위는 docs/ADR-001-query-transform-default.md(§재검토) 참고.
     # 다중 홉 분해(§5.48): 질문을 하위 질문으로 나눠(가벼운 LLM 1회) 검색어에 더하고, 하위 질문마다 맞는 논문이
     # 근거 자리에 하나는 들어가게 한다. 하위 질문 최고 점수가 이 값 미만이면 자리를 보장하지 않는다
-    multihop_decompose: bool = os.getenv("MULTIHOP_DECOMPOSE", "0") not in ("0", "false", "False")
+    # 기본 켬: 다중 홉 기대 논문 재현율 0.925→0.970, 단일 질문 227개는 변화 없음(§5.48)
+    multihop_decompose: bool = os.getenv("MULTIHOP_DECOMPOSE", "1") not in ("0", "false", "False")
     multihop_min_score: float = float(os.getenv("MULTIHOP_MIN_SCORE", "0.1"))
     query_transform_mode: str = "multi_query"  # "multi_query" | "hyde" | "decompose" | "none"
     num_query_variations: int = 3              # multi_query 생성 개수
 
     # --- 생성 ---
     # 생성 시스템 프롬프트 판: v1(이전) | v2(부분 답 허용·추론 표시, rag/core/prompts.py 주석)
-    generation_prompt: str = os.getenv("GENERATION_PROMPT", "v1")
+    # 기본 v2: 기준 세트 50문항 맞음 36→41(다중 홉 5→9/18), 퇴보 1건(§5.49)
+    generation_prompt: str = os.getenv("GENERATION_PROMPT", "v2")
 
     # --- 검증 ---
     enable_verification: bool = True
     # 검증 프롬프트 판: v1(근거 충실도만) | v2(질문을 주고 빠뜨린 부분까지 확인, rag/core/prompts.py 주석)
-    verify_prompt: str = os.getenv("VERIFY_PROMPT", "v1")
+    # 기본 v2: v2 답변 판정 일치 κ 0.675(v1 은 전부 '충실'이라 κ 0, 규칙 판정 0.299)(§5.50)
+    verify_prompt: str = os.getenv("VERIFY_PROMPT", "v2")
     max_regenerations: int = 1  # 검증 실패 시 재생성 최대 횟수
 
     # --- 4b 문장 단위 인용 확인(rag/stages/citation_check.py, LLM 없음 — 리랭커 점수) ---

@@ -13,6 +13,7 @@ export function VerificationBar({ result }: { result: ChatResult }) {
         {result.regenerated && <span className="pill">🔁 검증 후 고쳐 씀</span>}
       </div>
       {v.unsupported.length > 0 && <p className="warn-text small">근거 없는 주장: {v.unsupported.join("; ")}</p>}
+      {(v.missed?.length ?? 0) > 0 && <p className="warn-text small">근거에 있는데 빠뜨린 부분: {v.missed!.join("; ")}</p>}
     </div>
   );
 }

@@ -80,7 +80,8 @@ def chunk_json(c: RetrievedChunk, full: bool = False) -> dict:
 def verification_json(v: VerificationResult | None) -> dict | None:
     if v is None:
         return None
-    return {"grounded": v.grounded, "faithfulness": v.faithfulness, "unsupported": v.unsupported_claims}
+    return {"grounded": v.grounded, "faithfulness": v.faithfulness, "unsupported": v.unsupported_claims,
+            "completeness": v.completeness, "missed": v.missed}
 
 
 def result_json(r: PipelineResult) -> dict:

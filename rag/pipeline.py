@@ -240,9 +240,10 @@ class RAGPipeline:
             t = time.perf_counter()
             emit("verify_start")
             try:
-                verification = s4.verify(answer, reranked)
+                verification = s4.verify(answer, reranked, question=standalone)
                 emit("verify_done", grounded=verification.grounded, faithfulness=verification.faithfulness,
-                     unsupported=verification.unsupported_claims, sec=time.perf_counter() - t)
+                     unsupported=verification.unsupported_claims,
+                     completeness=verification.completeness, missed=verification.missed, sec=time.perf_counter() - t)
 
                 attempts = 0
                 while (
@@ -257,9 +258,10 @@ class RAGPipeline:
                                            on_token=on_token, on_reasoning=on_reasoning)
                     t2 = time.perf_counter()
                     emit("verify_start", again=True)
-                    verification = s4.verify(answer, reranked)
+                    verification = s4.verify(answer, reranked, question=standalone)
                     emit("verify_done", grounded=verification.grounded, faithfulness=verification.faithfulness,
-                         unsupported=verification.unsupported_claims, sec=time.perf_counter() - t2)
+                         unsupported=verification.unsupported_claims,
+                     completeness=verification.completeness, missed=verification.missed, sec=time.perf_counter() - t2)
                     attempts += 1
                     result.regenerated = True
 
