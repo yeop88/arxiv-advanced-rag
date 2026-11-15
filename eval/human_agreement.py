@@ -8,7 +8,10 @@ eval/human_agreement.py — 자동 판정이 사람 판정과 얼마나 맞는�
 판정마다 annotator(human 또는 판정한 모델 이름)가 있다 — 사람이 아닌 모델이 판정했다면 결과는 '독립 모델 판정과의 일치율'로 읽는다.
 --extra 에 '문항 id → 문장별 경보(bool) 목록' JSON 을 주면 다른 자동 판정기(예: 함의 판정)도 같은 기준으로 잰다.
 
-사용: python eval/human_agreement.py [--extra storage/nli_flags.json]
+--blind 이면 초안을 숨긴 채 사람이 판정한 문항(blind)만 쓴다 — 초안이 보이는 화면에서 저장한 판정은 초안에 끌릴 수 있다.
+--answer-judge 에 '문항 id → {grounded, completeness, missed}'(검증 v2 결과) JSON 을 주면 답변 단위로 함께 잰다.
+
+사용: python eval/human_agreement.py [--extra storage/nli_flags.json] [--blind] [--answer-judge 파일]
 결과: eval/results/human_agreement.json (문장 원문 없이 수치만)
 """
 from __future__ import annotations
@@ -93,13 +96,16 @@ def main() -> None:
                     help="저장된 답변을 지금 코드의 인용 확인으로 다시 채점해 같은 판정과 비교(리랭커, LLM 없음)")
     ap.add_argument("--annotator", default="human",
                     help="이 주체의 판정만 쓴다(기본 human — 사람이 검토해 저장한 것. 모델 초안만 보려면 그 이름)")
+    ap.add_argument("--blind", action="store_true", help="초안을 숨기고 판정한 문항만(blind=True)")
+    ap.add_argument("--answer-judge", help="답변 판정기 결과 JSON {문항 id: {grounded, completeness, missed}} — 검증 v2 등")
     args = ap.parse_args()
     set_path, label_path = Path(settings.human_set_path), Path(settings.human_labels_path)
     if not set_path.exists() or not label_path.exists():
         raise SystemExit("기준 세트나 사람 판정이 없습니다 — eval/human_set.py --build 후 챗봇 '사람 판정' 화면에서 판정하세요.")
     items = {r["id"]: r for r in (json.loads(x) for x in set_path.read_text(encoding="utf-8").splitlines() if x.strip())}
     labels = {k: v for k, v in json.loads(label_path.read_text(encoding="utf-8")).items()
-              if v.get("overall") and k in items and v.get("annotator", "human") == args.annotator}
+              if v.get("overall") and k in items and v.get("annotator", "human") == args.annotator
+              and (v.get("blind") or not args.blind)}
     if not labels:
         raise SystemExit(f"'{args.annotator}' 판정이 아직 없습니다 — 챗봇 '판정' 화면에서 검토·저장하세요.")
     extra = json.loads(Path(args.extra).read_text(encoding="utf-8")) if args.extra else {}
@@ -161,6 +167,29 @@ def main() -> None:
             "overall_same": round(sum(v["overall"] == d["overall"] for v, d in drafts) / len(drafts), 3),
             "sentence_same": round(sum(same_s) / len(same_s), 3) if same_s else None,
         }
+    if drafts:   # 답변 단위 3분류(맞음·부분·틀림)와 '맞음 여부' κ — 초안을 숨긴 판정이면 모델 판정의 사람 일치도
+        out["human_vs_model_draft"]["overall_kappa_correct"] = kappa(
+            [v["overall"] == "correct" for v, _ in drafts], [d["overall"] == "correct" for _, d in drafts])
+        out["human_vs_model_draft"]["pairs"] = {k: [v["overall"], v["model_draft"]["overall"]]
+                                                for k, v in labels.items() if v.get("model_draft")}
+    if args.answer_judge:
+        import re
+
+        judge = json.loads(Path(args.answer_judge).read_text(encoding="utf-8"))
+        refusal = re.compile(r"찾을 수 없|포함되어 있지 않|확인할 수 없|언급되어 있지 않|제공되지 않")
+        h, j, r = [], [], []
+        for iid, lab in labels.items():
+            if iid not in judge:
+                continue
+            g = judge[iid]
+            h.append(lab["overall"] == "correct")
+            j.append(bool(g.get("grounded")) and g.get("completeness") == "full" and not g.get("missed"))
+            r.append(not refusal.search(items[iid]["answer"]))
+        out["answer_judge"] = {"n": len(h), "file": Path(args.answer_judge).name,
+                               "agreement": round(sum(a == b for a, b in zip(h, j)) / len(h), 3) if h else None,
+                               "kappa": kappa(h, j)}
+        out["answer_rule"] = {"n": len(h), "agreement": round(sum(a == b for a, b in zip(h, r)) / len(h), 3) if h else None,
+                              "kappa": kappa(h, r)}
     if args.recheck:
         out["sentence_citation_check_recheck"], out["answer_citation_check_recheck"] = recheck(items, labels)
     OUT.write_text(json.dumps(out, ensure_ascii=False, indent=1), encoding="utf-8")

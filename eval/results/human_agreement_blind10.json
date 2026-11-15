@@ -1,0 +1,170 @@
+{
+ "labeled_items": 10,
+ "items": 50,
+ "annotators": [
+  "human"
+ ],
+ "sentence_citation_check": {
+  "n": 69,
+  "human_bad": 14,
+  "auto_flagged": 18,
+  "tp": 2,
+  "fp": 16,
+  "fn": 12,
+  "tn": 39,
+  "flag_precision": 0.111,
+  "flag_recall": 0.143,
+  "accuracy": 0.594,
+  "kappa": -0.134
+ },
+ "sentence_miscite": {
+  "n": 69,
+  "human_bad": 9,
+  "auto_flagged": 4,
+  "tp": 0,
+  "fp": 4,
+  "fn": 9,
+  "tn": 56,
+  "flag_precision": 0.0,
+  "flag_recall": 0.0,
+  "accuracy": 0.812,
+  "kappa": -0.087
+ },
+ "sentence_by_kind": {
+  "single": {
+   "n": 10,
+   "human_bad": 0,
+   "auto_flagged": 3,
+   "tp": 0,
+   "fp": 3,
+   "fn": 0,
+   "tn": 7,
+   "flag_precision": 0.0,
+   "flag_recall": null,
+   "accuracy": 0.7,
+   "kappa": 0.0
+  },
+  "multi_hop": {
+   "n": 56,
+   "human_bad": 14,
+   "auto_flagged": 13,
+   "tp": 2,
+   "fp": 11,
+   "fn": 12,
+   "tn": 31,
+   "flag_precision": 0.154,
+   "flag_recall": 0.143,
+   "accuracy": 0.589,
+   "kappa": -0.122
+  },
+  "table": {
+   "n": 3,
+   "human_bad": 0,
+   "auto_flagged": 2,
+   "tp": 0,
+   "fp": 2,
+   "fn": 0,
+   "tn": 1,
+   "flag_precision": 0.0,
+   "flag_recall": null,
+   "accuracy": 0.333,
+   "kappa": -0.0
+  }
+ },
+ "answer_llm_verification": {
+  "n": 10,
+  "agreement": 0.4,
+  "kappa": 0.0,
+  "llm_grounded_rate": 1.0,
+  "human_correct_rate": 0.4,
+  "faithfulness_by_human": {
+   "correct": 1.0,
+   "partial": 1.0,
+   "wrong": 1.0
+  }
+ },
+ "answer_citation_check_clean_vs_human_correct": {
+  "agreement": 0.4,
+  "kappa": -0.364
+ },
+ "human_vs_model_draft": {
+  "items": 10,
+  "draft_annotators": [
+   "claude",
+   "claude-review"
+  ],
+  "overall_same": 0.5,
+  "sentence_same": 0.768,
+  "overall_kappa_correct": 0.0,
+  "pairs": {
+   "gen_1910.03081": [
+    "wrong",
+    "wrong"
+   ],
+   "gen_2309.05429": [
+    "correct",
+    "correct"
+   ],
+   "gen_2502.14224": [
+    "partial",
+    "correct"
+   ],
+   "genmh_2603.02888_2403.15377": [
+    "partial",
+    "correct"
+   ],
+   "genmh_2211.16056_2307.00331": [
+    "correct",
+    "partial"
+   ],
+   "genmh_1707.07998_1708.02711": [
+    "partial",
+    "partial"
+   ],
+   "genmh_2208.03299_2002.08909": [
+    "partial",
+    "partial"
+   ],
+   "genmh_1301.3781_2107.05720": [
+    "partial",
+    "correct"
+   ],
+   "genmh_1807.02477_2402.16221": [
+    "correct",
+    "partial"
+   ],
+   "vis_08": [
+    "correct",
+    "correct"
+   ]
+  }
+ },
+ "answer_judge": {
+  "n": 10,
+  "file": "judge_base_llm_v2.json",
+  "agreement": 0.5,
+  "kappa": 0.074
+ },
+ "answer_rule": {
+  "n": 10,
+  "agreement": 0.4,
+  "kappa": -0.071
+ },
+ "sentence_citation_check_recheck": {
+  "n": 69,
+  "human_bad": 14,
+  "auto_flagged": 5,
+  "tp": 0,
+  "fp": 5,
+  "fn": 14,
+  "tn": 50,
+  "flag_precision": 0.0,
+  "flag_recall": 0.0,
+  "accuracy": 0.725,
+  "kappa": -0.12
+ },
+ "answer_citation_check_recheck": {
+  "agreement": 0.2,
+  "kappa": -0.538
+ }
+}

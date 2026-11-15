@@ -5,6 +5,7 @@
 ## [Unreleased]
 
 ### Added
+- `human_agreement.py --blind`(초안을 숨기고 판정한 문항만 — 초안이 보이면 사람 판정이 끌림)·`--answer-judge`(검증 v2 등 답변 판정기와 규칙 판정도 함께 비교). 사람 판정 10문항 결과 §5.52
 - 답변 품질 실험 도구: `eval/answer_quality.py`(같은 근거로 답 다시 쓰기·규칙 신호·판정용 모음), `eval/judge_eval.py`(답변 판정기 비교 — 규칙·LLM 검증 v1/v2), `eval/multihop_eval.py`(다중 홉 분해 검색 효과)
 - 생성 프롬프트 v2(`GENERATION_PROMPT`, 부분 답 허용·`(추론)` 표시), 검증 v2(`VERIFY_PROMPT`, 질문을 주고 근거에 있는데 빠뜨린 부분까지 확인), 다중 홉 분해(`MULTIHOP_DECOMPOSE`, 하위 질문마다 근거 자리 보장) — 측정 뒤 기본값 결정(아래 Changed)
 - 판정 초안 검토 흐름: 판정 주체(`annotator`) 기록, 다른 모델이 먼저 채운 판정은 '초안'으로 미리 채워 보여 주고 사람이 검토해 저장하면 사람 판정이 되며 원래 초안은 `model_draft`로 보존. 판정 화면에 "사람 확인 n/50 · 초안 m". `human_agreement.py`는 기본으로 사람 판정만 쓰고(`--annotator`), 초안 대비 사람이 고친 비율과 `--recheck`(지금 코드로 다시 채점) 제공

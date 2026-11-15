@@ -1,0 +1,182 @@
+{
+ "base": {
+  "signals": {
+   "n": 50,
+   "refusal_phrase": 9,
+   "refusal_by_kind": {
+    "single": 1,
+    "multi_hop": 8
+   },
+   "inference_marked": 0,
+   "sentences": 202,
+   "citation_flag_rate": 0.193,
+   "avg_chars": 436
+  },
+  "judge": {
+   "judged": 50,
+   "wrong": 2,
+   "correct": 36,
+   "partial": 12,
+   "correct_rate": 0.72,
+   "annotators": [
+    "claude"
+   ]
+  },
+  "judge_by_kind": {
+   "equation": {
+    "judged": 4,
+    "correct": 4,
+    "correct_rate": 1.0,
+    "annotators": [
+     "claude"
+    ]
+   },
+   "figure": {
+    "judged": 2,
+    "correct": 2,
+    "correct_rate": 1.0,
+    "annotators": [
+     "claude"
+    ]
+   },
+   "multi_hop": {
+    "judged": 18,
+    "partial": 12,
+    "correct": 5,
+    "wrong": 1,
+    "correct_rate": 0.278,
+    "annotators": [
+     "claude"
+    ]
+   },
+   "single": {
+    "judged": 20,
+    "wrong": 1,
+    "correct": 19,
+    "correct_rate": 0.95,
+    "annotators": [
+     "claude"
+    ]
+   },
+   "table": {
+    "judged": 6,
+    "correct": 6,
+    "correct_rate": 1.0,
+    "annotators": [
+     "claude"
+    ]
+   }
+  }
+ },
+ "v1": {
+  "signals": {
+   "n": 50,
+   "refusal_phrase": 6,
+   "refusal_by_kind": {
+    "single": 1,
+    "multi_hop": 5
+   },
+   "inference_marked": 0,
+   "sentences": 184,
+   "citation_flag_rate": 0.06,
+   "avg_chars": 433
+  },
+  "judge": {},
+  "judge_by_kind": {
+   "equation": {},
+   "figure": {},
+   "multi_hop": {},
+   "single": {},
+   "table": {}
+  }
+ },
+ "v2": {
+  "signals": {
+   "n": 50,
+   "refusal_phrase": 6,
+   "refusal_by_kind": {
+    "single": 1,
+    "multi_hop": 5
+   },
+   "inference_marked": 0,
+   "sentences": 211,
+   "citation_flag_rate": 0.09,
+   "avg_chars": 481
+  },
+  "judge": {
+   "judged": 50,
+   "correct": 41,
+   "wrong": 1,
+   "partial": 8,
+   "correct_rate": 0.82,
+   "annotators": [
+    "claude"
+   ]
+  },
+  "judge_by_kind": {
+   "equation": {
+    "judged": 4,
+    "correct": 4,
+    "correct_rate": 1.0,
+    "annotators": [
+     "claude"
+    ]
+   },
+   "figure": {
+    "judged": 2,
+    "correct": 2,
+    "correct_rate": 1.0,
+    "annotators": [
+     "claude"
+    ]
+   },
+   "multi_hop": {
+    "judged": 18,
+    "wrong": 1,
+    "correct": 9,
+    "partial": 8,
+    "correct_rate": 0.5,
+    "annotators": [
+     "claude"
+    ]
+   },
+   "single": {
+    "judged": 20,
+    "correct": 20,
+    "correct_rate": 1.0,
+    "annotators": [
+     "claude"
+    ]
+   },
+   "table": {
+    "judged": 6,
+    "correct": 6,
+    "correct_rate": 1.0,
+    "annotators": [
+     "claude"
+    ]
+   }
+  }
+ },
+ "v2b": {
+  "signals": {
+   "n": 50,
+   "refusal_phrase": 7,
+   "refusal_by_kind": {
+    "multi_hop": 7
+   },
+   "inference_marked": 3,
+   "sentences": 207,
+   "citation_flag_rate": 0.121,
+   "avg_chars": 486
+  },
+  "judge": {},
+  "judge_by_kind": {
+   "equation": {},
+   "figure": {},
+   "multi_hop": {},
+   "single": {},
+   "table": {}
+  }
+ }
+}

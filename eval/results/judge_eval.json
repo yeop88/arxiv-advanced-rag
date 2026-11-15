@@ -1,0 +1,77 @@
+{
+ "base": {
+  "tag": "base",
+  "annotators": [
+   "claude"
+  ],
+  "rule": {
+   "n": 50,
+   "agreement": 0.9,
+   "kappa": 0.722,
+   "pred_correct_rate": 0.82,
+   "truth_correct_rate": 0.72,
+   "missed_problems": 5,
+   "false_alarms": 0
+  },
+  "llm_v1": {
+   "n": 50,
+   "agreement": 0.72,
+   "kappa": 0.0,
+   "pred_correct_rate": 1.0,
+   "truth_correct_rate": 0.72,
+   "missed_problems": 14,
+   "false_alarms": 0
+  },
+  "llm_v2": {
+   "n": 50,
+   "agreement": 0.88,
+   "kappa": 0.658,
+   "pred_correct_rate": 0.84,
+   "truth_correct_rate": 0.72,
+   "missed_problems": 6,
+   "false_alarms": 0
+  },
+  "llm_v2_or_rule": {
+   "n": 50,
+   "agreement": 0.96,
+   "kappa": 0.896,
+   "pred_correct_rate": 0.76,
+   "truth_correct_rate": 0.72,
+   "missed_problems": 2,
+   "false_alarms": 0
+  }
+ },
+ "v2": {
+  "tag": "v2",
+  "annotators": [
+   "claude"
+  ],
+  "rule": {
+   "n": 50,
+   "agreement": 0.82,
+   "kappa": 0.299,
+   "pred_correct_rate": 0.88,
+   "truth_correct_rate": 0.82,
+   "missed_problems": 6,
+   "false_alarms": 3
+  },
+  "llm_v2": {
+   "n": 50,
+   "agreement": 0.9,
+   "kappa": 0.675,
+   "pred_correct_rate": 0.8,
+   "truth_correct_rate": 0.82,
+   "missed_problems": 2,
+   "false_alarms": 3
+  },
+  "llm_v2_or_rule": {
+   "n": 50,
+   "agreement": 0.88,
+   "kappa": 0.626,
+   "pred_correct_rate": 0.78,
+   "truth_correct_rate": 0.82,
+   "missed_problems": 2,
+   "false_alarms": 4
+  }
+ }
+}
