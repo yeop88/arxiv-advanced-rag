@@ -16,6 +16,9 @@ rag/stages/citation_check.py — 4b단계: 문장 단위 인용 확인 (LLM 없�
   inherited  인용 번호는 없지만 바로 앞·뒤 문장이 인용한 근거가 이 문장도 뒷받침(같은 근거를 이어 쓰는 주제문·맺음문) §5.47
   summary    인용 번호 없는 짧은 종합 문장("두 접근은 목표가 다릅니다", "서로 보완적입니다") — 숫자가 없을 때만, 경보 아님 §5.47
   table_row  표의 데이터 행(문장이 아니라 점수는 매기지 않고 숫자만 대조, 주장 문장 수에는 넣지 않음)
+관계 주장(상태와 별도, relation): 두 근거 이상을 인용했거나 논문 사이 관계·비교를 단정하는 표현("두 접근은",
+  "~에 집중한다면", "공유", "결합", "발전시킨")이 있고 "(추론)" 표시가 없는 문장. 리랭커 점수는 주제만 맞으면 높아서
+  이런 문장을 못 잡는다(사람 판정 10문항에서 사람이 짚은 14문장 중 0개, §5.52). 경보가 아니라 '확인 권장'으로 따로 보인다 §5.54
 숫자 대조(상태와 별도): 문장의 숫자(소수·두 자리 이상, 연도 제외)가 인용한 근거 원문에 없으면 numbers_missing 에 담는다.
 리랭커는 '78.4' 와 '68.4' 를 거의 같은 점수로 보므로, 표 숫자를 잘못 옮기는 환각은 이 규칙이 잡는다.
 """
@@ -45,6 +48,19 @@ _SUMMARY = re.compile(r"차이(?:가|점)|공통점|다릅니다|구분됩니다
 SUMMARY_MAX_CHARS = 60
 # 문장으로 확인할 수 없는 행: 수식으로 시작하는 줄(리랭커가 LaTeX 를 읽지 못해 늘 '근거 약함'이 됨)
 _MATH_LINE = re.compile(r"^\s*\$\$")
+# 관계·비교 단정 표현(사람 판정 10문항 69문장으로 고름 — 과적합 가능, §5.54). "반면"·"보완"·"와 달리"는 사람이 근거 있음으로 본 문장에 더 많아 뺐다
+_RELATION = re.compile(r"두 (?:모델|방법|접근|논문|관점|기법|방식)|공유|유사하게|역할을 나누|결론적으로|발전시킨|활용하여|시사"
+                       r"|결합|집중한다면|초점을 맞추지만|중점을 둡니다|집중하는 반면")
+_INFERENCE_MARK = re.compile(r"^\s*\(?추론\)")
+
+
+def is_relation_claim(text: str, cites: list[int]) -> bool:
+    """근거 사이 관계·비교를 단정하는 문장인가("(추론)" 표시 문장은 스스로 밝혔으므로 제외)."""
+    if _INFERENCE_MARK.search(text):
+        return False
+    return len(set(cites)) >= 2 or bool(_RELATION.search(text))
+
+
 OK_STATUSES = ("supported", "inherited", "summary", "table_row")
 # 소제목 줄("입력 데이터와 특징 표현 방식의 차이"): 인용이 없고 문장처럼 끝나지 않는 짧은 줄 — 시험 질문 50개에서 '인용 없음'의 대부분(§5.46)
 _SENTENCE_END = re.compile(r"(?:[.!?。]|[다요음임함됨])\s*$")
@@ -139,6 +155,7 @@ class SentenceCheck:
     numbers_found_in: list[int] = field(default_factory=list)  # 그 숫자가 모두 있는 다른 근거 번호
     entail: float | None = None        # 인용한 근거 중 최고 함의 확률(NLI)
     contradiction: float | None = None  # 인용한 근거 중 최저 모순 확률(NLI) — 모두와 모순이어야 높다
+    relation: bool = False             # 근거 사이 관계·비교 단정("(추론)" 표시 없음) — 확인 권장 §5.54
 
     @property
     def flagged(self) -> bool:
@@ -168,6 +185,7 @@ class CitationReport:
             "contradicted": count("contradicted"),
             "inherited": count("inherited"),
             "summary": count("summary"),
+            "relation": sum(s.relation for s in self.sentences),   # 관계·비교 단정 문장(경보와 별도)
             # 인용 정확도: 인용 단 문장 중 인용한 근거가 뒷받침하는 비율
             "precision": round(ok / len(cited), 3) if cited else None,
             # 인용 재현율: 주장 문장 중 뒷받침되는 인용이 달린(또는 앞뒤 문장의 인용을 이어받은) 비율
@@ -179,7 +197,8 @@ class CitationReport:
 
     def to_json(self) -> dict:
         return {"threshold": self.threshold, "summary": self.summary(),
-                "flagged": [asdict(s) for s in self.sentences + self.table_rows if s.flagged]}
+                "flagged": [asdict(s) for s in self.sentences + self.table_rows if s.flagged],
+                "relations": [asdict(s) for s in self.sentences if s.relation and not s.flagged]}
 
 
 def parse_cites(text: str) -> list[int]:
@@ -384,7 +403,8 @@ def check(answer: str, chunks: list[RetrievedChunk], scorer: Scorer | None = Non
             text=claim_text(s), cites=cites, status=status,
             support=None if support is None else round(support, 3),
             best=best + 1, best_score=round(row[best], 3),
-            numbers_missing=missing, numbers_found_in=elsewhere))
+            numbers_missing=missing, numbers_found_in=elsewhere,
+            relation=is_relation_claim(claim_text(s), cites)))
     _apply_nli(report, sents, chunks, nli)
     return report
 

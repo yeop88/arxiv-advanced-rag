@@ -191,6 +191,16 @@ class RAGPipeline:
                                                 top_score=auto_fetch.top_score(reranked),
                                                 threshold=settings.auto_fetch_threshold) or reranked
 
+        # --- 2b': 질문 주어인 기법의 원 논문이 근거에 없으면 수집 (3차 신호, 경량 LLM 1~2회 — §5.53) ---
+        # 파생 논문이 이름을 많이 써서 점수·답변 신호로는 근거가 있다고 보이는 유명 논문(CLIP·DDPM·GAN)
+        if settings.auto_fetch and settings.auto_fetch_original_signal and "2b_auto_fetch" not in result.timings \
+                and reranked and auto_fetch.original_signal(standalone, reranked, check_tried=True,
+                                                            known_titles=auto_fetch.db_titles(self.vectorstore)):
+            auto_fetch.mark_original_tried(auto_fetch.subject_name(standalone))
+            reranked = self._fetch_and_retrieve(standalone, queries, result, emit, reason="original", evidence=reranked,
+                                                subject=auto_fetch.subject_name(standalone),
+                                                title=auto_fetch.guess_original_title(standalone)) or reranked
+
         if not reranked:
             result.answer = "관련 근거를 찾지 못했습니다. 다른 질문을 시도하거나 논문을 더 수집하세요."
             return result

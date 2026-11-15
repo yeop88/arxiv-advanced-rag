@@ -15,6 +15,7 @@ rag/ingest/auto_fetch.py — 코퍼스에 근거가 부족할 때 arXiv 에서 �
 from __future__ import annotations
 
 import datetime as dt
+import functools
 import json
 import os
 import re
@@ -133,6 +134,89 @@ def answer_signal(question: str, answer: str, reranked) -> bool:
         return sum(_norm(name) in _norm(f"{c.title} {c.content}") for c in reranked)
 
     return any(not covered(n) and mentions(n) < _MIN_MENTIONS for n in names)
+
+
+_SUBJECT = re.compile(r"^\s*([A-Za-z][A-Za-z0-9.\-]*(?:\s+[A-Za-z0-9][A-Za-z0-9.\-]*){0,3})\s*(?:은|는|이|가|의)\s")
+
+
+def subject_name(question: str) -> str | None:
+    """질문의 주어가 기법·모델 이름인가("CLIP은 …", "Vision Transformer는 …") → 그 이름, 아니면 None.
+    한국어 질문의 맨 앞 영문 이름 + 조사만 본다. 일반 약어(LLM·RAG 등) 하나뿐이면 제외."""
+    m = _SUBJECT.match(question or "")
+    if not m:
+        return None
+    name = m.group(1).strip()
+    return None if name.upper() in _GENERIC_NAMES else name
+
+
+_TRIED_DAYS = 30  # 같은 주어로 3차 신호 수집을 한 번 했으면 이 기간 동안 다시 하지 않는다
+
+
+def _tried_path() -> Path:
+    p = Path(settings.auto_usage_path)
+    return p.with_name(p.stem + "_original.json")
+
+
+def original_tried(subject: str) -> bool:
+    """이 주어로 3차 신호 수집을 최근에 이미 했는가(원 논문을 못 찾았거나 찾았는데 근거 5개 밖이면 다시 해도 소용없다)."""
+    try:
+        day = json.loads(_tried_path().read_text(encoding="utf-8")).get(subject.lower())
+    except (OSError, ValueError):
+        return False
+    return bool(day) and (dt.date.today() - dt.date.fromisoformat(day)).days < _TRIED_DAYS
+
+
+def mark_original_tried(subject: str) -> None:
+    path = _tried_path()
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        data = {}
+    data[subject.lower()] = dt.date.today().isoformat()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+
+
+_DB_TITLES: dict[int, set[str]] = {}
+
+
+def db_titles(vectorstore) -> set[str]:
+    """DB 의 논문 제목들(숨긴 자동 수집분 포함). 수집·삭제 때 비운다."""
+    key = id(vectorstore)
+    if key not in _DB_TITLES:
+        raw = getattr(vectorstore, "inner", vectorstore).get(include=["metadatas"])
+        _DB_TITLES[key] = {(m or {}).get("title") for m in raw.get("metadatas", []) if (m or {}).get("title")}
+    return _DB_TITLES[key]
+
+
+def original_signal(question: str, reranked, guess: Callable[[str], str | None] | None = None,
+                    more: Callable[[str], list[str]] | None = None, known_titles=None, check_tried: bool = False) -> bool:
+    """3차 신호(§5.53): 질문의 주어인 기법의 **원 논문 제목**이 근거에 없으면 수집한다.
+
+    점수·답변 신호는 파생 논문이 이름을 많이 쓰면 근거가 있다고 본다(CLIP → Long-CLIP·Chinese CLIP,
+    ResNet → ResNet 을 쓰는 논문들). 그래서 경량 LLM 이 추정한 원 논문 제목과 근거 논문 제목을 비교한다.
+    추정을 못 하면 켜지 않는다. 첫 추정이 근거와 안 맞으면 제목 후보를 더 받아 하나라도 맞으면 켜지 않는다
+    (추정이 틀려 원 논문이 근거에 있는데도 켜지는 경우: InstructGPT·HyDE). 경량 LLM 1~2회(주어가 이름인 질문만).
+    known_titles(DB 의 논문 제목)에 원 논문이 있으면 근거 5개 밖일 뿐이라 켜지 않고, check_tried 면 최근 같은 주어로 수집한 적이 있을 때 켜지 않는다
+    — 실전 재시험에서 원 논문이 근거 밖이던 DDPM·GCN, 원 논문을 못 찾은 RWKV 가 다시 물을 때마다 파생 논문을 더 넣었다(§5.53)."""
+    subject = subject_name(question)
+    if not subject or (check_tried and original_tried(subject)):
+        return False
+
+    def real(t: str | None) -> bool:   # 이름만 돌려준 추정("Vision Transformer")은 제목이 아니다 — 파생 논문 제목과 겹쳐 보임
+        return bool(t) and len(_title_words(t)) > len(_title_words(subject)) + 1
+
+    title = (guess or guess_original_title)(question)
+    if not title:
+        return False   # 원 논문을 모른다고 함 — 후보를 더 받아도 지어낸 제목이 많아 오작동(DSP·IRCoT)
+    titles = [c.title or "" for c in reranked] + list(known_titles or ())
+    if real(title) and any(title_similar(t, title, _PRESENT_MATCH) for t in titles):
+        return False
+    others = [o for o in (more or (lambda q: guess_original_titles(q, settings.auto_fetch_title_candidates or 3)))(question)
+              if real(o)]
+    if not (real(title) or others):
+        return False
+    return not any(title_similar(t, o, _PRESENT_MATCH) for t in titles for o in others)
 
 
 def select_papers(ranked: list) -> list:
@@ -261,8 +345,9 @@ def _existing_sources(vectorstore) -> set[str]:
     return {(m or {}).get("source") for m in raw.get("metadatas", []) if (m or {}).get("source")}
 
 
+@functools.lru_cache(maxsize=256)
 def guess_original_title(question: str) -> str | None:
-    """경량 LLM 이 질문의 원 논문 제목을 추정(모르면 None)."""
+    """경량 LLM 이 질문의 원 논문 제목을 추정(모르면 None). 3차 신호와 후보 찾기가 같은 추정을 쓰도록 캐시."""
     from langchain_core.output_parsers import StrOutputParser
     from langchain_core.prompts import ChatPromptTemplate
 
@@ -280,6 +365,7 @@ def guess_original_title(question: str) -> str | None:
     return title
 
 
+@functools.lru_cache(maxsize=256)
 def guess_original_titles(question: str, n: int = 3) -> list[str]:
     """경량 LLM 이 원 논문 제목 후보를 최대 n개 추정(가장 그럴듯한 것부터, 모르면 빈 목록). §5.43"""
     from langchain_core.output_parsers import StrOutputParser
@@ -316,6 +402,7 @@ def title_overlap(a: str, b: str) -> float:
 
 
 _TITLE_MATCH = 0.6     # 같은 논문으로 볼 제목 겹침 비율(긴 쪽 기준). "Nets"↔"Networks" 같은 차이를 허용
+_PRESENT_MATCH = 0.75  # 3차 신호에서 '원 논문이 근거에 있다'고 볼 제목 겹침. 0.6 은 일반 낱말만 겹친 다른 논문도 맞다고 봄(wav2vec 2.0, §5.53)
 _TITLE_EXACT = 0.9     # 이 이상이면 관련도 기준 없이 선정(한국어 질문과 영어 초록의 관련도가 낮게 나오는 원 논문 대비)
 
 
@@ -468,6 +555,7 @@ def fetch_and_ingest(question: str, vectorstore, emit: Emit | None = None,
     from rag.ingest.arxiv_source import http_session, result_to_chunks
 
     emit = emit or (lambda *a, **k: None)
+    _DB_TITLES.pop(id(vectorstore), None)   # 논문이 늘거나 지워지므로 제목 목록을 다시 읽게
     chosen = find_candidates(question, _existing_sources(vectorstore), emit, evidence_sources)["chosen"]
     if not chosen:
         return []

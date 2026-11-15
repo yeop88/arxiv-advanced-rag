@@ -43,7 +43,7 @@ def save(fig, name: str) -> None:
 
 def achievement() -> None:
     """구분별 달성률(ACHIEVEMENT.md 요약표)."""
-    rows = [("해결하려는 문제", 90, "현재"), ("접근 방식", 90, "현재"), ("현재 기능", 100, "현재"),
+    rows = [("해결하려는 문제", 100, "현재"), ("접근 방식", 90, "현재"), ("현재 기능", 100, "현재"),
             ("확장 원칙 준수", 100, "현재"), ("단기 과제", 50, "로드맵"), ("중기 과제", 100, "로드맵"),
             ("다른 도메인 이전", 50, "로드맵"), ("장기 과제", 38, "로드맵")]
     fig, ax = plt.subplots(figsize=(10, 5.2))
@@ -58,7 +58,7 @@ def achievement() -> None:
     ax.grid(axis="y", visible=False)
     h, lab = ax.get_legend_handles_labels()
     uniq = dict(zip(lab, h))
-    ax.legend([uniq["현재"], uniq["로드맵"]], ["현재 목표 (합계 95%)", "로드맵 (합계 63%)"],
+    ax.legend([uniq["현재"], uniq["로드맵"]], ["현재 목표 (합계 97.5%)", "로드맵 (합계 63%)"],
               loc="lower right", frameon=False)
     ax.set_title("PROJECT_VISION 달성률 (2026-11-15)")
     save(fig, "01_achievement.png")
@@ -109,23 +109,23 @@ def corpus_growth() -> None:
 
 
 def auto_fetch_progress() -> None:
-    """자동 수집 개선 전후(§5.16 → §5.17)와 목표."""
+    """자동 수집 개선 과정과 목표: 원 논문 수집(§5.16 12문항 → §5.51·§5.53 20문항), 코퍼스 안 수집 신호(§5.16·§5.17 실전 → §5.53 B1 재판정)."""
     fig, axes = plt.subplots(1, 2, figsize=(10, 4.6))
     panels = [
-        (axes[0], "원 논문 수집률, 같은 12문항 (높을수록 좋음)", [17, 50], 60, "목표 60%"),
-        (axes[1], "코퍼스 안 질문의 수집 신호 (낮을수록 좋음)", [47, 23], 5, "목표 5%"),
+        (axes[0], "원 논문 수집률 (높을수록 좋음)", ["처음", "재시험 v7", "최종 v9"], [17, 55, 75], 60, "목표 60%"),
+        (axes[1], "코퍼스 안 질문의 수집 신호 (낮을수록 좋음)", ["처음", "개선 후", "최종"], [47, 23, 13], 5, "목표 5%"),
     ]
-    for ax, title, vals, target, tlab in panels:
-        bars = ax.bar(["개선 전", "개선 후"], vals, width=0.5, color=[AXIS, BLUE], edgecolor=SURFACE, linewidth=2)
+    for ax, title, labels, vals, target, tlab in panels:
+        bars = ax.bar(labels, vals, width=0.5, color=[AXIS, BLUE, BLUE], edgecolor=SURFACE, linewidth=2)
         for b, v in zip(bars, vals):
             ax.text(b.get_x() + b.get_width() / 2, v + 1.5, f"{v}%", ha="center", color=INK, fontsize=12)
         ax.axhline(target, color=CRITICAL, lw=1.2, ls="--")
         ax.text(-0.3, target + 1.5, tlab, ha="left", color=INK2, fontsize=11)
-        ax.set_ylim(0, 70)
-        ax.set_yticks([0, 20, 40, 60], ["0", "20", "40", "60%"])
+        ax.set_ylim(0, 85)
+        ax.set_yticks([0, 20, 40, 60, 80], ["0", "20", "40", "60", "80%"])
         ax.grid(axis="x", visible=False)
         ax.set_title(title, fontsize=13)
-    fig.suptitle("자동 수집: 좋아졌지만 두 목표는 아직 미달", x=0.02, ha="left", fontsize=16, fontweight="bold")
+    fig.suptitle("자동 수집: 원 논문 수집은 목표 달성, 코퍼스 안 신호는 아직 미달", x=0.02, ha="left", fontsize=16, fontweight="bold")
     save(fig, "04_auto_fetch_progress.png")
 
 
@@ -158,8 +158,8 @@ def kpi_table() -> None:
         ("answer_relevance 하락", "0.05 이내", "0.640 → 0.642", "통과"),
         ("무관한 질문으로 추가된 논문", "0편", "0편", "통과"),
         ("같은 질문 재수집", "0회", "0회", "통과"),
-        ("원 논문 수집", "60% 이상", "45%", "미달"),
-        ("코퍼스 안 질문의 수집 신호", "5% 이하", "23%", "미달"),
+        ("원 논문 수집", "60% 이상", "45% → 75%", "통과"),
+        ("코퍼스 안 질문의 수집 신호", "5% 이하", "23% → 13%", "미달"),
     ]
     fig, ax = plt.subplots(figsize=(10, 4.4))
     ax.axis("off")
@@ -176,7 +176,7 @@ def kpi_table() -> None:
         elif c == 3:
             ok = cell.get_text().get_text() == "통과"
             cell.set_text_props(color="#006300" if ok else CRITICAL, weight="bold")
-    ax.set_title("자동 수집 실전 시험 기준 (8개 중 6개 통과)", loc="left")
+    ax.set_title("자동 수집 실전 시험 기준 (8개 중 7개 통과)", loc="left")
     save(fig, "06_kpi_table.png")
 
 

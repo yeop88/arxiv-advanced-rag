@@ -65,6 +65,8 @@ export function describeEvent(event: string, info: any): ProgressUpdate | null {
       const why =
         info.reason === "answer"
           ? "답변이 '근거에서 찾을 수 없다'고 밝혔습니다"
+          : info.reason === "original"
+          ? `'${info.subject ?? ""}' 원 논문(${info.title ?? ""})이 근거에 없습니다`
           : `가장 관련 높은 근거 점수 ${(info.top_score ?? 0).toFixed(2)} < 기준 ${(info.threshold ?? 0).toFixed(2)}`;
       return { stage: "📥 논문 찾는 중", lines: [{ text: `📥 근거 부족 — ${why}. arXiv 에서 관련 논문을 찾아 DB 에 추가합니다` }] };
     }

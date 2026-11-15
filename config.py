@@ -179,6 +179,9 @@ class Settings:
     # 첫 추정 제목으로 원 논문을 못 찾으면 경량 LLM 에 제목 후보를 이만큼 더 받아 찾는다(0 = 끔). 측정 §5.43:
     # 원 논문이 제목 검색 후보에 드는 질문 조정용 15/34 → 20/34, 확인용 9/12 → 10/12
     auto_fetch_title_candidates: int = int(os.getenv("AUTO_FETCH_TITLE_CANDIDATES", "3"))
+    # 1 이면 질문 주어인 기법의 원 논문 제목(경량 LLM 추정)이 근거에 없을 때도 수집한다(3차 신호, §5.53:
+    # 수집 신호 평가 세트 감지 26/34 → 32/34, 코퍼스 안 오작동 3/42 → 4/42)
+    auto_fetch_original_signal: bool = os.getenv("AUTO_FETCH_ORIGINAL_SIGNAL", "1") not in ("0", "false", "False")
     auto_fetch_title_only: bool = os.getenv("AUTO_FETCH_TITLE_ONLY", "1") not in ("0", "false", "False")
     # 1 이면 근거 논문들이 공통으로 인용한 논문도 후보에 더한다(인용 그래프 필요)
     auto_fetch_common_refs: bool = os.getenv("AUTO_FETCH_COMMON_REFS", "0") not in ("0", "false", "False")

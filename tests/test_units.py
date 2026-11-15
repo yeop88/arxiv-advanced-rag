@@ -220,6 +220,56 @@ def test_auto_rerank_weight() -> None:
     print("  test_auto_rerank_weight ✅")
 
 
+def test_relation_claim() -> None:
+    """관계·비교 단정 문장: 두 근거 이상 인용 또는 관계 표현, "(추론)" 표시면 제외(§5.54)."""
+    from rag.stages.citation_check import is_relation_claim
+
+    assert is_relation_claim("두 접근 방식은 역할을 나누어 맡을 수 있습니다 [1]", [1])
+    assert is_relation_claim("A는 쿼리를, B는 색인을 다룹니다 [1][2]", [1, 2])
+    assert not is_relation_claim("(추론) 두 접근 방식은 결합할 수 있습니다 [1][2]", [1, 2])
+    assert not is_relation_claim("LoRA는 사전학습 가중치를 고정합니다 [1]", [1])
+
+
+def test_original_signal() -> None:
+    """3차 신호: 주어인 기법의 원 논문 제목이 근거에 없을 때만(파생 논문 제목에 이름이 있어도)."""
+    import rag.ingest.auto_fetch as af
+    from rag.core.schemas import RetrievedChunk
+
+    assert af.subject_name("CLIP은 어떻게 학습하나요?") == "CLIP"
+    assert af.subject_name("Vision Transformer는 이미지를 어떻게 나누나요?") == "Vision Transformer"
+    assert af.subject_name("RAG는 무엇인가요?") is None and af.subject_name("트랜스포머는 왜?") is None
+    orig = "Learning Transferable Visual Models From Natural Language Supervision"
+    deriv = [RetrievedChunk(content="CLIP CLIP", source="1", title="Long-CLIP: Unlocking the Long-Text Capability of CLIP")]
+    q = "CLIP은 어떻게 학습하나요?"
+    assert af.original_signal(q, deriv, guess=lambda _: orig, more=lambda _: [])
+    assert not af.original_signal(q, deriv + [RetrievedChunk(content="x", source="2", title=orig)],
+                                  guess=lambda _: orig, more=lambda _: [])
+    # 첫 추정이 틀려도 후보 중 하나가 근거에 있으면 켜지 않음
+    assert not af.original_signal(q, [RetrievedChunk(content="x", source="2", title=orig)],
+                                  guess=lambda _: "Contrastive Image Text Pretraining Wrong", more=lambda _: [orig])
+    assert not af.original_signal(q, deriv, guess=lambda _: None, more=lambda _: [orig])  # 모른다고 하면 끔
+    # 이름만 돌려준 추정은 제목이 아님 → 후보로 판단(파생 "Vicinity Vision Transformer" 와 맞다고 보지 않음)
+    vq = "Vision Transformer는 어떻게 분류하나요?"
+    vit = [RetrievedChunk(content="x", source="3", title="Vicinity Vision Transformer")]
+    assert af.original_signal(vq, vit, guess=lambda _: "Vision Transformer",
+                              more=lambda _: ["An Image is Worth 16x16 Words: Transformers for Image Recognition at Scale"])
+    assert not af.original_signal("트랜스포머는 왜?", deriv, guess=lambda _: orig)
+    # 원 논문이 DB 에 있으면(근거 5개 밖일 뿐) 켜지 않음
+    assert not af.original_signal(q, deriv, guess=lambda _: orig, more=lambda _: [], known_titles={orig})
+    # 같은 주어로 최근 수집했으면 켜지 않음
+    import tempfile
+    from config import settings
+    keep = settings.auto_usage_path
+    with tempfile.TemporaryDirectory() as d:
+        settings.auto_usage_path = str(Path(d) / "usage.json")
+        try:
+            assert af.original_signal(q, deriv, guess=lambda _: orig, more=lambda _: [], check_tried=True)
+            af.mark_original_tried("CLIP")
+            assert not af.original_signal(q, deriv, guess=lambda _: orig, more=lambda _: [], check_tried=True)
+        finally:
+            settings.auto_usage_path = keep
+
+
 def test_auto_fetch_decisions() -> None:
     """답변 신호는 대상이 근거에 없을 때만, 선정은 인용이 가장 많은 관련 논문을 먼저."""
     from types import SimpleNamespace as NS
@@ -826,6 +876,8 @@ def main() -> None:
     test_followup_helpers()
     test_citation_check()
     test_sub_coverage()
+    test_original_signal()
+    test_relation_claim()
     print("모든 단위 테스트 통과 ✅")
 
 

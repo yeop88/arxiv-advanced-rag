@@ -94,6 +94,26 @@ export function CitationCheckPanel({ result, onCite, defaultOpen = false }: { re
           </span>
         )}
       </div>
+      {(cc.relations?.length ?? 0) > 0 && (
+        <Collapsible
+          title={`근거 사이 관계·비교를 단정한 문장 ${cc.relations!.length}개 — 근거가 직접 말하지 않을 수 있어요`}
+          className="cc-list cc-relations"
+        >
+          <ul>
+            {cc.relations!.map((s, i) => (
+              <li key={i} className="cc-item">
+                <span className="cc-text">{s.text}</span>
+                <span className="cc-why muted">
+                  인용 근거 각각은 맞아도, 둘을 잇는 관계는 답변이 만든 해석일 수 있습니다
+                  {s.cites.map((n) => (
+                    <CiteButton key={n} n={n} onCite={onCite} />
+                  ))}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </Collapsible>
+      )}
       {cc.flagged.length === 0 && <p className="muted small">모든 주장 문장이 인용한 근거와 맞고, 숫자도 근거 원문에 있습니다.</p>}
       {cc.flagged.length > 0 && (
         <Collapsible title={`확인이 필요한 문장 ${cc.flagged.length}개`} className="cc-list" defaultOpen={defaultOpen}>

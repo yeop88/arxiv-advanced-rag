@@ -150,6 +150,32 @@
   "agreement": 0.4,
   "kappa": -0.071
  },
+ "relation_rule": {
+  "n": 69,
+  "human_bad": 14,
+  "auto_flagged": 19,
+  "tp": 11,
+  "fp": 8,
+  "fn": 3,
+  "tn": 47,
+  "flag_precision": 0.579,
+  "flag_recall": 0.786,
+  "accuracy": 0.841,
+  "kappa": 0.565,
+  "or_citation_check": {
+   "n": 69,
+   "human_bad": 14,
+   "auto_flagged": 30,
+   "tp": 11,
+   "fp": 19,
+   "fn": 3,
+   "tn": 36,
+   "flag_precision": 0.367,
+   "flag_recall": 0.786,
+   "accuracy": 0.681,
+   "kappa": 0.309
+  }
+ },
  "sentence_citation_check_recheck": {
   "n": 69,
   "human_bad": 14,

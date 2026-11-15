@@ -190,6 +190,19 @@ def main() -> None:
                                "kappa": kappa(h, j)}
         out["answer_rule"] = {"n": len(h), "agreement": round(sum(a == b for a, b in zip(h, r)) / len(h), 3) if h else None,
                               "kappa": kappa(h, r)}
+    # 관계·비교 단정 규칙(§5.54)이 사람이 짚은 문장(근거 없음·번호 틀림)을 얼마나 잡는지. 이 10문항으로 규칙을 골라 과적합 가능
+    from rag.stages.citation_check import is_relation_claim
+
+    rel_h, rel_a, cc_a = [], [], []
+    for iid, lab in labels.items():
+        for i, s in enumerate(items[iid]["citation_check"]["sentences"]):
+            h = (lab.get("sentences") or {}).get(str(i))
+            if h is None:
+                continue
+            rel_h.append(h != "supported")
+            rel_a.append(is_relation_claim(s["text"], s["cites"]))
+            cc_a.append(citation_flag(s))
+    out["relation_rule"] = {**flag_scores(rel_h, rel_a), "or_citation_check": flag_scores(rel_h, [a or c for a, c in zip(rel_a, cc_a)])}
     if args.recheck:
         out["sentence_citation_check_recheck"], out["answer_citation_check_recheck"] = recheck(items, labels)
     OUT.write_text(json.dumps(out, ensure_ascii=False, indent=1), encoding="utf-8")

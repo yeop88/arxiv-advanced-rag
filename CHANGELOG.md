@@ -5,6 +5,9 @@
 ## [Unreleased]
 
 ### Added
+- 자동 수집 3차 신호(`AUTO_FETCH_ORIGINAL_SIGNAL`, 기본 켬): 질문 주어가 기법 이름이면 원 논문 제목을 추정해 근거에 없을 때 생성 전에 수집 — 파생 논문만 있는 유명 논문(CLIP·DDPM·GAN 등). 수집 신호 세트 감지 26 → 32/34, 코퍼스 안 오작동 3 → 4/42(§5.53). 진행 줄에 "원 논문이 근거에 없음" 표시
+- 관계·비교 주장 표시(4b 인용 확인): 근거 두 개 이상 인용하거나 관계를 단정한 문장("(추론)" 표시 없음)을 경보와 별도 목록으로 보여 줌. 사람이 짚은 14문장 중 11개(κ 0.57, §5.54). `human_agreement.py` 결과에 `relation_rule`
+- `fetch_signal_set.py --judge` 에 원 논문 제목 규칙 비교(추정 제목을 `eval/results/fetch_signal_title_*.json` 에 저장해 재판정은 LLM 없음)
 - `human_agreement.py --blind`(초안을 숨기고 판정한 문항만 — 초안이 보이면 사람 판정이 끌림)·`--answer-judge`(검증 v2 등 답변 판정기와 규칙 판정도 함께 비교). 사람 판정 10문항 결과 §5.52
 - 답변 품질 실험 도구: `eval/answer_quality.py`(같은 근거로 답 다시 쓰기·규칙 신호·판정용 모음), `eval/judge_eval.py`(답변 판정기 비교 — 규칙·LLM 검증 v1/v2), `eval/multihop_eval.py`(다중 홉 분해 검색 효과)
 - 생성 프롬프트 v2(`GENERATION_PROMPT`, 부분 답 허용·`(추론)` 표시), 검증 v2(`VERIFY_PROMPT`, 질문을 주고 근거에 있는데 빠뜨린 부분까지 확인), 다중 홉 분해(`MULTIHOP_DECOMPOSE`, 하위 질문마다 근거 자리 보장) — 측정 뒤 기본값 결정(아래 Changed)

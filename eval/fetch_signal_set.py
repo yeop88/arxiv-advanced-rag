@@ -175,7 +175,54 @@ def _with_threshold(t: float):
     return rule
 
 
-RULES = {"현재": rule_current, "문장 단위": rule_sentence, "거절 표현 확장": rule_markers,
+GUESS_PATH = Path(__file__).resolve().parent / "results" / "fetch_signal_title_guess.json"
+_GUESSES: dict[str, str | None] | None = None
+
+
+def _guess(question: str) -> str | None:
+    """원 논문 제목 추정(경량 LLM). 결과를 파일에 저장해 다시 판정할 때는 LLM 을 부르지 않는다."""
+    global _GUESSES
+    if _GUESSES is None:
+        _GUESSES = json.loads(GUESS_PATH.read_text(encoding="utf-8")) if GUESS_PATH.exists() else {}
+    if question not in _GUESSES:
+        from rag.ingest.auto_fetch import guess_original_title
+
+        _GUESSES[question] = guess_original_title(question)
+        GUESS_PATH.write_text(json.dumps(_GUESSES, ensure_ascii=False, indent=1), encoding="utf-8")
+    return _GUESSES[question]
+
+
+MORE_PATH = GUESS_PATH.with_name("fetch_signal_title_candidates.json")
+_MORE: dict[str, list[str]] | None = None
+
+
+def _more(question: str) -> list[str]:
+    global _MORE
+    if _MORE is None:
+        _MORE = json.loads(MORE_PATH.read_text(encoding="utf-8")) if MORE_PATH.exists() else {}
+    if question not in _MORE:
+        from rag.ingest.auto_fetch import guess_original_titles
+
+        _MORE[question] = guess_original_titles(question, 3)
+        MORE_PATH.write_text(json.dumps(_MORE, ensure_ascii=False, indent=1), encoding="utf-8")
+    return _MORE[question]
+
+
+def rule_original_first(row) -> bool:
+    """(비교용) 첫 추정 제목만 보는 3차 신호."""
+    from rag.ingest.auto_fetch import original_signal
+
+    return rule_current(row) or original_signal(row["standalone"], _chunks(row), guess=_guess, more=lambda q: [])
+
+
+def rule_original(row) -> bool:
+    """현재 규칙 + 3차 신호(주어인 기법의 원 논문 제목이 근거에 없음, §5.53)."""
+    from rag.ingest.auto_fetch import original_signal
+
+    return rule_current(row) or original_signal(row["standalone"], _chunks(row), guess=_guess, more=_more)
+
+
+RULES = {"현재": rule_current, "+원 논문 제목(첫 추정)": rule_original_first, "+원 논문 제목": rule_original, "문장 단위": rule_sentence, "거절 표현 확장": rule_markers,
          "기준 0.15": _with_threshold(0.15), "기준 0.3": _with_threshold(0.3)}
 
 
@@ -223,6 +270,12 @@ def judge(do_rescore: bool = False) -> None:
     for r in in_corpus:
         if rule_current(r):
             print(f"  {r['id']:<20} top={r['top_score']:.2f} | {r['question'][:50]}")
+    print("\n3차 신호(원 논문 제목)로 바뀐 질문:")
+    for r in rows:
+        if rule_original(r) != rule_current(r):
+            from rag.ingest.auto_fetch import subject_name
+            print(f"  {r['id']:<20} 필요={r['should_fetch']!s:<5} 주어={subject_name(r['standalone'])} "
+                  f"추정={_guess(r['standalone'])} | {r['question'][:40]}")
 
 
 def main() -> None:

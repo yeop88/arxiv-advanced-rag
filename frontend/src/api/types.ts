@@ -112,6 +112,7 @@ export interface SentenceCheck {
   numbers_found_in: number[]; // 그 숫자가 있는 다른 근거 번호
   entail?: number | null; // 함의(NLI) 확률 — 인용한 근거 중 최고
   contradiction?: number | null; // 모순 확률 — 인용한 근거 중 최저
+  relation?: boolean; // 근거 사이 관계·비교 단정("(추론)" 표시 없음)
 }
 
 // 4b 문장 단위 인용 확인(rag/stages/citation_check.py) — 리랭커로 문장과 인용한 근거를 대조, LLM 없음
@@ -127,12 +128,14 @@ export interface CitationCheck {
     bad_ref: number;
     inherited?: number;
     summary?: number;
+    relation?: number; // 관계·비교 단정 문장 수(경보와 별도)
     precision: number | null;
     recall: number | null;
     numeric: number; // 숫자를 대조한 문장 수
     number_mismatch: number; // 숫자가 인용한 근거에 없는 문장 수
   };
   flagged: SentenceCheck[]; // 점수가 기준 미만이거나 숫자가 근거에 없는 문장
+  relations?: SentenceCheck[]; // 경보는 아니지만 근거 사이 관계를 단정해 확인을 권하는 문장
 }
 
 export interface AutoFetched {
