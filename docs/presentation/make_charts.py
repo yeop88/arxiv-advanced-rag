@@ -264,6 +264,38 @@ def title_candidates() -> None:
     save(fig, "09_title_candidates.png")
 
 
+def answer_quality() -> None:
+    """답변 품질 개선 단계 1·3(§5.48·§5.49): 기준 세트 판정 분포와 다중 홉 맞음. 판정은 Claude 초안(사람 검토 전)."""
+    seq = ["#1c5aa3", "#6fa3e3", "#c7dbf4"]   # 맞음·부분·틀림 — 순서가 있는 값이라 한 색의 진하기로
+    fig, (a1, a2) = plt.subplots(1, 2, figsize=(11, 5.2), gridspec_kw={"width_ratios": [1.5, 1]})
+    rows = [("프롬프트 v1", (36, 12, 2)), ("프롬프트 v2", (41, 8, 1))]
+    for yi, (name, vals) in zip((1, 0), rows):
+        left = 0
+        for v, c, lab in zip(vals, seq, ("맞음", "부분", "틀림")):
+            a1.barh(yi, v, left=left, height=0.55, color=c, edgecolor=SURFACE, linewidth=2, label=lab if yi == 1 else None)
+            if v >= 4:
+                a1.text(left + v / 2, yi, str(v), ha="center", va="center", color=SURFACE if c == seq[0] else INK, fontsize=12)
+            left += v
+    a1.set_yticks([1, 0], [r[0] for r in rows], color=INK2)
+    a1.set_xlim(0, 50)
+    a1.set_xlabel("문항 수 (50)")
+    a1.grid(axis="y", visible=False)
+    a1.legend(frameon=False, loc="lower center", bbox_to_anchor=(0.5, 1.0), ncol=3)
+    a1.set_title("기준 세트 50문항", pad=34)
+
+    names, vals = ["v1", "v2", "v2 + 다중 홉 분해"], [5, 9, 11]
+    bars = a2.bar(range(3), vals, width=0.55, color=seq[0], edgecolor=SURFACE, linewidth=2)
+    for b, v in zip(bars, vals):
+        a2.text(b.get_x() + b.get_width() / 2, v + 0.3, f"{v}/18", ha="center", color=INK2, fontsize=11)
+    a2.set_xticks(range(3), names, color=INK2, fontsize=10)
+    a2.set_ylim(0, 18)
+    a2.set_ylabel("맞음")
+    a2.grid(axis="x", visible=False)
+    a2.set_title("그중 다중 홉 18문항", pad=34)
+    fig.suptitle("답변 품질 개선 — 판정은 Claude 초안(사람 검토 전)", x=0.02, ha="left", fontsize=13, color=INK2)
+    save(fig, "10_answer_quality.png")
+
+
 if __name__ == "__main__":
     achievement()
     query_transform()
@@ -274,3 +306,4 @@ if __name__ == "__main__":
     citation_check()
     reranker_title()
     title_candidates()
+    answer_quality()
