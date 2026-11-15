@@ -192,13 +192,15 @@ def evict_over_budget(vectorstore, protect: set[str] | None = None) -> list[dict
     순서: 마지막 사용일(안 쓰였으면 수집일)이 오래된 순, 같으면 사용 횟수가 적은 순.
     protect(방금 수집한 논문)와 수동 수집 논문, 표·그림·수식 청크가 있는 논문은 지우지 않는다
     (표·그림·수식은 논문당 1~3분 걸려 만든 것이라 다시 만들기 비싸다). 이 논문들의 청크도 예산에는 센다.
+    오늘 수집했거나 오늘 근거로 쓰인 논문도 지우지 않는다 — 표·그림 논문이 예산 대부분(2,000 중 1,753청크)을
+    차지하자 새로 넣은 논문이 다음 수집 때 바로 지워져 같은 질문에 다시 수집했다(§5.51). 그래서 예산을 잠시 넘길 수 있다.
     """
     from rag.core.schemas import VISUAL_KINDS
 
     budget = settings.auto_fetch_max_chunks
     if budget <= 0:
         return []
-    protect = protect or set()
+    protect = set(protect or ())
     store = getattr(vectorstore, "inner", vectorstore)
     raw = store.get()
     papers: dict[str, dict] = {}
@@ -208,11 +210,14 @@ def evict_over_budget(vectorstore, protect: set[str] | None = None) -> list[dict
             p = papers.setdefault(m["source"], {"ids": [], "title": m.get("title", ""), "fetched_at": m.get("fetched_at", "")})
             p["ids"].append(i)
             if m.get("kind") in VISUAL_KINDS:
-                protect = protect | {m["source"]}
+                protect.add(m["source"])
     total = sum(len(p["ids"]) for p in papers.values())
     if total <= budget:
         return []
-    usage = load_usage()
+    usage, today = load_usage(), dt.date.today().isoformat()
+
+    def recent(pid: str, p: dict) -> bool:
+        return max(usage.get(pid, {}).get("last_used") or "", p["fetched_at"] or "")[:10] >= today
 
     def order(item):
         pid, p = item
@@ -220,7 +225,8 @@ def evict_over_budget(vectorstore, protect: set[str] | None = None) -> list[dict
         return row.get("last_used") or p["fetched_at"], row.get("count", 0)
 
     evicted = []
-    for pid, p in sorted(((k, v) for k, v in papers.items() if k not in protect), key=order):
+    candidates = ((k, v) for k, v in papers.items() if k not in protect and not recent(k, v))
+    for pid, p in sorted(candidates, key=order):
         if total <= budget:
             break
         store.delete(ids=p["ids"])

@@ -318,6 +318,15 @@ def test_evict_over_budget() -> None:
         left = {m["source"] for m in st.get()["metadatas"]}
         assert left == {"m", "vis", "used", "new"}, f"표·그림·수식이 있는 논문은 남아야 함: {left}"
         assert af.evict_over_budget(st, protect={"new"}) == [], "예산 안이면 지우지 않음"
+        # 오늘 넣은·오늘 쓰인 논문은 다음 수집 때 지우지 않음 — 지울 게 없으면 예산을 잠시 넘김(§5.51)
+        today = af.dt.date.today().isoformat()
+        st.upsert_vectors(["today0", "today1"], [[1.0, 0.0, 0.0]] * 2, ["t 본문"] * 2,
+                          [{"source": "today", "fetched_at": today, "origin": "auto"}] * 2)
+        settings.auto_fetch_max_chunks = 6
+        evicted = af.evict_over_budget(st, protect={"newest"})
+        assert [e["source"] for e in evicted] == ["new"], evicted
+        left = {m["source"] for m in st.get()["metadatas"]}
+        assert {"vis", "used", "today"} <= left, f"표·그림·오늘 논문은 남아야 함: {left}"
     finally:
         settings.auto_usage_path, settings.auto_fetch_max_chunks = orig
     print("  test_evict_over_budget ✅")
