@@ -101,18 +101,35 @@ def regen(tag: str, prompt: str, ids: list[str] | None) -> None:
         print(f"[{i}/{len(todo)}] {k} {row['sec']}s", flush=True)
 
 
-def rerun(tag: str, prompt: str, kind: str | None, ids: list[str] | None) -> None:
-    """검색부터 다시(검색 개선 실험). 근거도 새로 저장한다."""
+def apply_sets(sets: list[str] | None) -> dict:
+    """--set KEY=VALUE 로 이번 실행의 설정만 바꾼다(타입은 기존 설정값을 따름). 바꾼 값을 돌려준다."""
+    out = {}
+    for kv in sets or []:
+        k, v = kv.split("=", 1)
+        if not hasattr(settings, k):
+            raise SystemExit(f"알 수 없는 설정: {k}")
+        cur = getattr(settings, k)
+        val = (v not in ("0", "false", "False", "")) if isinstance(cur, bool) else type(cur)(v) if cur is not None else v
+        setattr(settings, k, val)
+        out[k] = val
+    return out
+
+
+def rerun(tag: str, prompt: str, kind: str | None, ids: list[str] | None,
+          verify: bool = False, sets: list[str] | None = None) -> None:
+    """검색부터 다시(검색 개선 실험). 근거도 새로 저장한다.
+    verify: 실제 서비스처럼 4단계 검증·재작성까지 켜고 검증 결과를 함께 저장(정확도 실험 §5.56)."""
     from rag.pipeline import RAGPipeline
 
     _local_only()
     settings.generation_prompt = prompt
-    settings.enable_verification = False
+    settings.enable_verification = verify
     settings.exclude_auto_papers = False
+    changed = apply_sets(sets)
     items = load_items()
     done = set(load_run(tag))
     todo = [k for k, v in items.items() if (not kind or v["kind"] == kind) and (not ids or k in ids) and k not in done]
-    print(f"{tag}: 전체 재실행, 프롬프트 {prompt}, 이번 {len(todo)}문항", flush=True)
+    print(f"{tag}: 전체 재실행, 프롬프트 {prompt}, 검증 {'켬' if verify else '끔'}, 설정 {changed}, 이번 {len(todo)}문항", flush=True)
     RUNS.mkdir(parents=True, exist_ok=True)
     pipe = RAGPipeline()
     for i, k in enumerate(todo, 1):
@@ -126,7 +143,14 @@ def rerun(tag: str, prompt: str, kind: str | None, ids: list[str] | None) -> Non
                "sources": [{"source": c.source, "title": c.title, "section": c.section, "kind": c.kind,
                             "content": c.content} for c in r.reranked],
                "citation_check": _check(r.answer, r.reranked, it["question"]),
-               "sec": round(time.perf_counter() - t, 1)}
+               "sec": round(time.perf_counter() - t, 1), "settings": {k: str(v) for k, v in changed.items()},
+               "regenerated": r.regenerated, "sub_questions": r.sub_questions,
+               "timings": {k: round(v, 2) for k, v in r.timings.items()}}
+        if r.verification is not None:
+            v = r.verification
+            row["verification"] = {"grounded": v.grounded, "faithfulness": v.faithfulness,
+                                   "completeness": v.completeness, "missed": v.missed,
+                                   "unsupported": v.unsupported_claims}
         with (RUNS / f"{tag}.jsonl").open("a", encoding="utf-8") as f:
             f.write(json.dumps(row, ensure_ascii=False) + "\n")
         exp = set(it.get("expected_sources") or [])
@@ -152,6 +176,15 @@ def signals(run: dict[str, dict], items: dict[str, dict]) -> dict:
     out = {"n": n, "refusal_phrase": len(refuse), "refusal_by_kind": dict(by_kind), "inference_marked": len(infer),
            "sentences": total, "citation_flag_rate": round(flagged / total, 3) if total else None,
            "avg_chars": round(sum(len(r["answer"]) for r in run.values()) / n)}
+    ver = [r["verification"] for r in run.values() if r.get("verification")]
+    if ver:  # 검증 v2(로컬 LLM) 판정 — 실행마다 같은 판정기라 변형끼리 비교용
+        out["verify_n"] = len(ver)
+        out["verify_grounded"] = round(sum(bool(v["grounded"]) for v in ver) / len(ver), 3)
+        out["verify_full"] = round(sum(v.get("completeness") == "full" for v in ver) / len(ver), 3)
+        out["verify_partial"] = round(sum(v.get("completeness") == "partial" for v in ver) / len(ver), 3)
+        out["verify_missed_items"] = sum(len(v.get("missed") or []) for v in ver)
+    out["regenerated"] = sum(bool(r.get("regenerated")) for r in run.values())
+    out["avg_sec"] = round(sum(r.get("sec", 0) for r in run.values()) / n, 1)
     srcs = [r for r in run.values() if r.get("sources")]
     if srcs:  # 다시 검색한 실행이면 기대 논문 재현율
         hit = tot = 0
@@ -217,12 +250,14 @@ def main() -> None:
     ap.add_argument("--dump")
     ap.add_argument("--out")
     ap.add_argument("--no-sources", action="store_true")
+    ap.add_argument("--verify", action="store_true", help="--rerun 에서 4단계 검증·재작성까지(실제 서비스와 같게)")
+    ap.add_argument("--set", action="append", help="--rerun 에서 설정 바꾸기 KEY=VALUE (여러 번)")
     a = ap.parse_args()
     ids = a.ids.split(",") if a.ids else None
     if a.regen:
         regen(a.regen, a.prompt, ids)
     elif a.rerun:
-        rerun(a.rerun, a.prompt, a.kind, ids)
+        rerun(a.rerun, a.prompt, a.kind, ids, verify=a.verify, sets=a.set)
     elif a.summary:
         summary(a.summary)
     elif a.dump:

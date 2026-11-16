@@ -8,6 +8,9 @@
 - 논문 원문 저장소(PostgreSQL, `rag/store/paperstore.py`): `DATABASE_URL` 이 있으면 수집할 때 PDF 원문·전문 텍스트·섹션 목록을 저장(arXiv·자동 수집·로컬 파일 모두). 표·그림·수식 처리는 저장된 PDF 를 먼저 씀. 기존 논문 채우기 `scripts/backfill_paper_store.py`, 의존성 `psycopg[binary]`
 - PostgreSQL 벡터 백엔드(`VECTOR_BACKEND=pgvector`, pgvector 확장): 청크 원문·메타데이터(JSONB)·벡터를 한 테이블(`PGVECTOR_TABLE`)에 두고 cosine HNSW 로 검색 — Chroma·Pinecone·PostgreSQL 중 선택. 이전 `scripts/migrate_vectors.py --to pgvector`, 비교 `eval/vector_parity.py --target pgvector`
 - PostgreSQL 로그인 정보를 `.env` 에 항목별로(`POSTGRES_HOST`·`PORT`·`DB`·`USER`·`PASSWORD`, 관리용 `POSTGRES_SUPERUSER_PASSWORD`) 넣을 수 있음 — `DATABASE_URL` 은 선택(있으면 우선). README 에 psql·GUI 로그인 방법
+- 다중 홉 질문에만 Thinking 켜기 `THINKING_AUTO`(기본 끔): 블라인드 짝 비교 두 번 합산 74:41(p=0.003)로 답이 낫지만 평균 응답 12초 → 42초(§5.56)
+- LLM 요청 시간 상한 `LLM_TIMEOUT`(기본 300초) — 넘으면 끊고 재시도
+- 정확도 실험 도구: `eval/retrieval_variants.py`(검색 설정 변형의 recall@1·3·5·MRR·다중 홉 전부 찾음), `eval/pairwise_judge.py`(두 실행의 답을 X/Y 로 섞어 블라인드 짝 비교·부호 검정), `scripts/rebuild_chunks.py`(원문 저장소 전문으로 청크 재구성, `CHUNK_SIZE`·`CHUNK_OVERLAP`·`CHUNK_UNIT=tokens`), `answer_quality.py --verify --set`
 
 ### Changed
 - `scripts/migrate_to_pinecone.py` → `scripts/migrate_vectors.py`(`--to pinecone|pgvector`)
@@ -15,6 +18,8 @@
 - 자동 수집은 원문 DB 를 먼저 찾고(벡터 DB 에 없는 저장 논문, 전문 검색 색인), 기준을 넘는 논문이 없을 때만 arXiv 를 검색. 전문도 원문 DB 에 있으면 PDF 를 다시 받지 않음. 진행 줄에 "원문 DB 에서 후보 n편" 표시
 
 ### Fixed
+- pgvector 검색이 코퍼스 밖 질문에서 오류로 끝나던 문제: 자동 수집 논문을 숨기는 래퍼가 후보 수를 4배씩 키워 `hnsw.ef_search` 상한(1000)을 넘음 → 1000 으로 묶고 넘치면 반복 스캔
+- 로컬 LLM 서버가 응답 없이 연결을 붙잡으면 무한 대기하던 문제(실험 중 3시간 멈춤) → `LLM_TIMEOUT`
 - 근거 5자리를 채우려고 관련도 0 근처 청크(예: 리랭크 0.0 인 kor_paper)가 근거에 들어가던 문제: 최소 리랭크 점수 `EVIDENCE_MIN_SCORE`(기본 0.002) 미만은 뺌(가장 높은 하나는 남김). 평가셋 294문항 recall@5·MRR 0.9700 그대로, 근거 평균 5 → 3.67개(§5.55)
 - pgvector·Pinecone 백엔드에서 표·그림·수식 백그라운드 처리 등이 멈추던 문제: 어댑터의 `get()` 이 Chroma 식 `get(include=[...])` 호출을 받지 못함 → 받도록 고침(pgvector 는 요청한 열만 읽음)
 

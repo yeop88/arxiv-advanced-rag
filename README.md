@@ -324,6 +324,7 @@ exam03_Advanced_RAG/
 │   ├── ingest_sample.py       # 번들 샘플 수집 (네트워크 불필요)
 │   ├── ingest_local.py        # 로컬 PDF/텍스트 폴더 수집 (한국어 논문)
 │   ├── migrate_vectors.py     # Chroma → Pinecone | pgvector 이전(벡터 그대로 복사, --to, --dry-run)
+│   ├── rebuild_chunks.py      # 원문 저장소 전문으로 청크를 다시 만들어 실험용 pgvector 테이블에(크기·단위·추출기 실험)
 │   ├── manage_auto_papers.py  # 자동 수집 논문(origin=auto) 목록·삭제
 │   ├── export_feedback.py     # 👎 받은 실제 질문 → 평가셋 후보
 │   ├── build_citation_graph.py # 인용 그래프(OpenAlex 참고문헌·피인용) 생성
@@ -346,6 +347,7 @@ exam03_Advanced_RAG/
 │   ├── human_set.py · human_agreement.py # 사람 판정 기준 세트 만들기 · 자동 판정과의 일치율
 │   ├── answer_quality.py · judge_eval.py # 같은 근거로 답 다시 쓰기(생성 프롬프트 비교) · 답변 판정기 비교
 │   ├── multihop_eval.py       # 다중 홉 분해(하위 질문별 근거 자리 보장) 검색 효과
+│   ├── retrieval_variants.py · pairwise_judge.py # 검색 설정 변형 비교(recall@1·3·5·MRR) · 두 실행의 답 블라인드 짝 비교(부호 검정)
 │   ├── nli_eval.py · followup_eval.py · title_candidates_eval.py # 함의 판정 · 보충 검색 · 원 논문 제목 후보 측정
 │   ├── contextual_header_eval.py # 본문 청크에 제목·섹션 머리말 붙이기 실험(1차 임베딩·BM25, 2차 리랭커 입력)
 │   └── vector_parity.py       # Chroma vs Pinecone | pgvector 검색 결과 동일성 검증(--target)
@@ -466,6 +468,9 @@ python scripts/backfill_paper_store.py --stats     # 저장 현황
 
   로컬 Thinking 은 기본 끔입니다. 웹 화면은 질문마다 `🧠 깊게 생각` 칩·설정 창의 선택을 보내므로 이 env 와 무관하고,
   env 값은 화면을 거치지 않는 스크립트에만 쓰입니다(평가 스크립트는 같은 조건을 위해 항상 끔).
+  `THINKING_AUTO=1` 이면 다중 홉(하위 질문 2개 이상) 질문의 답 생성에만 Thinking 을 켭니다(기본 끔).
+  블라인드 짝 비교에서 답이 더 나았지만(두 번 합산 74:41) 평균 응답이 12초 → 42초로 늘어납니다.
+  LLM 요청 하나가 `LLM_TIMEOUT`(기본 300초) 안에 끝나지 않으면 끊고 다시 시도합니다.
 
 - **로컬 모델(OpenAI 호환 서버)**: `LLM_PROVIDER=local`, `LOCAL_BASE_URL`, `LLM_MODEL`(서버의 모델 id)을 설정.
   응답에 섞인 `<think>…</think>` 추론은 자동 제거됩니다. 자세한 예시는 `.env.example` 참고.

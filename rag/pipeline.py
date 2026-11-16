@@ -24,6 +24,7 @@ rag/pipeline.py — 4단계를 하나로 엮는 오케스트레이터
 from __future__ import annotations
 
 import time
+from contextlib import contextmanager
 from typing import Any, Callable
 
 from config import settings
@@ -47,6 +48,24 @@ from rag.store.vectorstore import VectorStoreLike, load_vectorstore
 #   cite_check_done(summary, sec): 4b 문장 단위 인용 확인(LLM 없음)
 #   regenerate_start(attempt, unsupported) / error(stage, message)
 Progress = Callable[..., Any]
+
+
+def _auto_thinking(subs: list[str]):
+    """THINKING_AUTO 면 다중 홉(하위 질문 2개 이상) 질문의 생성에만 로컬 Thinking 을 켜는 context manager 를 돌려준다(§5.56)."""
+    on = settings.thinking_auto and settings.llm_provider == "local" and len(subs or []) >= 2
+
+    @contextmanager
+    def ctx():
+        if not on:
+            yield
+            return
+        old = settings.local_thinking
+        settings.local_thinking = "on"
+        try:
+            yield
+        finally:
+            settings.local_thinking = old
+    return ctx
 
 
 def sub_questions(question: str) -> list[str]:
@@ -204,13 +223,15 @@ class RAGPipeline:
         if not reranked:
             result.answer = "관련 근거를 찾지 못했습니다. 다른 질문을 시도하거나 논문을 더 수집하세요."
             return result
+        thinking = _auto_thinking(subs)
 
         # --- 3단계: 생성 (문맥화된 질문으로 자기완결적 답변) ---
         # 생성은 핵심 단계 → 실패하면 사용자에게 명확히 알리고 종료(크래시 방지)
         t = time.perf_counter()
         emit("generate_start", n_chunks=len(reranked))
         try:
-            answer = s3.generate(standalone, reranked, on_token=on_token, on_reasoning=on_reasoning)
+            with thinking():
+                answer = s3.generate(standalone, reranked, on_token=on_token, on_reasoning=on_reasoning)
         except Exception as e:  # noqa: BLE001
             result.answer = f"답변 생성 중 오류가 발생했습니다: {e}"
             result.timings["3_generate"] = time.perf_counter() - t
@@ -232,7 +253,8 @@ class RAGPipeline:
                 try:
                     if on_token:
                         on_token.restart()  # 다시 쓰는 답변은 처음부터 표시
-                    answer = s3.generate(standalone, reranked, on_token=on_token, on_reasoning=on_reasoning)
+                    with thinking():
+                        answer = s3.generate(standalone, reranked, on_token=on_token, on_reasoning=on_reasoning)
                 except Exception as e:  # noqa: BLE001
                     emit("error", stage="generate", message=str(e))  # 실패하면 첫 답변 유지
                 result.timings["3c_generate_again"] = time.perf_counter() - t
@@ -264,8 +286,9 @@ class RAGPipeline:
                     emit("regenerate_start", attempt=attempts + 1, unsupported=verification.unsupported_claims)
                     if on_token:
                         on_token.restart()
-                    answer = s3.regenerate(standalone, reranked, verification.unsupported_claims,
-                                           on_token=on_token, on_reasoning=on_reasoning)
+                    with thinking():
+                        answer = s3.regenerate(standalone, reranked, verification.unsupported_claims,
+                                               on_token=on_token, on_reasoning=on_reasoning)
                     t2 = time.perf_counter()
                     emit("verify_start", again=True)
                     verification = s4.verify(answer, reranked, question=standalone)

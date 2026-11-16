@@ -118,8 +118,9 @@ class Settings:
         return default if os.path.exists(default) else None
 
     # --- 청킹 ---
-    chunk_size: int = 1000
-    chunk_overlap: int = 150
+    chunk_size: int = int(os.getenv("CHUNK_SIZE", "1000"))
+    chunk_overlap: int = int(os.getenv("CHUNK_OVERLAP", "150"))
+    chunk_unit: str = os.getenv("CHUNK_UNIT", "chars")   # chars(글자 수) | tokens(임베딩 토크나이저 토큰 수)
 
     # --- 검색 파이프라인 파라미터 ---
     # 1차 벡터검색으로 넉넉히 뽑고(top_k_retrieve) → 리랭킹으로 추림(top_k_rerank)
@@ -247,6 +248,8 @@ class Settings:
     # 최종 근거의 최소 리랭크 점수(0 = 끔). 근거 5자리를 채우려고 관련도 0 근처 청크(예: kor_paper 0.0)가 들어가던 것을 뺀다.
     # 평가셋 294문항: 0.003 까지 recall@5 0.9700 그대로·근거 평균 5 → 3.6개, 가장 낮은 정답 근거가 0.0042 라 절반인 0.002(§5.55)
     evidence_min_score: float = float(os.getenv("EVIDENCE_MIN_SCORE", "0.002"))
+    # 다중 홉(하위 질문 2개 이상) 질문의 생성에만 로컬 Thinking 켬
+    thinking_auto: bool = os.getenv("THINKING_AUTO", "0") not in ("0", "false", "False")
     # 자동 수집 논문(origin=auto)을 검색에서 숨김. 지우지 않고 '기준 코퍼스'만으로 평가할 때 쓴다
     # (평가 스크립트의 --corpus base 가 켠다. 챗봇은 꺼 둔 채로 자동 수집분까지 검색)
     exclude_auto_papers: bool = os.getenv("EXCLUDE_AUTO_PAPERS", "0") in ("1", "true", "True")
@@ -267,6 +270,8 @@ class Settings:
     enable_llm_cache: bool = True          # 동일 프롬프트 응답 캐싱(SQLite) → 비용·속도 절감
     llm_cache_path: str = "./storage/llm_cache.db"
     llm_max_retries: int = 2               # API 일시 오류 시 자동 재시도 횟수
+    # 로컬 서버가 응답 없이 연결만 붙잡으면 무한 대기한다(실험 중 3시간 멈춤) → 초 단위 상한 후 재시도
+    llm_timeout: float = field(default_factory=lambda: float(os.getenv("LLM_TIMEOUT", "300")))
 
     def validate(self) -> None:
         """필수 API 키가 설정됐는지 확인."""

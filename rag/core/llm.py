@@ -152,6 +152,7 @@ def get_llm(light: bool = False, raw: bool = False) -> Runnable:
             temperature=settings.llm_temperature,
             max_tokens=settings.llm_max_tokens,
             max_retries=settings.llm_max_retries,
+            timeout=settings.llm_timeout,
             **extra,
         )
         return llm if raw else llm | RunnableLambda(_strip_reasoning)

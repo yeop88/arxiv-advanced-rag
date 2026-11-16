@@ -252,7 +252,12 @@ class PgVectorStore:
         def go(c):
             with c.transaction():
                 # HNSW 는 후보를 ef_search 개만 본다 → k 보다 넉넉히(근사 탐색 누락 방지)
-                c.execute("SELECT set_config('hnsw.ef_search', %s, true)", (str(max(100, 2 * k)),))
+                # ef_search 상한은 1000 — 자동 수집 논문을 숨기는 래퍼가 k 를 키우면(코퍼스 밖 질문) 넘어서 오류가 났다.
+                # k 가 그보다 크면 반복 스캔(pgvector 0.8+)으로 LIMIT 만큼 채운다.
+                ef = min(1000, max(100, 2 * k))
+                c.execute("SELECT set_config('hnsw.ef_search', %s, true)", (str(ef),))
+                if k > ef:
+                    c.execute("SELECT set_config('hnsw.iterative_scan', 'relaxed_order', true)")
                 return c.execute(
                     f"SELECT id, text, metadata, 1 - (embedding <=> %s::vector) FROM {self.table} "
                     f"ORDER BY embedding <=> %s::vector LIMIT %s", (vec, vec, k)).fetchall()

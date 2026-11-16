@@ -93,15 +93,23 @@ def split_into_sections(text: str) -> list[tuple[str, str]]:
     return result or [("body", text.strip())]
 
 
+def make_splitter():
+    """설정에 맞는 분할기. CHUNK_UNIT=tokens 면 임베딩 모델 토크나이저 기준(크기·겹침이 토큰 수), 기본은 글자 수."""
+    if settings.chunk_unit == "tokens":
+        from transformers import AutoTokenizer
+
+        return RecursiveCharacterTextSplitter.from_huggingface_tokenizer(
+            AutoTokenizer.from_pretrained(settings.embed_model),
+            chunk_size=settings.chunk_size, chunk_overlap=settings.chunk_overlap)
+    return RecursiveCharacterTextSplitter(chunk_size=settings.chunk_size, chunk_overlap=settings.chunk_overlap)
+
+
 def section_aware_split(text: str, base_metadata: dict) -> list[Document]:
     """전문 텍스트를 섹션으로 나눈 뒤, 섹션 안에서 청킹.
 
     각 청크 metadata 에 base_metadata + {"section": 섹션명} 을 부여.
     """
-    splitter = RecursiveCharacterTextSplitter(
-        chunk_size=settings.chunk_size,
-        chunk_overlap=settings.chunk_overlap,
-    )
+    splitter = make_splitter()
 
     docs: list[Document] = []
     for section_name, section_text in split_into_sections(text):

@@ -230,9 +230,35 @@ def test_pgvector_store() -> None:
         assert store.similarity_search("c", k=1)[0].id == ids[0]
         store.upsert_vectors(["id-b"], [[0.0, 0.0, 1.0]], ["본문 B2"], [{"source": "P2"}])
         assert store.count() == 2 and "본문 B2" in store.get()["documents"], "같은 ID 는 덮어쓰기"
+        # 자동 수집 논문을 숨기는 래퍼는 k 를 4배씩 키운다 — ef_search 상한(1000)을 넘는 k 도 오류 없이
+        assert len(store.similarity_search_with_relevance_scores("a", k=1500)) == 2
     finally:
         store.delete_all()
     print("  test_pgvector_store ✅ (DB 왕복 포함)")
+
+
+def test_auto_thinking() -> None:
+    """THINKING_AUTO: 로컬 provider·하위 질문 2개 이상일 때만 생성 동안 Thinking 을 켜고, 끝나면 원래 값으로 되돌린다."""
+    from config import settings
+    from rag.pipeline import _auto_thinking
+
+    saved = (settings.thinking_auto, settings.llm_provider, settings.local_thinking)
+    try:
+        settings.thinking_auto, settings.llm_provider, settings.local_thinking = True, "local", "off"
+        with _auto_thinking(["a", "b"])():
+            assert settings.local_thinking == "on"
+        assert settings.local_thinking == "off", "끝나면 되돌림"
+        with _auto_thinking(["a"])():
+            assert settings.local_thinking == "off", "단일 질문은 그대로"
+        settings.thinking_auto = False
+        with _auto_thinking(["a", "b"])():
+            assert settings.local_thinking == "off", "기본(끔)이면 그대로"
+        settings.thinking_auto, settings.llm_provider = True, "anthropic"
+        with _auto_thinking(["a", "b"])():
+            assert settings.local_thinking == "off", "로컬 provider 에서만"
+    finally:
+        settings.thinking_auto, settings.llm_provider, settings.local_thinking = saved
+    print("  test_auto_thinking ✅")
 
 
 def test_drop_weak_evidence() -> None:
@@ -1046,6 +1072,7 @@ def main() -> None:
     test_pgvector_store()
     test_paper_search_parsers()
     test_drop_weak_evidence()
+    test_auto_thinking()
     test_exclude_auto_view()
     test_auto_rerank_weight()
     test_auto_fetch_decisions()
