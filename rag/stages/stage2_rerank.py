@@ -345,13 +345,23 @@ def rerank(question: str, candidates: list[RetrievedChunk],
         # 관련도순 정렬된 후보에 MMR 적용 (내부에서 다양성 재배치)
         candidates = sorted(candidates, key=lambda c: c.rerank_score or 0.0, reverse=True)
         vectors = get_vectors(vectorstore, [c.id for c in candidates if c.id]) if vectorstore else None
-        return _mmr_select(
+        return drop_weak_evidence(_mmr_select(
             candidates, settings.top_k_rerank, settings.mmr_lambda,
             settings.same_source_penalty, settings.rerank_max_per_source, vectors=vectors,
-        )
+        ))
 
     ranked = sorted(candidates, key=lambda c: c.rerank_score or 0.0, reverse=True)
-    return ranked[: settings.top_k_rerank]
+    return drop_weak_evidence(ranked[: settings.top_k_rerank])
+
+
+def drop_weak_evidence(selected: list[RetrievedChunk]) -> list[RetrievedChunk]:
+    """관련도가 사실상 0인 근거는 빈 자리를 채우지 않고 뺀다(EVIDENCE_MIN_SCORE). 가장 높은 하나는 남긴다
+    — 근거가 약하다는 판단(자동 수집 신호·답변의 '근거 없음')은 그 점수로 한다."""
+    floor = settings.evidence_min_score
+    if floor <= 0 or not selected:
+        return selected
+    keep = [c for c in selected if (c.rerank_score or 0.0) >= floor]
+    return keep or [max(selected, key=lambda c: c.rerank_score or 0.0)]
 
 
 def ensure_sub_coverage(sub_questions: list[str], candidates: list[RetrievedChunk],

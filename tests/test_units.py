@@ -235,6 +235,26 @@ def test_pgvector_store() -> None:
     print("  test_pgvector_store ✅ (DB 왕복 포함)")
 
 
+def test_drop_weak_evidence() -> None:
+    """관련도 0 근처 근거는 빈 자리를 채우지 않고 빠진다. 전부 낮으면 가장 높은 하나만, 0 이면 끔."""
+    from config import settings
+    from rag.core.schemas import RetrievedChunk
+    from rag.stages.stage2_rerank import drop_weak_evidence
+
+    mk = lambda s, sc: RetrievedChunk(content=s, source=s, title=s, rerank_score=sc)  # noqa: E731
+    sel = [mk("a", 0.69), mk("b", 0.2), mk("kor", 0.0), mk("c", 0.0042), mk("d", 0.0001)]
+    floor0 = settings.evidence_min_score
+    try:
+        settings.evidence_min_score = 0.002
+        assert [c.source for c in drop_weak_evidence(sel)] == ["a", "b", "c"]
+        assert [c.source for c in drop_weak_evidence([mk("x", 0.0), mk("y", 0.001)])] == ["y"], "가장 높은 하나는 남김"
+        settings.evidence_min_score = 0.0
+        assert len(drop_weak_evidence(sel)) == 5, "0 이면 끔"
+    finally:
+        settings.evidence_min_score = floor0
+    print("  test_drop_weak_evidence ✅")
+
+
 def test_exclude_auto_view() -> None:
     """기준 코퍼스 보기: 자동 수집 청크를 숨긴 결과가 '처음부터 그 청크가 없던 스토어'와 같아야 한다."""
     import tempfile
@@ -1025,6 +1045,7 @@ def main() -> None:
     test_postgres_url()
     test_pgvector_store()
     test_paper_search_parsers()
+    test_drop_weak_evidence()
     test_exclude_auto_view()
     test_auto_rerank_weight()
     test_auto_fetch_decisions()

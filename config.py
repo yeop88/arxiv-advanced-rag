@@ -244,6 +244,9 @@ class Settings:
     visual_from_top_papers: int = int(os.getenv("VISUAL_FROM_TOP_PAPERS", "1"))
     # 표·그림 청크가 근거에 들어가는 최소 리랭크 점수(0 = 제한 없음). §5.37. 리랭커 제목 붙이기와 함께 0.1→0.2(§5.42)
     visual_min_score: float = float(os.getenv("VISUAL_MIN_SCORE", "0.2"))
+    # 최종 근거의 최소 리랭크 점수(0 = 끔). 근거 5자리를 채우려고 관련도 0 근처 청크(예: kor_paper 0.0)가 들어가던 것을 뺀다.
+    # 평가셋 294문항: 0.003 까지 recall@5 0.9700 그대로·근거 평균 5 → 3.6개, 가장 낮은 정답 근거가 0.0042 라 절반인 0.002(§5.55)
+    evidence_min_score: float = float(os.getenv("EVIDENCE_MIN_SCORE", "0.002"))
     # 자동 수집 논문(origin=auto)을 검색에서 숨김. 지우지 않고 '기준 코퍼스'만으로 평가할 때 쓴다
     # (평가 스크립트의 --corpus base 가 켠다. 챗봇은 꺼 둔 채로 자동 수집분까지 검색)
     exclude_auto_papers: bool = os.getenv("EXCLUDE_AUTO_PAPERS", "0") in ("1", "true", "True")
