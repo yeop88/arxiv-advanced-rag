@@ -60,10 +60,14 @@ export function SettingsDialog({ onClose, config, status, offline, options, onOp
       </section>
       <section className="dlg-section">
         <h3>소스 코드</h3>
-        <p className="muted small">이 챗봇의 전체 코드를 GitHub 에서 받을 수 있습니다.</p>
+        <p className="muted small">이 챗봇의 전체 코드를 GitHub 에서 받을 수 있습니다. 릴리즈는 버전별로 고정된 코드와 변경 내역입니다.</p>
         <p>
           <a href={REPO_URL} target="_blank" rel="noopener noreferrer">
             {REPO_URL.replace("https://", "")}
+          </a>
+          {" · "}
+          <a href={`${REPO_URL}/releases/latest`} target="_blank" rel="noopener noreferrer">
+            최신 릴리즈
           </a>
           {" · "}
           <a href={`${REPO_URL}/archive/refs/heads/main.zip`} rel="noopener noreferrer">
