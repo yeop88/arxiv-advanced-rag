@@ -55,24 +55,33 @@ def paper_meta(result: arxiv.Result) -> dict:
     }
 
 
-def download_pdf_text(result: arxiv.Result, session, timeout: int = 60) -> str:
+def pdf_to_text(pdf: bytes) -> str:
+    """PDF 바이트 → 텍스트(pypdf)."""
+    from pypdf import PdfReader
+
+    reader = PdfReader(io.BytesIO(pdf))
+    text = "\n".join(page.extract_text() or "" for page in reader.pages)
+    # PDF 에서 나온 깨진 문자(짝 없는 서로게이트 등)는 임베딩 토크나이저 오류를 일으키므로 제거
+    return text.encode("utf-8", "ignore").decode("utf-8").replace("\x00", "")
+
+
+def download_pdf_text(result: arxiv.Result, session, timeout: int = 60, out: dict | None = None) -> str:
     """논문 PDF 를 받아 텍스트 추출. 실패하면 빈 문자열.
 
     arxiv 4.x 에는 Result.download_pdf 가 없어 pdf_url 을 직접 받는다.
     client 의 세션(session)을 재사용해 프록시 SSL(CA 묶음) 설정을 그대로 쓴다.
+    out 을 주면 받은 PDF 바이트를 out["pdf"] 에 넣는다(원문 저장소용).
     """
-    from pypdf import PdfReader
-
     url = getattr(result, "pdf_url", None)
     if not url:
         return ""
     try:
         resp = session.get(url, timeout=timeout)
         resp.raise_for_status()
-        reader = PdfReader(io.BytesIO(resp.content))
-        text = "\n".join(page.extract_text() or "" for page in reader.pages)
-        # PDF 에서 나온 깨진 문자(짝 없는 서로게이트 등)는 임베딩 토크나이저 오류를 일으키므로 제거
-        return text.encode("utf-8", "ignore").decode("utf-8").replace("\x00", "")
+        text = pdf_to_text(resp.content)
+        if out is not None:
+            out["pdf"] = resp.content
+        return text
     except Exception as e:  # noqa: BLE001
         print(f"    (PDF 실패, 초록으로 대체: {e})")
         return ""
@@ -282,12 +291,19 @@ def result_to_chunks(result: arxiv.Result, session, fulltext: bool,
     """논문 1편 → 청크 목록. (청크, 전문 사용 여부) 반환.
 
     fulltext: PDF 전문을 섹션 인식 청킹(각 청크에 section 메타). 실패하면 초록으로 대체.
+    DATABASE_URL 이 있으면 PDF 원문과 전문(실패하면 초록)을 원문 저장소(PostgreSQL)에도 남긴다.
     """
+    from rag.store import paperstore
+
     meta = {**paper_meta(result), **(extra_meta or {})}
     abstract = f"{result.title}\n\n{result.summary}"
     if fulltext:
-        text = download_pdf_text(result, session)
+        got: dict = {}
+        text = download_pdf_text(result, session, out=got)
+        paperstore.save(meta, text or abstract, bool(text), pdf=got.get("pdf"),
+                        pdf_url=getattr(result, "pdf_url", "") or "")
         if text:
             return section_aware_split(text, meta), True
         return section_aware_split(abstract, meta), False
+    paperstore.save(meta, abstract, False)
     return flat_splitter().split_documents([Document(page_content=abstract, metadata=meta)]), False

@@ -289,7 +289,8 @@ exam03_Advanced_RAG/
 │   │   └── citation_check.py  # 4b 문장 단위 인용 확인(리랭커, LLM 없음)
 │   ├── store/
 │   │   ├── vectorstore.py     # 벡터 DB 로드/구축 (Chroma | Pinecone 어댑터)
-│   │   └── docstore.py        # 원문 보관소(JSONL) — Pinecone 사용 시 BM25·본문 기준
+│   │   ├── docstore.py        # 청크 원문 보관소(JSONL) — Pinecone 사용 시 BM25·본문 기준
+│   │   └── paperstore.py      # 논문 PDF 원문·전문 저장소(PostgreSQL, 선택)
 │   ├── ingest/
 │   │   ├── arxiv_source.py    # arXiv·OpenAlex 검색, PDF 전문 파싱
 │   │   ├── chunking.py        # 섹션 인식 청킹 (영문/국문 섹션 감지)
@@ -378,6 +379,32 @@ python eval/vector_parity.py                      # 평가셋 전체로 Chroma �
 ```
 키가 없을 때는 `python eval/vector_parity.py --fake` 로 메모리 내 대역에 같은 벡터를 넣어 어댑터를 검증할 수 있습니다.
 회사망 프록시 때문에 `CERTIFICATE_VERIFY_FAILED` 가 나면 `python scripts/export_ca_bundle.py` 를 한 번 실행하세요(인증서 검증은 유지).
+
+---
+
+## 🐘 논문 원문 저장소 (PostgreSQL, 선택)
+
+벡터 DB 에는 1,000자로 자른 청크만 남습니다. `DATABASE_URL` 을 설정하면 수집할 때 **PDF 원문과 추출한 전문 텍스트**를
+PostgreSQL 에도 저장해, 청킹 방식을 바꾸거나 표·그림·수식을 다시 만들 때 arXiv 에서 다시 받지 않아도 됩니다.
+
+| 테이블 | 내용 |
+|---|---|
+| `papers` | 논문 정보(source=arXiv ID 또는 파일 이름, 제목·저자·날짜·url·origin) |
+| `paper_texts` | 전문 텍스트, 전문 여부(PDF 실패 시 초록), 섹션 목록(이름·글자 수) |
+| `paper_pdfs` | PDF 원본(bytea)·크기·sha256 |
+
+- arXiv 수집(`ingest_arxiv.py`)·챗봇 자동 수집·로컬 파일 수집(`ingest_local.py`)이 모두 저장하고, 표·그림·수식 처리는 저장된 PDF 를 먼저 씁니다.
+- 테이블은 처음 연결할 때 자동으로 만듭니다. DB 에 연결하지 못하면 경고 한 번만 내고 수집은 계속합니다.
+- 자동 수집 예산 정리로 벡터 DB 에서 논문을 지워도 원문은 남깁니다.
+
+```bash
+# PostgreSQL 설치 후 DB·계정 생성 (예: psql -U postgres)
+#   CREATE ROLE arxiv_rag LOGIN PASSWORD '...';  CREATE DATABASE arxiv_rag OWNER arxiv_rag;
+# .env 에 DATABASE_URL=postgresql://arxiv_rag:<비밀번호>@localhost:5432/arxiv_rag
+python scripts/backfill_paper_store.py --limit 3   # 시험 삼아 3편
+python scripts/backfill_paper_store.py             # 기존 논문 전부(이미 저장한 것은 건너뜀, LLM 안 씀)
+python scripts/backfill_paper_store.py --stats     # 저장 현황
+```
 
 ---
 

@@ -4,6 +4,9 @@
 
 ## [Unreleased]
 
+### Added
+- 논문 원문 저장소(PostgreSQL, `rag/store/paperstore.py`): `DATABASE_URL` 이 있으면 수집할 때 PDF 원문·전문 텍스트·섹션 목록을 저장(arXiv·자동 수집·로컬 파일 모두). 표·그림·수식 처리는 저장된 PDF 를 먼저 씀. 기존 논문 채우기 `scripts/backfill_paper_store.py`, 의존성 `psycopg[binary]`
+
 ## [1.0.0] - 2026-11-16
 
 첫 릴리즈. 4단계 RAG(질의변환 → 리랭킹 → 생성 → 검증)와 FastAPI + React 챗봇, 자동 수집·표·그림·수식·연구 도구·사람 판정까지.

@@ -84,10 +84,15 @@ def enrich(src: str, meta: dict, vs, kinds: tuple[str, ...], progress=None, guar
     from rag.ingest import visual
     from rag.ingest.arxiv_source import http_session
 
-    resp = http_session().get(f"https://arxiv.org/pdf/{src}", timeout=90)
-    resp.raise_for_status()
+    from rag.store import paperstore
+
+    pdf = paperstore.get_pdf(src)   # 원문 저장소에 있으면 다시 받지 않는다
+    if pdf is None:
+        resp = http_session().get(f"https://arxiv.org/pdf/{src}", timeout=90)
+        resp.raise_for_status()
+        pdf = resp.content
     t0 = time.perf_counter()
-    items = visual.extract(resp.content, kinds=kinds, progress=progress, guard=guard or nullcontext)
+    items = visual.extract(pdf, kinds=kinds, progress=progress, guard=guard or nullcontext)
     keep = {k: meta[k] for k in ("source", "title", "url", "published", "origin", "fetched_at", "fetch_query") if k in meta}
     docs = [Document(page_content=titled(meta.get("title", ""), it.text),
                      metadata={**keep, "section": it.label, "kind": it.kind, "page": it.page}) for it in items]

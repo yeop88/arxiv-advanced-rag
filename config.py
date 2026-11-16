@@ -78,6 +78,12 @@ class Settings:
     pinecone_namespace: str = os.getenv("PINECONE_NAMESPACE", "arxiv")
     pinecone_cloud: str = os.getenv("PINECONE_CLOUD", "aws")
     pinecone_region: str = os.getenv("PINECONE_REGION", "us-east-1")
+
+    # --- 논문 원문 저장소 (PostgreSQL, rag/store/paperstore.py) ---
+    # 수집한 논문의 PDF 원문과 추출한 전문 텍스트를 보관(청크만 있으면 재청킹·재처리 때 다시 받아야 해서).
+    # 비어 있으면 저장하지 않는다(수집은 그대로 동작). 예: postgresql://user:pw@localhost:5432/arxiv_rag
+    database_url: str = os.getenv("DATABASE_URL", "")
+    paper_store_pdf: bool = os.getenv("PAPER_STORE_PDF", "1") not in ("0", "false", "False")  # 0 이면 전문 텍스트만
     # 원문 보관소: Pinecone 사용 시 BM25·본문 조회의 기준(원격 DB 에서 전체 문서를 꺼내기 어렵기 때문)
     docstore_path: str = os.getenv("DOCSTORE_PATH", "./storage/docstore.jsonl")
     # 사내 프록시 CA 묶음(PEM). 비우면 storage/ca_bundle.pem 이 있을 때 자동 사용

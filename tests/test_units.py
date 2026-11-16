@@ -851,6 +851,56 @@ def test_sub_coverage() -> None:
     print("  test_sub_coverage ✅")
 
 
+def test_paper_store() -> None:
+    """원문 저장소: 꺼져 있으면 조용히 건너뛰고, 수집은 PDF·전문을 넘기며, DB 가 있으면 저장·조회가 왕복한다."""
+    from types import SimpleNamespace
+
+    from config import settings
+    from rag.ingest import arxiv_source as A
+    from rag.store import paperstore
+
+    url0 = settings.database_url
+    try:
+        settings.database_url = ""
+        assert paperstore.save({"source": "x"}, "t", True) is False and paperstore.get_pdf("x") is None
+
+        # 수집 경로: PDF 를 받으면 바이트와 전문을, 실패하면 초록(is_fulltext=False)을 저장소에 넘긴다
+        calls = []
+        save0, dl0 = paperstore.save, A.download_pdf_text
+        paperstore.save = lambda meta, text, full, pdf=None, **k: calls.append((meta["source"], text, full, pdf))
+        r = SimpleNamespace(title="T", summary="S", pdf_url="u", entry_id="e", authors=[],
+                            published=__import__("datetime").date(2024, 1, 1), get_short_id=lambda: "2401.00001v1")
+
+        def fake_dl(result, session, timeout=60, out=None):
+            out["pdf"] = b"%PDF"
+            return "1 Introduction\nbody text"
+        try:
+            A.download_pdf_text = fake_dl
+            A.result_to_chunks(r, None, True)
+            A.download_pdf_text = lambda *a, **k: ""
+            A.result_to_chunks(r, None, True)
+        finally:
+            paperstore.save, A.download_pdf_text = save0, dl0
+        assert calls[0][2] is True and calls[0][3] == b"%PDF" and "body text" in calls[0][1], calls[0]
+        assert calls[1][2] is False and calls[1][3] is None and calls[1][1] == "T\n\nS", calls[1]
+    finally:
+        settings.database_url = url0
+
+    if not url0:
+        print("  test_paper_store ✅ (DATABASE_URL 없음 — DB 왕복은 건너뜀)")
+        return
+    src = "test-paperstore-0000"
+    try:
+        assert paperstore.save({"source": src, "title": "t"}, "1 Method\nfull", True, pdf=b"%PDF-1")
+        assert paperstore.save({"source": src, "title": "t"}, "abstract only", False), "초록만이면 전문을 덮지 않음"
+        assert paperstore.get_text(src) == "1 Method\nfull" and paperstore.get_pdf(src) == b"%PDF-1"
+        assert src in paperstore.stored_sources(with_pdf=True)
+    finally:
+        with paperstore.connect() as conn:
+            conn.execute("DELETE FROM papers WHERE source = %s", (src,))
+    print("  test_paper_store ✅ (DB 왕복 포함)")
+
+
 def main() -> None:
     print("단위 테스트 실행:")
     test_rrf()
@@ -878,6 +928,7 @@ def main() -> None:
     test_sub_coverage()
     test_original_signal()
     test_relation_claim()
+    test_paper_store()
     print("모든 단위 테스트 통과 ✅")
 
 

@@ -26,6 +26,7 @@ from langchain_core.documents import Document  # noqa: E402
 
 from config import settings  # noqa: E402
 from rag.ingest.chunking import section_aware_split  # noqa: E402
+from rag.store import paperstore  # noqa: E402
 from rag.store.vectorstore import build_vectorstore, reset_vectorstore  # noqa: E402
 
 SUPPORTED = {".pdf", ".txt", ".md"}
@@ -58,6 +59,9 @@ def load_dir(directory: Path) -> list[Document]:
         # 파일명을 제목/출처로. 첫 비어있지 않은 줄을 제목 후보로 쓸 수도 있음.
         title = path.stem
         meta = {"source": path.name, "title": title, "origin": "local"}
+        is_pdf = path.suffix.lower() == ".pdf"
+        paperstore.save(meta, text, True, pdf=path.read_bytes() if is_pdf else None,
+                        extractor="pypdf" if is_pdf else "text")   # DATABASE_URL 이 있을 때만 저장
         paper_chunks = section_aware_split(text, meta)
         chunks.extend(paper_chunks)
         n_sec = len({c.metadata.get("section") for c in paper_chunks})
