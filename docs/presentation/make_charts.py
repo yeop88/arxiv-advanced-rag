@@ -104,19 +104,23 @@ def corpus_growth() -> None:
     ax.set_xlabel("자동 수집 청크 수 (수동 2,436청크 기준)")
     ax.set_ylabel("자동 수집 제외 대비 변화")
     ax.legend(frameon=False, loc="upper right")
-    ax.set_title("코퍼스가 커질수록 검색 품질이 조금씩 내려간다")
+    ax.set_title("코퍼스가 커질수록 검색 품질이 조금씩 내려간다 (11-11 측정)")
     save(fig, "03_corpus_growth.png")
 
 
 def auto_fetch_progress() -> None:
-    """자동 수집 개선 과정과 목표: 원 논문 수집(§5.16 12문항 → §5.51·§5.53 20문항), 코퍼스 안 수집 신호(§5.16·§5.17 실전 → §5.53 B1 재판정)."""
+    """자동 수집 개선 과정과 목표.
+    원 논문 수집: 같은 20문항(기대 논문이 있는 문항) — §5.17 45% → §5.29 v4 50% → §5.51 v7 55% → §5.53 v9 75%.
+    (§5.16 의 2/12=17% 는 12문항 기준이라 넣지 않는다.)
+    코퍼스 안 수집 신호: §5.16·§5.17 은 실전 시험(hard 30), §5.53 은 B1 기록 재판정 — 측정 방식이 다르다.
+    같은 재판정 기준으로는 3차 신호 전 10%(3/30, §5.31) → 후 13%(4/30)."""
     fig, axes = plt.subplots(1, 2, figsize=(10, 4.6))
     panels = [
-        (axes[0], "원 논문 수집률 (높을수록 좋음)", ["처음", "재시험 v7", "최종 v9"], [17, 55, 75], 60, "목표 60%"),
-        (axes[1], "코퍼스 안 질문의 수집 신호 (낮을수록 좋음)", ["처음", "개선 후", "최종"], [47, 23, 13], 5, "목표 5%"),
+        (axes[0], "원 논문 수집률 — 같은 20문항 (높을수록 좋음)", ["§5.17", "v4", "v7", "최종 v9"], [45, 50, 55, 75], 60, "목표 60%"),
+        (axes[1], "코퍼스 안 질문의 수집 신호 (낮을수록 좋음)", ["실전 §5.16", "실전 §5.17", "재판정 §5.53"], [47, 23, 13], 5, "목표 5%"),
     ]
     for ax, title, labels, vals, target, tlab in panels:
-        bars = ax.bar(labels, vals, width=0.5, color=[AXIS, BLUE, BLUE], edgecolor=SURFACE, linewidth=2)
+        bars = ax.bar(labels, vals, width=0.5, color=[AXIS] * (len(vals) - 2) + [BLUE, BLUE], edgecolor=SURFACE, linewidth=2)
         for b, v in zip(bars, vals):
             ax.text(b.get_x() + b.get_width() / 2, v + 1.5, f"{v}%", ha="center", color=INK, fontsize=12)
         ax.axhline(target, color=CRITICAL, lw=1.2, ls="--")
@@ -125,6 +129,7 @@ def auto_fetch_progress() -> None:
         ax.set_yticks([0, 20, 40, 60, 80], ["0", "20", "40", "60", "80%"])
         ax.grid(axis="x", visible=False)
         ax.set_title(title, fontsize=13)
+    axes[1].text(1.0, -16, "§5.53 은 측정 방식이 다름 — 같은 재판정 기준 3차 신호 전 10%", ha="center", color=INK2, fontsize=9)
     fig.suptitle("자동 수집: 원 논문 수집은 목표 달성, 코퍼스 안 신호는 아직 미달", x=0.02, ha="left", fontsize=16, fontweight="bold")
     save(fig, "04_auto_fetch_progress.png")
 
@@ -176,7 +181,7 @@ def kpi_table() -> None:
         elif c == 3:
             ok = cell.get_text().get_text() == "통과"
             cell.set_text_props(color="#006300" if ok else CRITICAL, weight="bold")
-    ax.set_title("자동 수집 실전 시험 기준 (8개 중 7개 통과)", loc="left")
+    ax.set_title("자동 수집 실전 시험 기준 (8개 중 7개 통과) — recall·MRR·faithfulness 는 11-11 측정", loc="left")
     save(fig, "06_kpi_table.png")
 
 
@@ -292,7 +297,7 @@ def answer_quality() -> None:
     a2.set_ylabel("맞음")
     a2.grid(axis="x", visible=False)
     a2.set_title("그중 다중 홉 18문항", pad=34)
-    fig.suptitle("답변 품질 개선 — 판정은 Claude 초안(사람 검토 전)", x=0.02, ha="left", fontsize=13, color=INK2)
+    fig.suptitle("답변 품질 개선 — 판정은 Claude (사람 판정 10문항과는 5/10 일치, κ 0.00 — §5.52)", x=0.02, ha="left", fontsize=13, color=INK2)
     save(fig, "10_answer_quality.png")
 
 

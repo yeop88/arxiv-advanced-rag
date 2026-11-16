@@ -1,7 +1,5 @@
 # 📚 arXiv Advanced RAG — 학술논문 어시스턴트
 
-[![tests](https://github.com/yeop88/arxiv-advanced-rag/actions/workflows/tests.yml/badge.svg)](https://github.com/yeop88/arxiv-advanced-rag/actions/workflows/tests.yml)
-
 **질의 변환 → 리랭킹 → 생성 → 검증** 4단계 RAG 파이프라인을 각 단계가 코드에서
 **눈에 보이도록** 분리해 구현한 학습용 + 제품급 품질의 **비영리** 프로젝트입니다.
 
@@ -140,7 +138,7 @@ BM25 자리에 학습된 모델을 쓰는 방식도 있습니다. SPLADE 같은 
 
 점수순으로만 고르면 한 논문의 청크가 상위를 독점해, 여러 논문을 비교하는 질문에서 근거가 한쪽으로 쏠립니다.
 MMR은 관련도(`λ=0.6`)와 이미 고른 청크와의 유사도를 함께 고려해 고르고, 한 논문은 최대 2개까지만 뽑습니다.
-다중 홉 질문에서 recall@5가 0.73에서 0.80으로 올랐습니다.
+다중 홉 질문에서 recall@5가 0.733에서 0.800으로(도입 시 hard 10문항), 490편 코퍼스 다중 홉 30문항 격자 탐색에서는 0.794에서 0.850으로 올랐습니다(PROGRESS §5.6).
 
 유사도 계산에는 벡터 DB에 저장된 벡터를 꺼내 쓰므로 새로 임베딩하지 않습니다. 이 변경으로 리랭크와 MMR 구간이 평균 4.74초에서 0.06초로 줄었습니다.
 
@@ -350,7 +348,6 @@ exam03_Advanced_RAG/
 │   ├── contextual_header_eval.py # 본문 청크에 제목·섹션 머리말 붙이기 실험(1차 임베딩·BM25, 2차 리랭커 입력)
 │   └── vector_parity.py       # Chroma vs Pinecone 검색 결과 동일성 검증
 ├── tests/                     # 단위·오프라인·서버(SSE) 테스트 (fake_pinecone.py: Pinecone 대역)
-├── .github/workflows/tests.yml # 푸시마다 회귀 검사(모델·DB 없이 도는 테스트 + 화면 빌드)
 ├── notebooks/
 │   └── advanced_rag_walkthrough.ipynb  # 4단계 셀 단위 학습 노트북
 └── docs/
@@ -360,8 +357,8 @@ exam03_Advanced_RAG/
 ```
 
 테스트: `python tests/test_units.py` · `python tests/test_pipeline_offline.py` · `python tests/test_server.py` ·
-`cd frontend && npm test`. 푸시마다 GitHub Actions(`.github/workflows/tests.yml`)가 모델·DB 없이 도는 단위·서버·청킹·화면 테스트와 빌드를 실행합니다
-(`test_pipeline_offline.py`는 실제 벡터 DB 와 모델이 필요해 로컬에서만).
+`cd frontend && npm test`. 테스트는 로컬에서 실행합니다(GitHub Actions 는 쓰지 않음, 2026-11-16).
+`test_pipeline_offline.py`는 실제 벡터 DB 와 모델이 필요합니다.
 
 ---
 
@@ -390,7 +387,7 @@ python eval/vector_parity.py                      # 평가셋 전체로 Chroma �
 
 - `query_transform_mode`: 기본 `multi_query`(111문항 검색 A/B 재검토 근거, [docs/ADR-001](docs/ADR-001-query-transform-default.md)) ↔ `hyde` ↔ `decompose` 비교
 - `top_k_retrieve` / `top_k_rerank`: 리랭킹이 실제로 품질을 올리는지
-- `rerank_diversity` / `rerank_max_per_source`: 다양성 리랭킹(MMR) on/off — 다중 홉 질문에서 한 논문 쏠림 방지(recall@5 0.73→0.80)
+- `rerank_diversity` / `rerank_max_per_source`: 다양성 리랭킹(MMR) on/off — 다중 홉 질문에서 한 논문 쏠림 방지(다중 홉 30문항 recall@5 0.794→0.850, §5.6)
 - `enable_verification`: 검증 on/off 로 환각률 비교
 - `MULTIHOP_DECOMPOSE`(기본 켬): 질문을 하위 질문으로 나눠 검색하고 하위 질문마다 맞는 논문이 근거에 하나는 들어가게 함(가벼운 LLM 1회 추가 — 다중 홉 기대 논문 재현율 0.925→0.970)
 - `GENERATION_PROMPT`(기본 `v2`): 질문 일부만 근거에 있으면 그 부분은 답하고 빠진 부분만 "찾을 수 없습니다"로 밝힘, 두 근거를 이은 판단은 `(추론)` 표시. `v1` 은 이전 프롬프트
