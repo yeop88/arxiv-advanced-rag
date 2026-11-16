@@ -313,7 +313,7 @@ class PgVectorStore:
 
 def _load_pgvector(create: bool = False) -> PgVectorStore:
     if not settings.database_url:
-        raise RuntimeError("VECTOR_BACKEND=pgvector 는 DATABASE_URL(PostgreSQL 접속 주소)이 필요합니다.")
+        raise RuntimeError("VECTOR_BACKEND=pgvector 는 PostgreSQL 로그인 정보(.env 의 POSTGRES_* 또는 DATABASE_URL)가 필요합니다.")
     store = PgVectorStore(settings.database_url, settings.pgvector_table, get_embeddings())
     if not create and not store.exists():
         raise FileNotFoundError(

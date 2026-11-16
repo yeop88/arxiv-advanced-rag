@@ -11,7 +11,7 @@ rag/store/paperstore.py — 논문 원문(PDF)·전문 텍스트 저장소 (Post
   paper_texts : 추출한 전문 텍스트, 전문 여부(실패 시 초록), 섹션 목록(이름·글자 수)
   paper_pdfs  : PDF 원본(bytea), 크기, sha256 — 무거워서 따로 둔다(논문 목록 조회가 PDF 를 읽지 않게)
 
-DATABASE_URL 이 비어 있거나 DB 에 연결하지 못하면 저장을 건너뛰고 경고만 한다(수집은 계속).
+PostgreSQL 로그인 정보(.env 의 POSTGRES_* 또는 DATABASE_URL)가 없거나 DB 에 연결하지 못하면 저장을 건너뛰고 경고만 한다(수집은 계속).
 벡터 DB 에서 논문을 지워도(자동 수집 예산 정리) 원문은 남긴다 — 다시 넣을 때 받지 않아도 되게.
 """
 from __future__ import annotations

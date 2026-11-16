@@ -15,6 +15,19 @@ from dotenv import load_dotenv
 load_dotenv()  # .env 로드
 
 
+def _postgres_url() -> str:
+    """항목별 PostgreSQL 로그인 정보(.env 의 POSTGRES_*) → 접속 URL. 사용자·DB 이름이 없으면 빈 문자열(저장소 끔)."""
+    from urllib.parse import quote
+
+    user, db = os.getenv("POSTGRES_USER", ""), os.getenv("POSTGRES_DB", "")
+    if not (user and db):
+        return ""
+    pw = os.getenv("POSTGRES_PASSWORD", "")
+    auth = quote(user, safe="") + (":" + quote(pw, safe="") if pw else "")
+    host, port = os.getenv("POSTGRES_HOST", "localhost"), os.getenv("POSTGRES_PORT", "5432")
+    return f"postgresql://{auth}@{host}:{port}/{quote(db, safe='')}"
+
+
 @dataclass
 class Settings:
     # --- LLM 백엔드 ---
@@ -84,7 +97,13 @@ class Settings:
     # --- 논문 원문 저장소 (PostgreSQL, rag/store/paperstore.py) ---
     # 수집한 논문의 PDF 원문과 추출한 전문 텍스트를 보관(청크만 있으면 재청킹·재처리 때 다시 받아야 해서).
     # 비어 있으면 저장하지 않는다(수집은 그대로 동작). 예: postgresql://user:pw@localhost:5432/arxiv_rag
-    database_url: str = os.getenv("DATABASE_URL", "")
+    # 접속 정보는 항목별(POSTGRES_HOST·PORT·DB·USER·PASSWORD)로 넣거나 DATABASE_URL 한 줄로 넣는다(둘 다 있으면 URL 우선).
+    postgres_host: str = os.getenv("POSTGRES_HOST", "localhost")
+    postgres_port: str = os.getenv("POSTGRES_PORT", "5432")
+    postgres_db: str = os.getenv("POSTGRES_DB", "")
+    postgres_user: str = os.getenv("POSTGRES_USER", "")
+    postgres_password: str = os.getenv("POSTGRES_PASSWORD", "")
+    database_url: str = field(default_factory=lambda: os.getenv("DATABASE_URL", "") or _postgres_url())
     paper_store_pdf: bool = os.getenv("PAPER_STORE_PDF", "1") not in ("0", "false", "False")  # 0 이면 전문 텍스트만
     # 원문 보관소: Pinecone 사용 시 BM25·본문 조회의 기준(원격 DB 에서 전체 문서를 꺼내기 어렵기 때문)
     docstore_path: str = os.getenv("DOCSTORE_PATH", "./storage/docstore.jsonl")
@@ -257,7 +276,7 @@ class Settings:
         if self.vector_backend == "pinecone" and not self.pinecone_api_key:
             raise RuntimeError("PINECONE_API_KEY 가 설정되지 않았습니다. .env 를 확인하세요.")
         if self.vector_backend == "pgvector" and not self.database_url:
-            raise RuntimeError("VECTOR_BACKEND=pgvector 는 DATABASE_URL 이 필요합니다. .env 를 확인하세요.")
+            raise RuntimeError("VECTOR_BACKEND=pgvector 는 PostgreSQL 로그인 정보(POSTGRES_* 또는 DATABASE_URL)가 필요합니다. .env 를 확인하세요.")
 
 
 # 싱글턴처럼 import 해서 사용: from config import settings

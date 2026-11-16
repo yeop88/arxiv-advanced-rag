@@ -7,6 +7,7 @@
 ### Added
 - 논문 원문 저장소(PostgreSQL, `rag/store/paperstore.py`): `DATABASE_URL` 이 있으면 수집할 때 PDF 원문·전문 텍스트·섹션 목록을 저장(arXiv·자동 수집·로컬 파일 모두). 표·그림·수식 처리는 저장된 PDF 를 먼저 씀. 기존 논문 채우기 `scripts/backfill_paper_store.py`, 의존성 `psycopg[binary]`
 - PostgreSQL 벡터 백엔드(`VECTOR_BACKEND=pgvector`, pgvector 확장): 청크 원문·메타데이터(JSONB)·벡터를 한 테이블(`PGVECTOR_TABLE`)에 두고 cosine HNSW 로 검색 — Chroma·Pinecone·PostgreSQL 중 선택. 이전 `scripts/migrate_vectors.py --to pgvector`, 비교 `eval/vector_parity.py --target pgvector`
+- PostgreSQL 로그인 정보를 `.env` 에 항목별로(`POSTGRES_HOST`·`PORT`·`DB`·`USER`·`PASSWORD`, 관리용 `POSTGRES_SUPERUSER_PASSWORD`) 넣을 수 있음 — `DATABASE_URL` 은 선택(있으면 우선). README 에 psql·GUI 로그인 방법
 
 ### Changed
 - `scripts/migrate_to_pinecone.py` → `scripts/migrate_vectors.py`(`--to pinecone|pgvector`)

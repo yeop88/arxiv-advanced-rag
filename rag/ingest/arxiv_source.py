@@ -291,7 +291,7 @@ def result_to_chunks(result: arxiv.Result, session, fulltext: bool,
     """논문 1편 → 청크 목록. (청크, 전문 사용 여부) 반환.
 
     fulltext: PDF 전문을 섹션 인식 청킹(각 청크에 section 메타). 실패하면 초록으로 대체.
-    DATABASE_URL 이 있으면 원문 저장소(PostgreSQL)에 전문이 있는지 먼저 보고, 없을 때만 PDF 를 받아
+    PostgreSQL 로그인 정보가 있으면 원문 저장소(PostgreSQL)에 전문이 있는지 먼저 보고, 없을 때만 PDF 를 받아
     PDF 원문과 전문(실패하면 초록)을 저장소에도 남긴다.
     """
     from rag.store import paperstore

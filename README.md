@@ -373,7 +373,7 @@ exam03_Advanced_RAG/
 |---|---|---|---|
 | `chroma`(기본) | 로컬 파일 `storage/chroma` | Chroma 안 | 없음 |
 | `pinecone` | 원격(서버리스) | 로컬 docstore(JSONL) | `PINECONE_API_KEY` |
-| `pgvector` | PostgreSQL 테이블 `PGVECTOR_TABLE`(기본 `rag_chunks`) | 같은 테이블(JSONB 메타데이터) | `DATABASE_URL` + pgvector 확장 |
+| `pgvector` | PostgreSQL 테이블 `PGVECTOR_TABLE`(기본 `rag_chunks`) | 같은 테이블(JSONB 메타데이터) | PostgreSQL 로그인 정보(`POSTGRES_*`) + pgvector 확장 |
 
 성능 저하 없이 옮기도록 설계했습니다.
 
@@ -395,7 +395,7 @@ pgvector 확장은 PostgreSQL 에 따로 설치해야 합니다(Windows: Visual 
 
 ## 🐘 논문 원문 저장소 (PostgreSQL, 선택)
 
-벡터 DB 에는 1,000자로 자른 청크만 남습니다. `DATABASE_URL` 을 설정하면 수집할 때 **PDF 원문과 추출한 전문 텍스트**를
+벡터 DB 에는 1,000자로 자른 청크만 남습니다. `.env` 에 PostgreSQL 로그인 정보를 넣으면 수집할 때 **PDF 원문과 추출한 전문 텍스트**를
 PostgreSQL 에도 저장해, 청킹 방식을 바꾸거나 표·그림·수식을 다시 만들 때 arXiv 에서 다시 받지 않아도 됩니다.
 
 | 테이블 | 내용 |
@@ -411,10 +411,31 @@ PostgreSQL 에도 저장해, 청킹 방식을 바꾸거나 표·그림·수식�
 - 테이블은 처음 연결할 때 자동으로 만듭니다. DB 에 연결하지 못하면 경고 한 번만 내고 수집은 계속합니다.
 - 자동 수집 예산 정리로 벡터 DB 에서 논문을 지워도 원문은 남깁니다.
 
+**로그인 정보 (`.env`)** — 항목별로 넣거나 `DATABASE_URL` 한 줄로 넣습니다(둘 다 있으면 URL 우선).
+
+```ini
+POSTGRES_HOST=localhost
+POSTGRES_PORT=5432
+POSTGRES_DB=arxiv_rag
+POSTGRES_USER=arxiv_rag            # 앱 전용 계정(DB 소유자)
+POSTGRES_PASSWORD=...
+POSTGRES_SUPERUSER_PASSWORD=...    # postgres(슈퍼유저) — 앱은 쓰지 않음, 확장 설치 등 관리용
+```
+
+**직접 로그인해 보기**
+
+| 방법 | 명령·설정 |
+|---|---|
+| psql(명령줄, PostgreSQL 에 포함) | `"C:\Program Files\PostgreSQL8in\psql.exe" -h localhost -p 5432 -U arxiv_rag -d arxiv_rag` → 비밀번호 입력 |
+| 관리자(postgres)로 | 위에서 `-U postgres` (슈퍼유저 비밀번호) |
+| GUI | pgAdmin 4 또는 VS Code 의 PostgreSQL 확장에서 호스트 localhost · 포트 5432 · DB arxiv_rag · 사용자 arxiv_rag |
+
+psql 안에서 `\dt`(테이블 목록), `SELECT count(*) FROM papers;`, `\q`(종료). 서비스 이름은 `postgresql-x64-18`(Windows 서비스).
+
 ```bash
-# PostgreSQL 설치 후 DB·계정 생성 (예: psql -U postgres)
+# 처음 설치했다면 DB·계정 생성 (psql -U postgres 로 접속해서)
 #   CREATE ROLE arxiv_rag LOGIN PASSWORD '...';  CREATE DATABASE arxiv_rag OWNER arxiv_rag;
-# .env 에 DATABASE_URL=postgresql://arxiv_rag:<비밀번호>@localhost:5432/arxiv_rag
+#   pgvector 를 쓰려면 같은 DB 에서 슈퍼유저로: CREATE EXTENSION vector;
 python scripts/backfill_paper_store.py --limit 3   # 시험 삼아 3편
 python scripts/backfill_paper_store.py             # 기존 논문 전부(이미 저장한 것은 건너뜀, LLM 안 씀)
 python scripts/backfill_paper_store.py --stats     # 저장 현황

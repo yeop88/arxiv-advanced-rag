@@ -153,14 +153,54 @@ def test_pinecone_store_adapter() -> None:
     print("  test_pinecone_store_adapter ✅")
 
 
+def _db_login_error() -> str | None:
+    """설정된 PostgreSQL 에 로그인할 수 없으면 이유(테스트의 DB 부분을 건너뛰려고), 되면 None."""
+    from config import settings
+
+    if not settings.database_url:
+        return "PostgreSQL 로그인 정보 없음"
+    try:
+        import psycopg
+
+        psycopg.connect(settings.database_url, connect_timeout=3).close()
+        return None
+    except Exception as e:  # noqa: BLE001
+        return f"DB 로그인 실패: {str(e).splitlines()[-1][:60]}"
+
+
+def test_postgres_url() -> None:
+    """.env 의 POSTGRES_* 항목 → 접속 URL(특수문자는 인코딩), 사용자·DB 가 없으면 빈 값(저장소 끔)."""
+    import os
+
+    from config import _postgres_url
+
+    keys = ("POSTGRES_HOST", "POSTGRES_PORT", "POSTGRES_DB", "POSTGRES_USER", "POSTGRES_PASSWORD")
+    saved = {k: os.environ.get(k) for k in keys}
+    try:
+        for k in keys:
+            os.environ.pop(k, None)
+        assert _postgres_url() == ""
+        os.environ.update(POSTGRES_DB="arxiv_rag", POSTGRES_USER="app", POSTGRES_PASSWORD="p@ss:w/rd", POSTGRES_PORT="5433")
+        assert _postgres_url() == "postgresql://app:p%40ss%3Aw%2Frd@localhost:5433/arxiv_rag"
+        os.environ.pop("POSTGRES_PASSWORD")
+        assert _postgres_url() == "postgresql://app@localhost:5433/arxiv_rag"
+    finally:
+        for k, v in saved.items():
+            os.environ.pop(k, None)
+            if v is not None:
+                os.environ[k] = v
+    print("  test_postgres_url ✅")
+
+
 def test_pgvector_store() -> None:
     """PgVectorStore: Pinecone 어댑터와 같은 검사를 실제 PostgreSQL 임시 테이블로(pgvector 확장이 있을 때만)."""
     from config import settings
     from rag.store.vectorstore import PgVectorStore, _vec_literal, get_all_documents, get_vectors
 
     assert _vec_literal([1.0, 0.5, -0.25]) == "[1,0.5,-0.25]"
-    if not settings.database_url:
-        print("  test_pgvector_store ✅ (DATABASE_URL 없음 — DB 왕복은 건너뜀)")
+    why = _db_login_error()
+    if why:
+        print(f"  test_pgvector_store ✅ ({why} — DB 왕복은 건너뜀)")
         return
     import psycopg
 
@@ -944,8 +984,9 @@ def test_paper_store() -> None:
     finally:
         F.make_search_queries, F.paper_db_candidates, L.get_reranker, A.search_papers = saved
 
-    if not url0:
-        print("  test_paper_store ✅ (DATABASE_URL 없음 — DB 왕복은 건너뜀)")
+    why = _db_login_error()
+    if why:
+        print(f"  test_paper_store ✅ ({why} — DB 왕복은 건너뜀)")
         return
     src = "test-paperstore-0000"
     try:
@@ -977,6 +1018,7 @@ def main() -> None:
     test_contextualize_no_history()
     test_mmr_per_source_cap()
     test_pinecone_store_adapter()
+    test_postgres_url()
     test_pgvector_store()
     test_paper_search_parsers()
     test_exclude_auto_view()

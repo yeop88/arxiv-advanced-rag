@@ -50,7 +50,7 @@ def main() -> None:
     args = ap.parse_args()
 
     if not paperstore.enabled():
-        sys.exit("DATABASE_URL 이 설정되지 않았습니다(.env). README 의 '원문 저장소' 절을 참고하세요.")
+        sys.exit("PostgreSQL 로그인 정보가 없습니다(.env 의 POSTGRES_* 또는 DATABASE_URL). README 의 '논문 원문 저장소' 절을 참고하세요.")
     if args.stats:
         print_stats()
         return
