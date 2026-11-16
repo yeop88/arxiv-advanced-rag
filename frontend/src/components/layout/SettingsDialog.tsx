@@ -1,8 +1,10 @@
-// 설정 대화 상자: 서버 상태 · 검색·생성 설정 · 모델 정보 · 지금 대화 지우기.
+// 설정 대화 상자: 서버 상태 · 검색·생성 설정 · 모델 정보 · 지금 대화 지우기 · 소스 코드(GitHub) 링크.
 import type { AppConfig, ChatOptions, ServerStatus } from "../../api/types";
 import { SettingsPanel } from "../sidebar/SettingsPanel";
 import { StatusPanel } from "../sidebar/StatusPanel";
 import { Dialog } from "./Dialog";
+
+const REPO_URL = "https://github.com/yeop88/arxiv-advanced-rag";
 
 interface Props {
   onClose: () => void;
@@ -55,6 +57,19 @@ export function SettingsDialog({ onClose, config, status, offline, options, onOp
         >
           지금 대화 지우기
         </button>
+      </section>
+      <section className="dlg-section">
+        <h3>소스 코드</h3>
+        <p className="muted small">이 챗봇의 전체 코드를 GitHub 에서 받을 수 있습니다.</p>
+        <p>
+          <a href={REPO_URL} target="_blank" rel="noopener noreferrer">
+            {REPO_URL.replace("https://", "")}
+          </a>
+          {" · "}
+          <a href={`${REPO_URL}/archive/refs/heads/main.zip`} rel="noopener noreferrer">
+            ZIP 내려받기
+          </a>
+        </p>
       </section>
     </Dialog>
   );
