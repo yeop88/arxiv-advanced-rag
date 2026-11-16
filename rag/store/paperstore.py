@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 
 from config import settings
 
@@ -49,6 +50,10 @@ CREATE TABLE IF NOT EXISTS paper_pdfs (
     pdf_url     TEXT NOT NULL DEFAULT '',
     fetched_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+-- 후보 검색용 색인: 앞부분(제목·초록·서론)만. 전문 전체는 tsvector 한도(1MB)를 넘을 수 있다
+ALTER TABLE paper_texts ADD COLUMN IF NOT EXISTS search_tsv tsvector
+    GENERATED ALWAYS AS (to_tsvector('english', left(fulltext, 30000))) STORED;
+CREATE INDEX IF NOT EXISTS paper_texts_search ON paper_texts USING gin (search_tsv);
 """
 
 _SCHEMA_READY: set[str] = set()   # 스키마를 만든 DATABASE_URL (프로세스당 1번)
@@ -140,8 +145,37 @@ def _one(sql: str, params: tuple):
         return None
 
 
-def get_text(source: str) -> str | None:
-    return _one("SELECT fulltext FROM paper_texts WHERE source = %s", (source,))
+def get_text(source: str, full_only: bool = False) -> str | None:
+    """저장된 텍스트(full_only 면 PDF 전문일 때만 — 초록만 저장된 논문은 None)."""
+    sql = "SELECT fulltext FROM paper_texts WHERE source = %s" + (" AND is_fulltext" if full_only else "")
+    return _one(sql, (source,))
+
+
+def search(queries: list[str], exclude: set[str] | None = None, limit: int = 20) -> list[dict]:
+    """검색어들로 저장된 논문(전문 있는 arXiv 논문만)을 찾는다. 검색어 낱말 중 하나라도 맞으면 후보, 순위는 ts_rank_cd.
+
+    돌려주는 dict: source·title·authors·published·head(본문 앞 1,500자 — 관련도 채점용 초록 대신).
+    """
+    words = sorted({w.lower() for q in queries for w in re.findall(r"[A-Za-z][A-Za-z0-9]+", q or "")})
+    if not enabled() or not words:
+        return []
+    exclude = exclude or set()
+    try:
+        with connect() as conn:
+            rows = conn.execute(
+                """SELECT p.source, p.title, p.authors, p.published, left(t.fulltext, 1500)
+                   FROM paper_texts t JOIN papers p USING (source),
+                        to_tsquery('english', %s) q
+                   WHERE t.is_fulltext AND p.origin <> 'local' AND t.search_tsv @@ q
+                   ORDER BY ts_rank_cd(t.search_tsv, q) DESC LIMIT %s""",
+                (" | ".join(words), limit + len(exclude)),
+            ).fetchall()
+    except Exception as e:  # noqa: BLE001
+        _warn(e)
+        return []
+    out = [{"source": s, "title": ti, "authors": a, "published": pu, "head": h}
+           for s, ti, a, pu, h in rows if s not in exclude]
+    return out[:limit]
 
 
 def get_pdf(source: str) -> bytes | None:

@@ -68,10 +68,12 @@ export function describeEvent(event: string, info: any): ProgressUpdate | null {
           : info.reason === "original"
           ? `'${info.subject ?? ""}' 원 논문(${info.title ?? ""})이 근거에 없습니다`
           : `가장 관련 높은 근거 점수 ${(info.top_score ?? 0).toFixed(2)} < 기준 ${(info.threshold ?? 0).toFixed(2)}`;
-      return { stage: "📥 논문 찾는 중", lines: [{ text: `📥 근거 부족 — ${why}. arXiv 에서 관련 논문을 찾아 DB 에 추가합니다` }] };
+      return { stage: "📥 논문 찾는 중", lines: [{ text: `📥 근거 부족 — ${why}. 원문 DB 부터, 없으면 arXiv 에서 관련 논문을 찾아 DB 에 추가합니다` }] };
     }
     case "fetch_queries":
-      return { lines: [{ text: `· arXiv 검색어: ${(info.queries ?? []).join(" / ")}`, sub: true }] };
+      return { lines: [{ text: `· 검색어: ${(info.queries ?? []).join(" / ")}`, sub: true }] };
+    case "fetch_db":
+      return { lines: [{ text: `· 원문 DB 에서 후보 ${info.n}편 찾음 — 관련도 채점 중`, sub: true }] };
     case "fetch_title_guess":
       return {
         lines: [{ text: `· ${info.more ? "원 논문 제목 후보 더" : "원 논문 제목 추정"}: ${info.title ?? ""}`, sub: true }],
@@ -101,7 +103,12 @@ export function describeEvent(event: string, info: any): ProgressUpdate | null {
       }
       return {
         lines: [
-          { text: `· 관련 논문 ${papers.length}편 선택 — 전문(PDF)을 받아 DB 에 추가합니다`, sub: true },
+          {
+            text: info.from_db
+              ? `· 원문 DB 에 있는 논문 ${papers.length}편 선택 — 다시 받지 않고 저장된 전문을 DB 에 추가합니다`
+              : `· 관련 논문 ${papers.length}편 선택 — 전문(PDF)을 받아 DB 에 추가합니다`,
+            sub: true,
+          },
           ...papers.map(([t, s]) => ({ text: `· ${t.slice(0, 80)} (관련도 ${s.toFixed(2)})`, sub: true })),
         ],
       };

@@ -886,15 +886,45 @@ def test_paper_store() -> None:
     finally:
         settings.database_url = url0
 
+    # 자동 수집 후보: 원문 DB 에서 기준을 넘는 논문을 찾으면 사이트 검색을 하지 않는다
+    from rag.core import llm as L
+    from rag.ingest import auto_fetch as F
+    from rag.ingest.arxiv_source import Paper
+
+    saved = F.make_search_queries, F.paper_db_candidates, L.get_reranker, A.search_papers
+    site_calls = []
+    try:
+        F.make_search_queries = lambda q: ["contrastive image text pretraining"]
+        L.get_reranker = lambda: SimpleNamespace(predict=lambda pairs: [5.0 if "CLIP" in p[1] else -5.0 for p in pairs])
+        A.search_papers = lambda *a, **k: site_calls.append(a) or [Paper(pid="9999.00001", title="site paper", found_by="arXiv")]
+        F.paper_db_candidates = lambda qs, ex: [Paper(pid="2103.00020", title="CLIP: Learning Transferable", found_by="원문 DB")]
+        fc = F.find_candidates("CLIP 은?", set(), title_guess=False, common_refs=False)
+        assert fc["from_db"] and [p.pid for p, _ in fc["chosen"]] == ["2103.00020"] and not site_calls, fc
+        F.paper_db_candidates = lambda qs, ex: [Paper(pid="1111.00001", title="unrelated", found_by="원문 DB")]
+        fc = F.find_candidates("CLIP 은?", set(), title_guess=False, common_refs=False)
+        assert not fc["from_db"] and site_calls, "원문 DB 에서 기준 미달이면 사이트 검색"
+    finally:
+        F.make_search_queries, F.paper_db_candidates, L.get_reranker, A.search_papers = saved
+
     if not url0:
         print("  test_paper_store ✅ (DATABASE_URL 없음 — DB 왕복은 건너뜀)")
         return
     src = "test-paperstore-0000"
     try:
-        assert paperstore.save({"source": src, "title": "t"}, "1 Method\nfull", True, pdf=b"%PDF-1")
+        assert paperstore.save({"source": src, "title": "t"}, "1 Method\nzyxwquux transformer full", True, pdf=b"%PDF-1")
         assert paperstore.save({"source": src, "title": "t"}, "abstract only", False), "초록만이면 전문을 덮지 않음"
-        assert paperstore.get_text(src) == "1 Method\nfull" and paperstore.get_pdf(src) == b"%PDF-1"
-        assert src in paperstore.stored_sources(with_pdf=True)
+        assert paperstore.get_text(src, full_only=True) == "1 Method\nzyxwquux transformer full"
+        assert paperstore.get_pdf(src) == b"%PDF-1" and src in paperstore.stored_sources(with_pdf=True)
+        assert [r["source"] for r in paperstore.search(["zyxwquux"])] == [src], "원문 DB 검색"
+        assert paperstore.search(["zyxwquux"], exclude={src}) == [], "벡터 DB 에 있는 논문은 제외"
+        # 수집: 원문 DB 에 전문이 있으면 PDF 를 받지 않는다
+        r2 = SimpleNamespace(**{**r.__dict__, "get_short_id": lambda: src})
+        A.download_pdf_text = lambda *a, **k: (_ for _ in ()).throw(AssertionError("받으면 안 됨"))
+        try:
+            chunks, full = A.result_to_chunks(r2, None, True)
+        finally:
+            A.download_pdf_text = dl0
+        assert full and "zyxwquux" in chunks[0].page_content
     finally:
         with paperstore.connect() as conn:
             conn.execute("DELETE FROM papers WHERE source = %s", (src,))

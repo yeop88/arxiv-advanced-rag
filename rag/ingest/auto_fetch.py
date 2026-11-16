@@ -458,12 +458,30 @@ def common_ref_candidates(evidence_sources: list[str], n: int = 3) -> list:
     return list(papers.values())
 
 
+def paper_db_candidates(queries: list[str], existing: set[str]) -> list:
+    """원문 DB(PostgreSQL)에서 벡터 DB 에 없는 논문 후보(Paper, found_by='원문 DB'). 저장소가 꺼져 있으면 빈 목록."""
+    from rag.ingest.arxiv_source import Paper
+    from rag.store import paperstore
+
+    out = []
+    for r in paperstore.search(queries, exclude=existing, limit=settings.auto_fetch_candidates):
+        try:
+            pub = dt.date.fromisoformat(r["published"][:10])
+        except ValueError:
+            pub = dt.date.today()
+        out.append(Paper(pid=r["source"], title=r["title"] or r["source"], summary=r["head"],
+                         author_names=[a for a in (r["authors"] or "").split(", ") if a], published=pub,
+                         found_by="원문 DB"))
+    return out
+
+
 def find_candidates(question: str, existing: set[str], emit: Emit | None = None,
                     evidence_sources: list[str] | None = None, title_guess: bool | None = None,
                     common_refs: bool | None = None) -> dict:
     """수집 후보를 모아 관련도로 채점하고 넣을 논문을 고른다(DB 는 바꾸지 않음 — 평가에서도 그대로 쓴다).
 
-    후보 출처: ① 검색어(경량 LLM)로 arXiv(막히면 OpenAlex) ② 같은 검색어로 OpenAlex 인용 순
+    먼저 원문 DB(PostgreSQL)에서 찾아 기준을 넘는 논문이 있으면 그것만 쓰고(from_db=True) 사이트 검색은 하지 않는다.
+    없으면 사이트 검색 — 후보 출처: ① 검색어(경량 LLM)로 arXiv(막히면 OpenAlex) ② 같은 검색어로 OpenAlex 인용 순
     ③ 원 논문 제목 추정 → 제목 검색(A3) ④ 근거 논문들의 공통 참고문헌(A3, 인용 그래프).
     """
     from rag.ingest.arxiv_source import Paper, search_openalex, search_papers
@@ -497,6 +515,27 @@ def find_candidates(question: str, existing: set[str], emit: Emit | None = None,
         else:
             candidates[p.pid] = p
 
+    def score(items: list) -> list:
+        scores = get_reranker().predict([(question, f"{r.title}\n{r.summary}") for r in items])
+        return sorted(zip(items, (float(s) for s in scores)), key=lambda x: x[1], reverse=True)
+
+    # 2a) 원문 DB(PostgreSQL)부터: 예전에 받았지만 벡터 DB 에 없는 논문(예산 정리로 빠진 것 등).
+    #     여기서 기준을 넘는 논문이 있으면 사이트 검색 없이 그것을 쓴다.
+    result = {"queries": queries, "guessed": None, "ranked": [], "chosen": [], "from_db": False}
+    db_found = paper_db_candidates(queries, existing)
+    if db_found:
+        emit("fetch_db", n=len(db_found))
+        ranked = score(db_found)
+        chosen = select_papers(ranked)
+        if chosen:
+            emit("fetch_selected", papers=[(r.title.strip(), s) for r, s in chosen], from_db=True,
+                 best_rejected=(ranked[len(chosen)][1] if len(ranked) > len(chosen) else None))
+            result.update(ranked=ranked, chosen=chosen, from_db=True)
+            return result
+        for p in db_found:   # 기준 미달이어도 사이트 검색 결과와 함께 다시 겨룬다
+            add(p)
+
+    # 2b) 사이트 검색: arXiv(막히면 OpenAlex)
     for q in queries:
         try:
             for p in search_papers(q, settings.auto_fetch_candidates, warn=warn):
@@ -532,14 +571,12 @@ def find_candidates(question: str, existing: set[str], emit: Emit | None = None,
         except Exception as e:  # noqa: BLE001
             warn(f"공통 참고문헌 후보 실패: {type(e).__name__}")
     emit("fetch_candidates", n=len(candidates), n_existing_skipped=n_skipped, sources=sorted(sources_used))
-    result = {"queries": queries, "guessed": guessed, "ranked": [], "chosen": []}
+    result["guessed"] = guessed
     if not candidates:
         return result
 
     # 3) 선별: (질문, 제목+초록) 리랭크 점수
-    items = list(candidates.values())
-    scores = get_reranker().predict([(question, f"{r.title}\n{r.summary}") for r in items])
-    ranked = sorted(zip(items, (float(s) for s in scores)), key=lambda x: x[1], reverse=True)
+    ranked = score(list(candidates.values()))
     chosen = select_papers(ranked)
     emit("fetch_selected", papers=[(r.title.strip(), s) for r, s in chosen],
          best_rejected=(ranked[len(chosen)][1] if len(ranked) > len(chosen) else None))
