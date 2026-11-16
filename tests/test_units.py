@@ -145,6 +145,7 @@ def test_pinecone_store_adapter() -> None:
     assert hits[0][0].metadata == {"source": "P1", "section": None}, "메타데이터는 docstore 원본 그대로"
     assert len(get_all_documents(store)) == 2 and store.count() == 2
     assert DocStore(path).get("id-b")["text"] == "본문 B", "docstore 가 디스크에 저장돼야 함"
+    assert store.get(include=["metadatas"])["metadatas"][1] == {"source": "P2"}, "Chroma 식 get(include=...) 호출"
 
     store.delete(ids=["id-a"])
     assert store.count() == 1 and store.get()["ids"] == ["id-b"], "삭제가 인덱스·docstore 양쪽에 반영"
@@ -220,6 +221,9 @@ def test_pgvector_store() -> None:
         assert hits[0][0].metadata == {"source": "P1", "section": None}
         assert len(get_all_documents(store)) == 2 and store.count() == 2
         assert get_vectors(store, ["id-b"]) == {"id-b": [0.0, 1.0, 0.0]}
+        only_meta = store.get(include=["metadatas"])   # Chroma 식 호출(enrich·auto_fetch 가 씀)
+        assert only_meta["ids"] == ["id-a", "id-b"] and only_meta["documents"] is None
+        assert only_meta["metadatas"][1] == {"source": "P2"}
         store.delete(ids=["id-a"])
         assert store.count() == 1 and store.get()["ids"] == ["id-b"]
         ids = store.add_documents([Document(page_content="c", metadata={"source": "P3"})])

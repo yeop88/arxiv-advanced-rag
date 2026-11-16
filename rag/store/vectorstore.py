@@ -33,7 +33,7 @@ class VectorStoreLike(Protocol):
 
     def similarity_search(self, query: str, k: int = 4) -> list[Document]: ...
     def similarity_search_with_relevance_scores(self, query: str, k: int = 4) -> list[tuple[Document, float]]: ...
-    def get(self) -> dict: ...
+    def get(self, include: list[str] | None = None) -> dict: ...
     def delete(self, ids: list[str]) -> Any: ...
 
 
@@ -92,7 +92,8 @@ class PineconeStore:
         return [d for d, _ in self.similarity_search_with_relevance_scores(query, k)]
 
     # --- 조회·삭제 (Chroma 와 같은 반환 모양) ---
-    def get(self) -> dict:
+    def get(self, include: list[str] | None = None) -> dict:
+        """Chroma 의 get(include=...) 과 같은 호출을 받는다(docstore 는 한 번에 다 읽으므로 항상 전부 돌려준다)."""
         rows = self.docstore.all()
         return {
             "ids": [r["id"] for r in rows],
@@ -262,10 +263,15 @@ class PgVectorStore:
         return [d for d, _ in self.similarity_search_with_relevance_scores(query, k)]
 
     # --- 조회·삭제 (Chroma 와 같은 반환 모양) ---
-    def get(self) -> dict:
-        rows = self._run(lambda c: c.execute(f"SELECT id, text, metadata FROM {self.table} ORDER BY seq").fetchall())
-        return {"ids": [r[0] for r in rows], "documents": [r[1] for r in rows],
-                "metadatas": [dict(r[2] or {}) for r in rows]}
+    def get(self, include: list[str] | None = None) -> dict:
+        """Chroma 와 같은 모양. include 를 주면(예: ["metadatas"]) 그 열만 읽는다 — 원문 전체를 읽지 않게."""
+        docs = include is None or "documents" in include
+        metas = include is None or "metadatas" in include
+        cols = "id" + (", text" if docs else ", NULL") + (", metadata" if metas else ", NULL")
+        rows = self._run(lambda c: c.execute(f"SELECT {cols} FROM {self.table} ORDER BY seq").fetchall())
+        return {"ids": [r[0] for r in rows],
+                "documents": [r[1] for r in rows] if docs else None,
+                "metadatas": [dict(r[2] or {}) for r in rows] if metas else None}
 
     def get_vectors(self, ids: list[str]) -> dict[str, list[float]]:
         rows = self._run(lambda c: c.execute(
@@ -376,8 +382,8 @@ class ExcludeOriginStore:
     def similarity_search(self, query: str, k: int = 4) -> list[Document]:
         return [d for d, _ in self.similarity_search_with_relevance_scores(query, k)]
 
-    def get(self) -> dict:
-        raw = self.inner.get()
+    def get(self, include: list[str] | None = None) -> dict:
+        raw = self.inner.get()   # 걸러내려면 메타데이터가 필요해 항상 전부 읽는다
         ids = raw.get("ids") or [None] * len(raw.get("documents", []))
         rows = [(i, t, m) for i, t, m in zip(ids, raw.get("documents", []), raw.get("metadatas", []))
                 if self._keep(m, i)]
