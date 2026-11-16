@@ -1,6 +1,6 @@
 # 달성률 — PROJECT_VISION 기준
 
-[PROJECT_VISION.md](../PROJECT_VISION.md)에 적은 목표를 항목별로 점검한 문서입니다. 근거 수치는 [PROGRESS_REPORT.md](PROGRESS_REPORT.md)의 절 번호로 표시했습니다.
+[PROJECT_VISION.md](PROJECT_VISION.md)에 적은 목표를 항목별로 점검한 문서입니다. 근거 수치는 [PROGRESS_REPORT.md](PROGRESS_REPORT.md)의 절 번호로 표시했습니다.
 기준일: 2026-11-12, 로드맵 판정 갱신 2026-11-15.
 
 ## 판정 기준

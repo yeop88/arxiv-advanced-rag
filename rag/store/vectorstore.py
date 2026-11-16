@@ -1,19 +1,22 @@
 """
-rag/store/vectorstore.py — 벡터 스토어 로드/구축 헬퍼 (Chroma | Pinecone)
+rag/store/vectorstore.py — 벡터 스토어 로드/구축 헬퍼 (Chroma | Pinecone | PostgreSQL pgvector)
 
 - load_vectorstore(): 파이프라인이 쓰는 스토어 로드 (config.vector_backend 로 선택)
 - build_vectorstore(docs): 문서를 임베딩해 추가 (ingest 스크립트에서 사용)
 - get_all_documents(vs): 전체 청크 → BM25 인덱스용
 - delete_sources(sources) / reset_vectorstore(): 재수집·초기화용
 
-설계: 파이프라인(stage2_rerank)은 아래 네 가지만 쓴다. 두 백엔드가 이 모양을 똑같이 제공하므로
+설계: 파이프라인(stage2_rerank)은 아래 네 가지만 쓴다. 세 백엔드가 이 모양을 똑같이 제공하므로
 `VECTOR_BACKEND` 만 바꾸면 나머지 코드는 그대로 동작한다.
     similarity_search(query, k) / similarity_search_with_relevance_scores(query, k)
     get() -> {"ids", "documents", "metadatas"} / delete(ids=[...])
 """
 from __future__ import annotations
 
+import json
+import re
 import shutil
+import threading
 import uuid
 from pathlib import Path
 from typing import Any, Protocol
@@ -26,7 +29,7 @@ from rag.core.llm import get_embeddings
 
 
 class VectorStoreLike(Protocol):
-    """파이프라인이 기대하는 벡터 스토어 인터페이스(Chroma 와 PineconeStore 공통)."""
+    """파이프라인이 기대하는 벡터 스토어 인터페이스(Chroma·PineconeStore·PgVectorStore 공통)."""
 
     def similarity_search(self, query: str, k: int = 4) -> list[Document]: ...
     def similarity_search_with_relevance_scores(self, query: str, k: int = 4) -> list[tuple[Document, float]]: ...
@@ -177,10 +180,147 @@ def _load_pinecone(create: bool = False) -> PineconeStore:
         if not pc.has_index(settings.pinecone_index):
             raise FileNotFoundError(
                 f"Pinecone 인덱스가 없습니다: {settings.pinecone_index}\n"
-                f"먼저 `python scripts/migrate_to_pinecone.py` 로 옮기거나 수집 스크립트를 실행하세요."
+                f"먼저 `python scripts/migrate_vectors.py --to pinecone` 로 옮기거나 수집 스크립트를 실행하세요."
             )
         index = pc.Index(settings.pinecone_index)
     return PineconeStore(index, settings.pinecone_namespace, emb, DocStore(settings.docstore_path))
+
+
+# ---------------------------------------------------------------------------
+# PostgreSQL(pgvector) 어댑터
+# ---------------------------------------------------------------------------
+def _vec_literal(v) -> str:
+    """파이썬 벡터 → pgvector 문자열('[0.1,0.2,…]'). float4 를 손실 없이 옮기도록 유효숫자 9자리."""
+    return "[" + ",".join(f"{float(x):.9g}" for x in v) + "]"
+
+
+class PgVectorStore:
+    """PostgreSQL 한 테이블에 청크 원문·메타데이터(JSONB)·벡터(pgvector)를 함께 둔다 — Chroma 와 같은 모양.
+
+    원문도 같은 테이블에 있어 docstore(JSONL)가 필요 없다(get() 이 BM25 원문을 바로 준다).
+    검색은 cosine 거리(<=>) + HNSW 색인. 벡터가 정규화돼 있어 Chroma(L2) 와 순위가 같다.
+    점수는 Pinecone 과 같게 (cosine+1)/2 로 0~1 에 맞춘다(순위에는 영향 없음).
+    """
+
+    UPSERT_BATCH = 500
+
+    def __init__(self, url: str, table: str, embeddings):
+        if not re.fullmatch(r"[a-z_][a-z0-9_]{0,62}", table):
+            raise ValueError(f"PGVECTOR_TABLE 이름이 올바르지 않습니다: {table}")
+        self.url, self.table, self.embeddings = url, table, embeddings
+        self._conn = None
+        self._lock = threading.Lock()   # 서버는 여러 스레드가 한 연결을 나눠 쓴다
+
+    # --- 연결 ---
+    def _connection(self):
+        import psycopg
+
+        if self._conn is None or self._conn.closed or self._conn.broken:
+            self._conn = psycopg.connect(self.url, autocommit=True, connect_timeout=5)
+        return self._conn
+
+    def _run(self, fn):
+        with self._lock:
+            try:
+                return fn(self._connection())
+            except Exception:
+                if self._conn is not None and (self._conn.closed or self._conn.broken):
+                    self._conn = None
+                raise
+
+    def exists(self) -> bool:
+        return bool(self._run(lambda c: c.execute("SELECT to_regclass(%s)", (self.table,)).fetchone()[0]))
+
+    def ensure_table(self, dimension: int) -> None:
+        t = self.table
+
+        def go(c):
+            with c.transaction():
+                c.execute("CREATE EXTENSION IF NOT EXISTS vector")
+                c.execute(f"""CREATE TABLE IF NOT EXISTS {t} (
+                    seq BIGSERIAL, id TEXT PRIMARY KEY, source TEXT, text TEXT NOT NULL,
+                    metadata JSONB NOT NULL DEFAULT '{{}}'::jsonb, embedding vector({int(dimension)}) NOT NULL)""")
+                c.execute(f"CREATE INDEX IF NOT EXISTS {t}_source ON {t} (source)")
+                c.execute(f"CREATE INDEX IF NOT EXISTS {t}_hnsw ON {t} USING hnsw (embedding vector_cosine_ops)")
+        self._run(go)
+
+    # --- 검색 ---
+    def similarity_search_with_relevance_scores(self, query: str, k: int = 4) -> list[tuple[Document, float]]:
+        vec = _vec_literal(self.embeddings.embed_query(query))
+
+        def go(c):
+            with c.transaction():
+                # HNSW 는 후보를 ef_search 개만 본다 → k 보다 넉넉히(근사 탐색 누락 방지)
+                c.execute("SELECT set_config('hnsw.ef_search', %s, true)", (str(max(100, 2 * k)),))
+                return c.execute(
+                    f"SELECT id, text, metadata, 1 - (embedding <=> %s::vector) FROM {self.table} "
+                    f"ORDER BY embedding <=> %s::vector LIMIT %s", (vec, vec, k)).fetchall()
+        return [(Document(page_content=t, metadata=dict(m or {}), id=i), (float(cos) + 1) / 2)
+                for i, t, m, cos in self._run(go)]
+
+    def similarity_search(self, query: str, k: int = 4) -> list[Document]:
+        return [d for d, _ in self.similarity_search_with_relevance_scores(query, k)]
+
+    # --- 조회·삭제 (Chroma 와 같은 반환 모양) ---
+    def get(self) -> dict:
+        rows = self._run(lambda c: c.execute(f"SELECT id, text, metadata FROM {self.table} ORDER BY seq").fetchall())
+        return {"ids": [r[0] for r in rows], "documents": [r[1] for r in rows],
+                "metadatas": [dict(r[2] or {}) for r in rows]}
+
+    def get_vectors(self, ids: list[str]) -> dict[str, list[float]]:
+        rows = self._run(lambda c: c.execute(
+            f"SELECT id, embedding::text FROM {self.table} WHERE id = ANY(%s)", (list(ids),)).fetchall())
+        return {i: [float(x) for x in e.strip("[]").split(",")] for i, e in rows}
+
+    def delete(self, ids: list[str]) -> None:
+        self._run(lambda c: c.execute(f"DELETE FROM {self.table} WHERE id = ANY(%s)", (list(ids),)))
+
+    def delete_all(self) -> None:
+        self._run(lambda c: c.execute(f"DROP TABLE IF EXISTS {self.table}"))
+
+    def count(self) -> int:
+        return int(self._run(lambda c: c.execute(f"SELECT count(*) FROM {self.table}").fetchone()[0]))
+
+    # --- 추가 ---
+    def upsert_vectors(self, ids: list[str], vectors: list[list[float]],
+                       texts: list[str], metadatas: list[dict]) -> None:
+        """이미 계산된 벡터를 그대로 넣는다(이전: Chroma 벡터 복사 → 임베딩 동일). 같은 ID 는 덮어쓴다."""
+        if not ids:
+            return
+        self.ensure_table(len(vectors[0]))
+        # PostgreSQL 문자열은 NUL(0x00)을 담지 못한다(PDF 추출 청크에 드물게 섞여 있음) → 빼고 저장
+        rows = [(i, (m or {}).get("source"), (t or "").replace("\x00", ""),
+                 json.dumps(m or {}, ensure_ascii=False).replace("\\u0000", ""), _vec_literal(v))
+                for i, v, t, m in zip(ids, vectors, texts, metadatas)]
+
+        def go(c):
+            with c.transaction(), c.cursor() as cur:
+                for s in range(0, len(rows), self.UPSERT_BATCH):
+                    cur.executemany(
+                        f"""INSERT INTO {self.table} (id, source, text, metadata, embedding)
+                            VALUES (%s, %s, %s, %s::jsonb, %s::vector)
+                            ON CONFLICT (id) DO UPDATE SET source = EXCLUDED.source, text = EXCLUDED.text,
+                                metadata = EXCLUDED.metadata, embedding = EXCLUDED.embedding""",
+                        rows[s:s + self.UPSERT_BATCH])
+        self._run(go)
+
+    def add_documents(self, docs: list[Document], ids: list[str] | None = None) -> list[str]:
+        ids = ids or [str(uuid.uuid4()) for _ in docs]
+        texts = [d.page_content for d in docs]
+        self.upsert_vectors(ids, self.embeddings.embed_documents(texts), texts, [d.metadata for d in docs])
+        return ids
+
+
+def _load_pgvector(create: bool = False) -> PgVectorStore:
+    if not settings.database_url:
+        raise RuntimeError("VECTOR_BACKEND=pgvector 는 DATABASE_URL(PostgreSQL 접속 주소)이 필요합니다.")
+    store = PgVectorStore(settings.database_url, settings.pgvector_table, get_embeddings())
+    if not create and not store.exists():
+        raise FileNotFoundError(
+            f"PostgreSQL 벡터 테이블이 없습니다: {settings.pgvector_table}\n"
+            f"먼저 `python scripts/migrate_vectors.py --to pgvector` 로 옮기거나 수집 스크립트를 실행하세요."
+        )
+    return store
 
 
 # ---------------------------------------------------------------------------
@@ -259,10 +399,12 @@ def load_vectorstore(backend: str | None = None) -> VectorStoreLike:
     backend = backend or settings.vector_backend
     if backend == "pinecone":
         vs = _load_pinecone()
+    elif backend == "pgvector":
+        vs = _load_pgvector()
     elif backend == "chroma":
         vs = _load_chroma()
     else:
-        raise ValueError(f"알 수 없는 VECTOR_BACKEND: {backend} (chroma|pinecone)")
+        raise ValueError(f"알 수 없는 VECTOR_BACKEND: {backend} (chroma|pinecone|pgvector)")
     return ExcludeOriginStore(vs) if settings.exclude_auto_papers else vs
 
 
@@ -286,6 +428,8 @@ def get_vectors(vs: VectorStoreLike, ids: list[str]) -> dict[str, list[float]]:
         if isinstance(vs, PineconeStore):
             res = vs.index.fetch(ids=ids, namespace=vs.namespace)
             return {k: list(v.values) for k, v in res.vectors.items()}
+        if isinstance(vs, PgVectorStore):
+            return vs.get_vectors(ids)
         raw = vs._collection.get(ids=ids, include=["embeddings"])  # Chroma
         return {i: list(e) for i, e in zip(raw["ids"], raw["embeddings"])}
     except Exception:  # noqa: BLE001 — 꺼내지 못하면 호출부가 새로 임베딩
@@ -315,8 +459,8 @@ def delete_sources(sources: set[str]) -> int:
 
 def build_vectorstore(docs: list[Document]) -> VectorStoreLike:
     """문서 리스트를 임베딩해 스토어에 추가(없으면 생성)."""
-    if settings.vector_backend == "pinecone":
-        store = _load_pinecone(create=True)
+    if settings.vector_backend in ("pinecone", "pgvector"):
+        store = _load_pinecone(create=True) if settings.vector_backend == "pinecone" else _load_pgvector(create=True)
         store.add_documents(docs)
         return store
     from langchain_chroma import Chroma
@@ -336,6 +480,9 @@ def reset_vectorstore() -> None:
             _load_pinecone().delete_all()
         except FileNotFoundError:
             pass
+        return
+    if settings.vector_backend == "pgvector":
+        _load_pgvector(create=True).delete_all()
         return
     if Path(settings.chroma_dir).exists():
         shutil.rmtree(settings.chroma_dir)

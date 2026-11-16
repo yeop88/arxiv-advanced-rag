@@ -1,19 +1,21 @@
 """
-scripts/migrate_to_pinecone.py — Chroma → Pinecone 이전 (임베딩 재계산 없이 벡터를 그대로 복사)
+scripts/migrate_vectors.py — Chroma → Pinecone 또는 PostgreSQL(pgvector) 이전 (임베딩 재계산 없이 벡터를 그대로 복사)
 
 성능 저하 없이 옮기기 위한 원칙:
   1) 벡터를 다시 만들지 않고 Chroma 에 저장된 벡터를 그대로 복사 → 임베딩이 완전히 동일.
   2) ID 를 그대로 유지 → 재실행해도 덮어쓰기(upsert)라 중복이 생기지 않음.
-  3) 인덱스 척도는 cosine. 벡터가 길이 1로 정규화돼 있어 Chroma 의 L2 와 순위가 같다.
-  4) 원문·메타데이터는 로컬 docstore(JSONL)에도 저장 → BM25(하이브리드 검색)가 Chroma 때와 같은 원문을 쓴다.
+  3) 척도는 cosine. 벡터가 길이 1로 정규화돼 있어 Chroma 의 L2 와 순위가 같다.
+  4) 원문·메타데이터: Pinecone 은 로컬 docstore(JSONL)에, pgvector 는 같은 테이블에 함께 저장
+     → BM25(하이브리드 검색)가 Chroma 때와 같은 원문을 쓴다.
 
 사용:
-    python scripts/migrate_to_pinecone.py --dry-run   # 키 없이 점검만(데이터·제약 확인)
-    python scripts/migrate_to_pinecone.py             # 실제 이전 (PINECONE_API_KEY 필요)
-    python scripts/migrate_to_pinecone.py --reset     # 대상 namespace 를 비우고 다시 이전
+    python scripts/migrate_vectors.py --to pinecone --dry-run   # 점검만(데이터·제약 확인)
+    python scripts/migrate_vectors.py --to pinecone             # Pinecone (PINECONE_API_KEY 필요)
+    python scripts/migrate_vectors.py --to pgvector             # PostgreSQL (DATABASE_URL·pgvector 확장 필요)
+    python scripts/migrate_vectors.py --to pgvector --reset     # 대상을 비우고 다시 이전
 이전 후:
-    python eval/vector_parity.py                      # Chroma 와 검색 결과가 같은지 확인
-    .env 에 VECTOR_BACKEND=pinecone                   # 전환
+    python eval/vector_parity.py --target pgvector              # Chroma 와 검색 결과가 같은지 확인
+    .env 에 VECTOR_BACKEND=pinecone 또는 pgvector                # 전환
 """
 from __future__ import annotations
 
@@ -30,7 +32,9 @@ import numpy as np  # noqa: E402
 from config import settings  # noqa: E402
 from rag.store.docstore import DocStore  # noqa: E402
 from rag.core.llm import get_embeddings  # noqa: E402
-from rag.store.vectorstore import PineconeStore, _load_chroma, _pc_metadata, ensure_pinecone_index  # noqa: E402
+from rag.store.vectorstore import (  # noqa: E402
+    PineconeStore, _load_chroma, _load_pgvector, _pc_metadata, ensure_pinecone_index,
+)
 
 PAGE = 500
 
@@ -67,7 +71,7 @@ def check(data: dict) -> dict:
     }
 
 
-def copy_into(store: PineconeStore, data: dict, batch: int = 500) -> None:
+def copy_into(store, data: dict, batch: int = 500) -> None:
     """준비된 데이터를 스토어에 넣는다(벡터 그대로). 진행 상황 출력."""
     n = len(data["ids"])
     for s in range(0, n, batch):
@@ -77,8 +81,8 @@ def copy_into(store: PineconeStore, data: dict, batch: int = 500) -> None:
         print(f"  업로드 {e}/{n}")
 
 
-def wait_until_count(store: PineconeStore, expected: int, timeout: int = 180) -> int:
-    """Pinecone 은 반영이 약간 늦을 수 있어(eventual consistency) 개수가 맞을 때까지 기다린다."""
+def wait_until_count(store, expected: int, timeout: int = 180) -> int:
+    """Pinecone 은 반영이 약간 늦을 수 있어(eventual consistency) 개수가 맞을 때까지 기다린다(pgvector 는 바로 맞음)."""
     t0 = time.time()
     while True:
         c = store.count()
@@ -88,9 +92,10 @@ def wait_until_count(store: PineconeStore, expected: int, timeout: int = 180) ->
 
 
 def main() -> None:
-    ap = argparse.ArgumentParser(description="Chroma → Pinecone 이전")
-    ap.add_argument("--dry-run", action="store_true", help="Pinecone 에 쓰지 않고 점검만")
-    ap.add_argument("--reset", action="store_true", help="대상 namespace·docstore 를 비우고 이전")
+    ap = argparse.ArgumentParser(description="Chroma → Pinecone | PostgreSQL(pgvector) 이전")
+    ap.add_argument("--to", choices=["pinecone", "pgvector"], default="pinecone", help="옮길 대상")
+    ap.add_argument("--dry-run", action="store_true", help="대상에 쓰지 않고 점검만")
+    ap.add_argument("--reset", action="store_true", help="대상(namespace·docstore 또는 테이블)을 비우고 이전")
     args = ap.parse_args()
 
     print(f"[1/3] Chroma 내보내기: {settings.chroma_dir}")
@@ -105,7 +110,7 @@ def main() -> None:
         problems.append(f"저장 벡터 차원 {info['dimension']} ≠ 현재 임베딩 차원 {info['query_embedding_dim']}")
     if not (0.99 < info["norm_min"] and info["norm_max"] < 1.01):
         problems.append("벡터가 정규화돼 있지 않음 → cosine 과 L2 순위가 달라질 수 있음")
-    if info["meta_bytes_max"] > 40_000:
+    if args.to == "pinecone" and info["meta_bytes_max"] > 40_000:
         problems.append(f"메타데이터 최대 {info['meta_bytes_max']}B > Pinecone 한도 40KB")
     if problems:
         print("⚠️ 점검 실패: " + "; ".join(problems))
@@ -113,24 +118,29 @@ def main() -> None:
     print("      점검 통과: ID 고유·차원 일치·정규화·메타데이터 크기 OK")
 
     if args.dry_run:
-        print("(dry-run: Pinecone 에 쓰지 않았습니다)")
+        print(f"(dry-run: {args.to} 에 쓰지 않았습니다)")
         return
 
-    print(f"[2/3] Pinecone 인덱스 준비: {settings.pinecone_index} / namespace={settings.pinecone_namespace}")
-    index = ensure_pinecone_index(info["dimension"])
-    store = PineconeStore(index, settings.pinecone_namespace, get_embeddings(), DocStore(settings.docstore_path))
+    if args.to == "pinecone":
+        print(f"[2/3] Pinecone 인덱스 준비: {settings.pinecone_index} / namespace={settings.pinecone_namespace}")
+        index = ensure_pinecone_index(info["dimension"])
+        store = PineconeStore(index, settings.pinecone_namespace, get_embeddings(), DocStore(settings.docstore_path))
+    else:
+        print(f"[2/3] PostgreSQL 테이블 준비: {settings.pgvector_table}")
+        store = _load_pgvector(create=True)
     if args.reset:
         store.delete_all()
-        print("      기존 namespace·docstore 비움")
+        print("      기존 데이터 비움")
+    if args.to == "pgvector":
+        store.ensure_table(info["dimension"])
 
     print(f"[3/3] 벡터 복사 ({info['count']}개)")
     copy_into(store, data)
     got = wait_until_count(store, info["count"])
-    print(f"완료: Pinecone {got}개 / Chroma {info['count']}개, docstore {len(store.docstore)}개")
+    print(f"완료: {args.to} {got}개 / Chroma {info['count']}개")
     if got != info["count"]:
         print("⚠️ 개수 불일치 — 잠시 뒤 다시 확인하거나 --reset 으로 재실행하세요.")
-    print("다음: python eval/vector_parity.py 로 검색 동일성 확인 → .env 에 VECTOR_BACKEND=pinecone")
-
+    print(f"다음: python eval/vector_parity.py --target {args.to} 로 검색 동일성 확인 → .env 에 VECTOR_BACKEND={args.to}")
 
 if __name__ == "__main__":
     main()

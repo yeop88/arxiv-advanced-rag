@@ -68,10 +68,12 @@ class Settings:
             return "cpu"
 
     # --- 벡터 스토어 ---
-    # "chroma"(로컬 파일) | "pinecone"(원격). 전환은 scripts/migrate_to_pinecone.py 로 벡터를 그대로 복사한 뒤.
+    # "chroma"(로컬 파일) | "pinecone"(원격) | "pgvector"(PostgreSQL — DATABASE_URL 사용).
+    # 전환은 scripts/migrate_vectors.py --to pinecone|pgvector 로 벡터를 그대로 복사한 뒤.
     vector_backend: str = os.getenv("VECTOR_BACKEND", "chroma")
     chroma_dir: str = os.getenv("CHROMA_DIR", "./storage/chroma")
     collection_name: str = "arxiv_papers"
+    pgvector_table: str = os.getenv("PGVECTOR_TABLE", "rag_chunks")  # pgvector 백엔드의 청크 테이블
     # Pinecone: 인덱스는 cosine(정규화 벡터라 Chroma 의 L2 와 순위가 같음), 차원은 임베딩과 동일(bge-m3=1024)
     pinecone_api_key: str = os.getenv("PINECONE_API_KEY", "")
     pinecone_index: str = os.getenv("PINECONE_INDEX", "arxiv-rag")
@@ -254,6 +256,8 @@ class Settings:
             raise RuntimeError("LOCAL_BASE_URL 이 설정되지 않았습니다. 예: http://localhost:8000/v1")
         if self.vector_backend == "pinecone" and not self.pinecone_api_key:
             raise RuntimeError("PINECONE_API_KEY 가 설정되지 않았습니다. .env 를 확인하세요.")
+        if self.vector_backend == "pgvector" and not self.database_url:
+            raise RuntimeError("VECTOR_BACKEND=pgvector 는 DATABASE_URL 이 필요합니다. .env 를 확인하세요.")
 
 
 # 싱글턴처럼 import 해서 사용: from config import settings

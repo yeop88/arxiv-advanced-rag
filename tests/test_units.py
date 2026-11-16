@@ -153,6 +153,44 @@ def test_pinecone_store_adapter() -> None:
     print("  test_pinecone_store_adapter ✅")
 
 
+def test_pgvector_store() -> None:
+    """PgVectorStore: Pinecone 어댑터와 같은 검사를 실제 PostgreSQL 임시 테이블로(pgvector 확장이 있을 때만)."""
+    from config import settings
+    from rag.store.vectorstore import PgVectorStore, _vec_literal, get_all_documents, get_vectors
+
+    assert _vec_literal([1.0, 0.5, -0.25]) == "[1,0.5,-0.25]"
+    if not settings.database_url:
+        print("  test_pgvector_store ✅ (DATABASE_URL 없음 — DB 왕복은 건너뜀)")
+        return
+    import psycopg
+
+    with psycopg.connect(settings.database_url) as c:
+        has = c.execute("SELECT count(*) FROM pg_extension WHERE extname = 'vector'").fetchone()[0]
+    if not has:
+        print("  test_pgvector_store ✅ (pgvector 확장 없음 — DB 왕복은 건너뜀)")
+        return
+    store = PgVectorStore(settings.database_url, "test_pgvector_units", _OneHotEmbeddings())
+    try:
+        store.delete_all()
+        store.upsert_vectors(["id-a", "id-b"], [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]],
+                             ["본문 A", "본문 B"], [{"source": "P1", "section": None}, {"source": "P2"}])
+        hits = store.similarity_search_with_relevance_scores("a", k=2)
+        assert hits[0][0].page_content == "본문 A" and hits[0][0].id == "id-a", hits
+        assert abs(hits[0][1] - 1.0) < 1e-6 and abs(hits[1][1] - 0.5) < 1e-6, "점수 (cos+1)/2"
+        assert hits[0][0].metadata == {"source": "P1", "section": None}
+        assert len(get_all_documents(store)) == 2 and store.count() == 2
+        assert get_vectors(store, ["id-b"]) == {"id-b": [0.0, 1.0, 0.0]}
+        store.delete(ids=["id-a"])
+        assert store.count() == 1 and store.get()["ids"] == ["id-b"]
+        ids = store.add_documents([Document(page_content="c", metadata={"source": "P3"})])
+        assert store.similarity_search("c", k=1)[0].id == ids[0]
+        store.upsert_vectors(["id-b"], [[0.0, 0.0, 1.0]], ["본문 B2"], [{"source": "P2"}])
+        assert store.count() == 2 and "본문 B2" in store.get()["documents"], "같은 ID 는 덮어쓰기"
+    finally:
+        store.delete_all()
+    print("  test_pgvector_store ✅ (DB 왕복 포함)")
+
+
 def test_exclude_auto_view() -> None:
     """기준 코퍼스 보기: 자동 수집 청크를 숨긴 결과가 '처음부터 그 청크가 없던 스토어'와 같아야 한다."""
     import tempfile
@@ -939,6 +977,7 @@ def main() -> None:
     test_contextualize_no_history()
     test_mmr_per_source_cap()
     test_pinecone_store_adapter()
+    test_pgvector_store()
     test_paper_search_parsers()
     test_exclude_auto_view()
     test_auto_rerank_weight()

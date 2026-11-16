@@ -6,8 +6,11 @@
 
 ### Added
 - 논문 원문 저장소(PostgreSQL, `rag/store/paperstore.py`): `DATABASE_URL` 이 있으면 수집할 때 PDF 원문·전문 텍스트·섹션 목록을 저장(arXiv·자동 수집·로컬 파일 모두). 표·그림·수식 처리는 저장된 PDF 를 먼저 씀. 기존 논문 채우기 `scripts/backfill_paper_store.py`, 의존성 `psycopg[binary]`
+- PostgreSQL 벡터 백엔드(`VECTOR_BACKEND=pgvector`, pgvector 확장): 청크 원문·메타데이터(JSONB)·벡터를 한 테이블(`PGVECTOR_TABLE`)에 두고 cosine HNSW 로 검색 — Chroma·Pinecone·PostgreSQL 중 선택. 이전 `scripts/migrate_vectors.py --to pgvector`, 비교 `eval/vector_parity.py --target pgvector`
 
 ### Changed
+- `scripts/migrate_to_pinecone.py` → `scripts/migrate_vectors.py`(`--to pinecone|pgvector`)
+- `PROJECT_VISION.md` 를 `docs/` 로 옮김
 - 자동 수집은 원문 DB 를 먼저 찾고(벡터 DB 에 없는 저장 논문, 전문 검색 색인), 기준을 넘는 논문이 없을 때만 arXiv 를 검색. 전문도 원문 DB 에 있으면 PDF 를 다시 받지 않음. 진행 줄에 "원문 DB 에서 후보 n편" 표시
 
 ## [1.0.0] - 2026-11-16

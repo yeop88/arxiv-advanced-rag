@@ -1,7 +1,7 @@
 # 프로젝트 필요성과 확장 방향
 
 arXiv Advanced RAG가 왜 필요한지, 앞으로 어떻게 넓힐 수 있는지 정리한 문서입니다.
-설치와 실행은 [README.md](README.md), 측정 기록은 [docs/PROGRESS_REPORT.md](docs/PROGRESS_REPORT.md)를 참고하세요.
+설치와 실행은 [README.md](../README.md), 측정 기록은 [docs/PROGRESS_REPORT.md](PROGRESS_REPORT.md)를 참고하세요.
 이 프로젝트는 학습·연구·개인용 **비영리** 프로젝트입니다.
 
 ## 1. 왜 필요한가
@@ -27,12 +27,12 @@ arXiv Advanced RAG가 왜 필요한지, 앞으로 어떻게 넓힐 수 있는지
 ### 학습 프로젝트로서의 가치
 
 각 단계가 독립 모듈로 나뉘어 있어 하나씩 열어 보고 바꿔 볼 수 있습니다.
-측정으로 결정이 뒤집힌 기록도 남겨 두었습니다. 작은 표본으로 고른 HyDE가 평가셋을 111문항으로 늘리자 가장 낮은 recall을 보여 `multi_query`로 되돌린 사례가 그 예입니다([ADR-001](docs/ADR-001-query-transform-default.md)).
+측정으로 결정이 뒤집힌 기록도 남겨 두었습니다. 작은 표본으로 고른 HyDE가 평가셋을 111문항으로 늘리자 가장 낮은 recall을 보여 `multi_query`로 되돌린 사례가 그 예입니다([ADR-001](ADR-001-query-transform-default.md)).
 
 ## 2. 현재 수준과 한계
 
 **할 수 있는 것**: 한국어 질문에 인용과 함께 답하기, 멀티턴 대화, 답변 검증과 재작성, 근거가 없을 때 논문 자동 수집, 진행 상황과 답변의 실시간 표시.
-2026-11-14 기준 중기 과제(표·그림·수식 이해, 인용 그래프, 비교표, 관심 분야 알림, 문헌 조사 초안)도 구현됨 — 달성 현황은 [docs/ACHIEVEMENT.md](docs/ACHIEVEMENT.md).
+2026-11-14 기준 중기 과제(표·그림·수식 이해, 인용 그래프, 비교표, 관심 분야 알림, 문헌 조사 초안)도 구현됨 — 달성 현황은 [docs/ACHIEVEMENT.md](ACHIEVEMENT.md).
 
 **측정된 수치**(평가셋 294문항, 질의 변환 없이 측정): recall@5 0.9700, MRR 0.9700 (2026-11-15, 리랭커에 논문 제목 적용 후 §5.42 — 자동 수집 논문을 넣어도 같음).
 

@@ -7,7 +7,7 @@
 - **스택**: LangChain · FastAPI(SSE 스트리밍) · React(TypeScript, Vite) · HuggingFace(임베딩/리랭커) · Claude/OpenAI/로컬 LLM
 - **특징**: LLM 백엔드 교체 가능, 단계별 하이퍼파라미터 실험, 검증(자기수정) 내장
 - **성격**: 비영리 — 학습·연구·개인용. 상업적 수익 모델은 다루지 않습니다.
-- **필요성과 확장 방향**: [PROJECT_VISION.md](PROJECT_VISION.md)
+- **필요성과 확장 방향**: [docs/PROJECT_VISION.md](docs/PROJECT_VISION.md)
 - **목표 달성률**: [docs/ACHIEVEMENT.md](docs/ACHIEVEMENT.md) · 발표 자료: [docs/presentation/SLIDES.md](docs/presentation/SLIDES.md)
 
 ---
@@ -69,7 +69,7 @@
 |---|---|---|---|
 | 0·1단계 | 문맥화, 질의 변환 | 경량 LLM | `LLM_PROVIDER`에 따름 |
 | 2단계 | 질문을 벡터로 변환 | bge-m3 임베딩 | 로컬 GPU |
-| 2단계 | 비슷한 청크 찾기 | 벡터 검색(모델 없음) | Pinecone 원격 또는 Chroma 로컬 |
+| 2단계 | 비슷한 청크 찾기 | 벡터 검색(모델 없음) | Chroma 로컬 · Pinecone 원격 · PostgreSQL(pgvector) 중 선택 |
 | 2단계 | 키워드 검색(BM25) | 모델 없음(단어 통계 공식) | 로컬 CPU |
 | 2단계 | 후보 청크 채점 | bge-reranker-v2-m3 리랭커 | 로컬 GPU |
 | 2단계 | 다양성 선택(MMR) | 저장된 벡터 재사용, 새 임베딩 없음 | 로컬 |
@@ -288,7 +288,7 @@ exam03_Advanced_RAG/
 │   │   ├── stage4_verify.py
 │   │   └── citation_check.py  # 4b 문장 단위 인용 확인(리랭커, LLM 없음)
 │   ├── store/
-│   │   ├── vectorstore.py     # 벡터 DB 로드/구축 (Chroma | Pinecone 어댑터)
+│   │   ├── vectorstore.py     # 벡터 DB 로드/구축 (Chroma | Pinecone | PostgreSQL pgvector 어댑터)
 │   │   ├── docstore.py        # 청크 원문 보관소(JSONL) — Pinecone 사용 시 BM25·본문 기준
 │   │   └── paperstore.py      # 논문 PDF 원문·전문 저장소(PostgreSQL, 선택)
 │   ├── ingest/
@@ -322,7 +322,7 @@ exam03_Advanced_RAG/
 │   ├── ingest_arxiv.py        # arXiv 수집 (--fulltext/--ca-bundle/--insecure)
 │   ├── ingest_sample.py       # 번들 샘플 수집 (네트워크 불필요)
 │   ├── ingest_local.py        # 로컬 PDF/텍스트 폴더 수집 (한국어 논문)
-│   ├── migrate_to_pinecone.py # Chroma → Pinecone 이전(벡터 그대로 복사, --dry-run)
+│   ├── migrate_vectors.py     # Chroma → Pinecone | pgvector 이전(벡터 그대로 복사, --to, --dry-run)
 │   ├── manage_auto_papers.py  # 자동 수집 논문(origin=auto) 목록·삭제
 │   ├── export_feedback.py     # 👎 받은 실제 질문 → 평가셋 후보
 │   ├── build_citation_graph.py # 인용 그래프(OpenAlex 참고문헌·피인용) 생성
@@ -347,11 +347,13 @@ exam03_Advanced_RAG/
 │   ├── multihop_eval.py       # 다중 홉 분해(하위 질문별 근거 자리 보장) 검색 효과
 │   ├── nli_eval.py · followup_eval.py · title_candidates_eval.py # 함의 판정 · 보충 검색 · 원 논문 제목 후보 측정
 │   ├── contextual_header_eval.py # 본문 청크에 제목·섹션 머리말 붙이기 실험(1차 임베딩·BM25, 2차 리랭커 입력)
-│   └── vector_parity.py       # Chroma vs Pinecone 검색 결과 동일성 검증
+│   └── vector_parity.py       # Chroma vs Pinecone | pgvector 검색 결과 동일성 검증(--target)
 ├── tests/                     # 단위·오프라인·서버(SSE) 테스트 (fake_pinecone.py: Pinecone 대역)
 ├── notebooks/
 │   └── advanced_rag_walkthrough.ipynb  # 4단계 셀 단위 학습 노트북
 └── docs/
+    ├── PROJECT_VISION.md      # 프로젝트 필요성과 확장 방향
+    ├── ACHIEVEMENT.md         # PROJECT_VISION 목표별 달성률
     ├── PROGRESS_REPORT.md     # 진행 보고서(A/B 결과·이슈·로드맵)
     ├── ADR-001-query-transform-default.md  # 기본 질의변환 모드 결정 기록
     └── FREETOKEN.md           # FreeToken(로컬 LLM 서버) 사용법·자원 관리·문제 해결 (v0.2.2)
@@ -363,21 +365,30 @@ exam03_Advanced_RAG/
 
 ---
 
-## 🗄️ 벡터 DB 전환 (Chroma → Pinecone)
+## 🗄️ 벡터 DB 전환 (Chroma · Pinecone · PostgreSQL)
+
+`.env` 의 `VECTOR_BACKEND` 하나로 세 가지 중에서 고릅니다. 나머지 코드는 그대로입니다.
+
+| 백엔드 | 위치 | 원문(BM25용) | 필요한 것 |
+|---|---|---|---|
+| `chroma`(기본) | 로컬 파일 `storage/chroma` | Chroma 안 | 없음 |
+| `pinecone` | 원격(서버리스) | 로컬 docstore(JSONL) | `PINECONE_API_KEY` |
+| `pgvector` | PostgreSQL 테이블 `PGVECTOR_TABLE`(기본 `rag_chunks`) | 같은 테이블(JSONB 메타데이터) | `DATABASE_URL` + pgvector 확장 |
 
 성능 저하 없이 옮기도록 설계했습니다.
 
 - **벡터를 다시 만들지 않고 Chroma 의 벡터를 그대로 복사**(ID 유지) → 임베딩이 완전히 동일.
-- 인덱스는 **cosine**: 벡터가 길이 1로 정규화돼 있어 Chroma(L2)와 순위가 같습니다.
-- **원문은 로컬 docstore(JSONL)에도 저장** → 하이브리드 검색의 BM25 가 Chroma 때와 같은 원문을 사용.
+- 척도는 **cosine**: 벡터가 길이 1로 정규화돼 있어 Chroma(L2)와 순위가 같습니다. pgvector 는 HNSW 색인을 쓰고, 검색할 때 후보 폭(`hnsw.ef_search`)을 k 의 2배 이상(최소 100)으로 넓혀 근사 탐색 누락을 줄입니다.
+- 하이브리드 검색의 BM25 는 어느 백엔드든 같은 원문을 씁니다.
 
 ```bash
-python scripts/migrate_to_pinecone.py --dry-run   # 키 없이 점검
-python scripts/migrate_to_pinecone.py             # 이전 (PINECONE_API_KEY 필요)
-python eval/vector_parity.py                      # 평가셋 전체로 Chroma 와 결과 비교
-# 통과하면 .env 에 VECTOR_BACKEND=pinecone
+python scripts/migrate_vectors.py --to pgvector --dry-run   # 점검(대상에 쓰지 않음)
+python scripts/migrate_vectors.py --to pgvector             # 이전 (pinecone 이면 --to pinecone)
+python eval/vector_parity.py --target pgvector              # 평가셋 전체로 Chroma 와 결과 비교
+# 통과하면 .env 에 VECTOR_BACKEND=pgvector
 ```
-키가 없을 때는 `python eval/vector_parity.py --fake` 로 메모리 내 대역에 같은 벡터를 넣어 어댑터를 검증할 수 있습니다.
+Pinecone 키가 없을 때는 `python eval/vector_parity.py --fake` 로 메모리 내 대역에 같은 벡터를 넣어 어댑터를 검증할 수 있습니다.
+pgvector 확장은 PostgreSQL 에 따로 설치해야 합니다(Windows: Visual Studio Build Tools 로 공식 소스를 `nmake /F Makefile.win` 빌드·`install` 한 뒤 슈퍼유저로 `CREATE EXTENSION vector`).
 회사망 프록시 때문에 `CERTIFICATE_VERIFY_FAILED` 가 나면 `python scripts/export_ca_bundle.py` 를 한 번 실행하세요(인증서 검증은 유지).
 
 ---

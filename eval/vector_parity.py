@@ -1,5 +1,5 @@
 """
-eval/vector_parity.py — Chroma 와 Pinecone 의 검색 결과가 같은지 확인 (전환 전 필수 점검)
+eval/vector_parity.py — Chroma 와 Pinecone·PostgreSQL(pgvector) 의 검색 결과가 같은지 확인 (전환 전 필수 점검)
 
 "성능 저하 없이" 를 숫자로 보이기 위해 평가셋 전체 질문에 대해 두 백엔드를 비교한다.
 LLM 은 쓰지 않는다(질의변환 none) → 비용 0, 순수하게 벡터 스토어 차이만 본다.
@@ -7,11 +7,12 @@ LLM 은 쓰지 않는다(질의변환 none) → 비용 0, 순수하게 벡터 �
 비교 항목:
   - 벡터 검색 상위 N 겹침률(dense overlap@N): 두 백엔드가 같은 청크를 찾는가
   - 최종 리랭크 결과 일치율: 하이브리드+리랭킹+MMR 을 거친 최종 근거 5개가 완전히 같은가
-  - recall@k · MRR: 정답 논문을 얼마나 잘 찾는가 (Pinecone 이 Chroma 보다 낮으면 '저하')
+  - recall@k · MRR: 정답 논문을 얼마나 잘 찾는가 (대상이 Chroma 보다 낮으면 '저하')
 
 사용:
     python eval/vector_parity.py --fake      # 키 없이: 메모리 내 Pinecone 대역에 같은 벡터를 넣어 어댑터 검증
-    python eval/vector_parity.py             # 실제 Pinecone (migrate_to_pinecone.py 로 이전한 뒤)
+    python eval/vector_parity.py             # 실제 Pinecone (migrate_vectors.py --to pinecone 로 이전한 뒤)
+    python eval/vector_parity.py --target pgvector  # PostgreSQL (migrate_vectors.py --to pgvector 로 이전한 뒤)
     python eval/vector_parity.py --n 50      # 질문 수 제한
 """
 from __future__ import annotations
@@ -33,7 +34,7 @@ from config import settings  # noqa: E402
 
 settings.query_transform_mode = "none"  # LLM 미사용: 벡터 스토어 차이만 측정
 settings.auto_fetch = False  # 평가는 코퍼스를 고정한다(근거 부족 시 논문 자동 수집 끔)
-# 자동 수집 논문은 챗봇이 쓰는 Pinecone 에만 들어가므로, 두 백엔드를 같은 코퍼스로 비교하려면 숨긴다
+# 자동 수집 논문은 챗봇이 쓰는 백엔드에만 들어가므로, 두 백엔드를 같은 코퍼스로 비교하려면 숨긴다
 settings.exclude_auto_papers = True
 
 from eval.dataset import load_eval_set  # noqa: E402
@@ -45,7 +46,7 @@ from rag.store.vectorstore import load_vectorstore  # noqa: E402
 def _fake_pinecone_store():
     """실제 계정 없이: Chroma 벡터를 그대로 복사한 메모리 내 Pinecone 대역 스토어."""
     from fake_pinecone import FakePineconeIndex
-    from migrate_to_pinecone import copy_into, export_chroma
+    from migrate_vectors import copy_into, export_chroma
 
     from rag.store.docstore import DocStore
     from rag.core.llm import get_embeddings
@@ -78,7 +79,8 @@ def measure(vs, records, n_dense: int) -> dict:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--fake", action="store_true", help="실제 Pinecone 대신 메모리 내 대역 사용")
+    ap.add_argument("--target", choices=["pinecone", "pgvector"], default="pinecone", help="Chroma 와 비교할 대상")
+    ap.add_argument("--fake", action="store_true", help="실제 Pinecone 대신 메모리 내 대역 사용(--target pinecone)")
     ap.add_argument("--n", type=int, default=None, help="질문 수 제한")
     ap.add_argument("--dense-k", type=int, default=settings.top_k_retrieve)
     args = ap.parse_args()
@@ -89,8 +91,9 @@ def main() -> None:
 
     print("[1/2] Chroma 측정")
     a = measure(load_vectorstore("chroma"), records, args.dense_k)
-    print("[2/2] Pinecone 측정" + (" (fake)" if args.fake else ""))
-    pc = _fake_pinecone_store() if args.fake else load_vectorstore("pinecone")
+    name = "Pinecone" + (" (fake)" if args.fake else "") if args.target == "pinecone" else "pgvector"
+    print(f"[2/2] {name} 측정")
+    pc = _fake_pinecone_store() if args.fake and args.target == "pinecone" else load_vectorstore(args.target)
     b = measure(pc, records, args.dense_k)
 
     def avg(xs):
@@ -105,7 +108,7 @@ def main() -> None:
     ma, mb = avg([a[i]["mrr"] for i in ids]), avg([b[i]["mrr"] for i in ids])
     k = settings.top_k_rerank
 
-    print("\n| 항목 | Chroma | Pinecone" + (" (fake)" if args.fake else "") + " | 차이 |")
+    print(f"\n| 항목 | Chroma | {name} | 차이 |")
     print("|---|---|---|---|")
     print(f"| recall@{k} | {ra:.4f} | {rb:.4f} | {rb - ra:+.4f} |")
     print(f"| MRR | {ma:.4f} | {mb:.4f} | {mb - ma:+.4f} |")
